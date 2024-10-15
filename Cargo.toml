@@ -1,0 +1,25 @@
+[package]
+name = "grw"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["id32"]
+id32 = []
+id64 = []
+
+[dev-dependencies]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+smallvec = { version = "1.15.0", features = ["serde"] }
+roaring = { version = "0.10.12", features = ["serde"] }
+rustc-hash = "2.1.1"
+derive_more = { version = "2.0.1", features = ["debug", "deref", "deref_mut"] }
+indexmap = { version = "2.10.0", features = ["serde"] }
+range-set-blaze = "0.3.0"
+range-collections = "0.4.6"
+itertools = "0.14.0"
+thiserror = "2.0.18"
+slotmap = { version = "1.1.1", features = ["serde"] }
+rayon = "1.10.0"
