@@ -1,4 +1,5 @@
 pub(crate) mod collections;
+pub mod dsl;
 pub mod edge;
 pub(crate) mod node;
 
