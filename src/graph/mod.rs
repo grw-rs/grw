@@ -3,6 +3,8 @@ pub mod dsl;
 pub mod edge;
 pub(crate) mod node;
 
+#[cfg(test)]
+mod tests;
 
 use std::fmt::Debug;
 
