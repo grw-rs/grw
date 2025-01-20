@@ -129,6 +129,7 @@ pub(crate) use graph::collections::*;
 pub(crate) use graph::{Edge, Edges, Node, Nodes};
 pub use graph::edge;
 
+pub mod modify;
 #[cfg(test)]
 pub(crate) mod test;
 
