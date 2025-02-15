@@ -126,3 +126,6 @@ fn lookup_binding(bindings: &[(u32, u32)], id: LocalId) -> crate::id::N {
     panic!("no binding for translated node T({local})")
 }
 
+
+#[cfg(test)]
+mod tests;
