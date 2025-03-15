@@ -2,6 +2,7 @@ pub(crate) mod collections;
 pub mod dsl;
 pub mod edge;
 pub(crate) mod node;
+pub mod watcher;
 
 #[cfg(test)]
 mod tests;
@@ -335,6 +336,12 @@ impl<NV, E: Edge> Graph<NV, E> {
         self.degrees[..end].iter().map(|(_, set)| set)
     }
 
+    pub fn watched<'a, W: crate::watch::Watcher<NV, E>>(
+        &'a mut self,
+        watcher: &'a mut W,
+    ) -> crate::watch::WatchedGraph<'a, NV, E, W> {
+        crate::watch::WatchedGraph { graph: self, watcher }
+    }
 
     pub(crate) fn build_degrees(&mut self) {
         self.degrees.clear();

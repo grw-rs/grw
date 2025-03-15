@@ -130,7 +130,9 @@ pub(crate) use graph::{Edge, Edges, Node, Nodes};
 pub use graph::edge;
 
 pub mod modify;
+pub use graph::watcher as watch;
 #[cfg(test)]
 pub(crate) mod test;
 
 pub use graph::Graph;
+pub use watch::{Watcher, Control, BanVerdict, Silent};
