@@ -130,9 +130,12 @@ pub(crate) use graph::{Edge, Edges, Node, Nodes};
 pub use graph::edge;
 
 pub mod modify;
+pub mod search;
 pub use graph::watcher as watch;
 #[cfg(test)]
 pub(crate) mod test;
 
 pub use graph::Graph;
+pub use search::Morphism::{self, Iso, SubIso, EpiMono, Mono, Epi, Homo};
+pub use search::{compile, Search, Resolved, Unresolved, BindError, Seq, RevCsr};
 pub use watch::{Watcher, Control, BanVerdict, Silent};
