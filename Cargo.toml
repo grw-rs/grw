@@ -27,3 +27,6 @@ thiserror = "2.0.18"
 slotmap = { version = "1.1.1", features = ["serde"] }
 rayon = "1.10.0"
 rand = { version = "0.9", optional = true }
+grw_derive = { path = "../grw_derive" }
+bincode = "1"
+memmap2 = "0.9"

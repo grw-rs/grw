@@ -1,6 +1,7 @@
 pub(crate) mod collections;
 pub mod dsl;
 pub mod edge;
+pub mod layout;
 pub(crate) mod node;
 pub mod watcher;
 

@@ -132,6 +132,9 @@ pub use graph::edge;
 pub mod modify;
 pub mod search;
 pub use graph::watcher as watch;
+pub use graph::layout;
+pub use grw_derive::repl;
+pub use layout::Val;
 #[cfg(test)]
 pub(crate) mod test;
 
