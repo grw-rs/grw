@@ -3,6 +3,7 @@ pub mod dsl;
 pub mod edge;
 pub mod layout;
 pub(crate) mod node;
+pub mod persist;
 pub mod watcher;
 
 #[cfg(test)]
