@@ -8,6 +8,7 @@ default = ["id32"]
 id32 = []
 id64 = []
 parity = ["dep:rand"]
+scratch = ["dep:crossterm"]
 
 [dev-dependencies]
 trybuild = "1"
@@ -30,3 +31,17 @@ rand = { version = "0.9", optional = true }
 grw_derive = { path = "../grw_derive" }
 bincode = "1"
 memmap2 = "0.9"
+crossterm = { version = "0.28", optional = true }
+
+[[bin]]
+name = "scratch"
+path = "bin/scratch.rs"
+required-features = ["scratch"]
+
+[[bin]]
+name = "grw-dot"
+path = "emacs/grw_dot.rs"
+
+[[bin]]
+name = "prof_search"
+path = "tests/perf/prof_search.rs"
