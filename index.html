@@ -127,6 +127,14 @@
 
   .apistrip{background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:0 0 20px}
   .apistrip pre{margin:0; padding:16px 18px; font-size:12.5px; line-height:1.9; overflow-x:auto}
+  .ptable{width:100%; border-collapse:collapse; font-family:"JetBrains Mono",monospace; font-size:13px}
+  .ptable th{color:var(--muted); font-weight:400; text-align:right; padding:8px 14px; border-bottom:1px solid var(--line)}
+  .ptable td{text-align:right; padding:7px 14px; color:var(--text)}
+  .ptable td:nth-child(3),.ptable td:nth-child(4),.ptable td:nth-child(5){color:var(--node)}
+  .ptable th.note,.ptable td.note{text-align:left; color:var(--dim); font-style:italic; font-size:12px}
+  .ptable tbody tr{border-bottom:1px solid rgba(34,44,61,.5)}
+  .ptable tbody tr:last-child{border-bottom:0}
+  .ptable tr.hl td{background:rgba(240,166,63,.05)}
 
   .deeper{display:grid; grid-template-columns:repeat(4,1fr); gap:16px}
   .dcard{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 18px 16px;
@@ -522,20 +530,22 @@ session.<span class="f">iter</span>()
     <div class="sec-head">
       <p class="sec-kicker">Measured, not claimed</p>
       <h2 class="sec-title">Against <span class="em">VF3.</span></h2>
-      <p class="sec-lede">Head-to-head with <a href="https://github.com/MiviaLab/vf3lib">vf3lib</a> — the reference subgraph-isomorphism implementation — via its C++ API. For every cell both engines enumerate <b>all</b> matches and the counts are verified equal before either timer is trusted. Ratio is VF3 time ÷ GRW time; higher means GRW is faster.</p>
+      <p class="sec-lede">Head-to-head with <a href="https://github.com/MiviaLab/vf3lib">vf3lib</a> — the reference subgraph-isomorphism implementation — via its C++ API, using its bulk <code>ARGLoader</code> path. For every cell both engines enumerate <b>all</b> matches and the counts are verified equal before either timer is trusted. Ratio is VF3 time ÷ GRW time; higher means GRW is faster.</p>
     </div>
-    <div class="apistrip">
-      <pre><span class="c">// median speedup across patterns per graph size (undirected, avg degree ~6),
-// with the biggest absolute cell on each row</span>
-<span class="f">nodes      edges        iso   subiso     mono</span>
-    154        369       2.2x     5.5x    10.6x
- 10,458     30,174      2.5x     6.7x    15.9x   <span class="c">// 343k matches</span>
-104,374    303,588      2.9x     6.9x    17.9x   <span class="c">// 3.5M matches</span>
-253,122    737,476      3.0x     6.7x    18.9x   <span class="c">// 8.5M: 0.34s vs 2.3s</span>
-503,122  1,476,678      2.9x     5.9x    15.9x   <span class="c">// 17.2M: 0.75s vs 4.7s</span>
-<span class="n">1,013,122  2,970,545      3.2x     5.8x    16.2x</span>   <span class="c">// 34.7M: 1.79s vs 10.4s</span></pre>
+    <div class="apistrip" style="padding:6px 0">
+      <table class="ptable">
+        <thead><tr><th>nodes</th><th>edges</th><th>iso</th><th>subiso</th><th>mono</th><th class="note">largest cell (GRW vs VF3)</th></tr></thead>
+        <tbody>
+          <tr><td>154</td><td>369</td><td>2.2×</td><td>5.5×</td><td>10.6×</td><td class="note"></td></tr>
+          <tr><td>10,458</td><td>30,174</td><td>2.5×</td><td>6.7×</td><td>15.9×</td><td class="note">343k matches</td></tr>
+          <tr><td>104,374</td><td>303,588</td><td>2.9×</td><td>6.9×</td><td>17.9×</td><td class="note">3.5M matches</td></tr>
+          <tr><td>253,122</td><td>737,476</td><td>3.0×</td><td>6.7×</td><td>18.9×</td><td class="note">8.5M · 0.34s vs 2.3s</td></tr>
+          <tr><td>503,122</td><td>1,476,678</td><td>2.9×</td><td>5.9×</td><td>15.9×</td><td class="note">17.2M · 0.75s vs 4.7s</td></tr>
+          <tr class="hl"><td>1,013,122</td><td>2,970,545</td><td>3.2×</td><td>5.8×</td><td>16.2×</td><td class="note">34.7M · 1.79s vs 10.4s</td></tr>
+        </tbody>
+      </table>
     </div>
-    <p class="sec-lede" style="margin-top:2px">GRW was faster in <b>128 of 137</b> parity-verified measurements; the nine losses are all sub-3&nbsp;ms micro-runs. The mono advantage <b>grows with graph size</b>, and at a million nodes GRW enumerates 34.7M matches in 1.8&nbsp;s. Loading is its own story: GRW loads + indexes the 1M-node graph in ~0.5&nbsp;s (135&nbsp;ms load, 355&nbsp;ms CSR index) versus ~4&nbsp;s for the vf3 build — <em>after</em> we fixed the harness to use vf3lib's bulk-load path. Its convenient <code>ARGEdit</code> builder is consumed in O(V²) and takes 45+ minutes at this size; naive benchmarks will wildly overstate vf3lib's load cost, so ours doesn't. Pattern sizes are capped on large graphs (subiso/mono ≤ 3 nodes from 29k up); one machine, single runs. Full protocol, corpus generator, and the pitfall write-up: <a href="https://github.com/grw-rs/grw_vf3_tests">grw_vf3_tests</a>.</p>
+    <p class="sec-lede" style="margin-top:2px">GRW was faster in <b>128 of 137</b> parity-verified measurements; the nine losses are all sub-3&nbsp;ms micro-runs. The mono advantage <b>grows with graph size</b>, and at a million nodes GRW enumerates 34.7M matches in 1.8&nbsp;s. Loading the 1M-node graph: <b>~0.5&nbsp;s</b> for GRW (135&nbsp;ms load + 355&nbsp;ms CSR index) vs <b>~4&nbsp;s</b> for the vf3 graph build. Pattern sizes are capped on large graphs (subiso/mono ≤ 3 nodes from 29k up); one machine, single runs. Full protocol, corpus generator, and harness: <a href="https://github.com/grw-rs/grw_vf3_tests">grw_vf3_tests</a> — clone, <code>./gen_data.sh</code>, <code>cargo build --release</code>, <code>./bench_all.sh</code>.</p>
   </section>
 
   <!-- GO DEEPER -->
