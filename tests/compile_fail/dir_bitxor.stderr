@@ -1,0 +1,25 @@
+warning: unused import: `grw::modify::*`
+ --> tests/compile_fail/dir_bitxor.rs:1:5
+  |
+1 | use grw::modify::*;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: `grw::edge::Dir<()>` is a directed edge type — `^` requires an undirected edge
+ --> tests/compile_fail/dir_bitxor.rs:6:14
+  |
+6 |         N(1) ^ N(2),
+  |              ^ `grw::edge::Dir<()>` has no undirected mode
+  |
+  = help: the trait `grw::edge::Und` is not implemented for `grw::edge::Dir<()>`
+  = note: use `>>` or `<<` for directed edges, or switch to `Undir<V>` / `Anydir<V>`
+help: the following other types implement trait `grw::edge::Und`
+ --> src/graph/edge.rs
+  |
+  |     impl<V> super::Und for super::Undir<V> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::edge::Undir<V>`
+...
+  |     impl<U, D> super::Und for super::Anydir<U, D> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Anydir<U, D>`
+  = note: required for `grw::modify::node::new::Node<(), (), grw::edge::Dir<()>>` to implement `BitXor`

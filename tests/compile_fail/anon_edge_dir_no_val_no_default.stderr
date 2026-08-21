@@ -1,0 +1,12 @@
+error[E0277]: the trait bound `NoDef: Default` is not satisfied
+ --> tests/compile_fail/anon_edge_dir_no_val_no_default.rs:7:14
+  |
+7 |         N(1) >> N(2),
+  |              ^^ the trait `Default` is not implemented for `NoDef`
+  |
+  = note: required for `grw::modify::node::new::Node<(), (), grw::edge::Dir<NoDef>>` to implement `Shr`
+help: consider annotating `NoDef` with `#[derive(Default)]`
+  |
+3 + #[derive(Default)]
+4 | struct NoDef(u32);
+  |

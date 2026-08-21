@@ -1,0 +1,14 @@
+error[E0277]: the trait bound `NoDef: Default` is not satisfied
+ --> tests/compile_fail/new_node_rhs_no_val_no_default.rs:7:28
+  |
+7 |         N(1).val(NoDef(5)) >> N(2),
+  |                            ^^ the trait `Default` is not implemented for `NoDef`
+  |
+  = note: required for `()` to implement `grw::graph::dsl::IntoVal<NoDef>`
+  = note: required for `grw::modify::node::new::Node<NoDef, (), _>` to implement `IntoNode<NoDef, _>`
+  = note: required for `grw::modify::node::new::Node<NoDef, HasVal<NoDef>, _>` to implement `Shr<grw::modify::node::new::Node<NoDef, (), _>>`
+help: consider annotating `NoDef` with `#[derive(Default)]`
+  |
+3 + #[derive(Default)]
+4 | struct NoDef(u32);
+  |

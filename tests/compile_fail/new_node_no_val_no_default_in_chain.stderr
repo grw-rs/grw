@@ -1,0 +1,33 @@
+error[E0277]: the trait bound `NoDef: Default` is not satisfied
+ --> tests/compile_fail/new_node_no_val_no_default_in_chain.rs:6:58
+  |
+6 |       let _: Vec<Node<NoDef, grw::graph::edge::Dir<()>>> = grw::modify![
+  |  __________________________________________________________^
+7 | |         N(1) >> N(2),
+8 | |     ];
+  | |_____^ the trait `Default` is not implemented for `NoDef`
+  |
+  = note: required for `()` to implement `grw::graph::dsl::IntoVal<NoDef>`
+  = note: required for `grw::modify::Node<NoDef, grw::edge::Dir<()>>` to implement `From<grw::modify::node::new::Node<NoDef, (), grw::edge::Dir<()>>>`
+  = note: required for `grw::modify::node::new::Node<NoDef, (), grw::edge::Dir<()>>` to implement `Into<grw::modify::Node<NoDef, grw::edge::Dir<()>>>`
+  = note: this error originates in the macro `grw::modify` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NoDef` with `#[derive(Default)]`
+  |
+3 + #[derive(Default)]
+4 | struct NoDef(u32);
+  |
+
+error[E0277]: the trait bound `NoDef: Default` is not satisfied
+ --> tests/compile_fail/new_node_no_val_no_default_in_chain.rs:7:14
+  |
+7 |         N(1) >> N(2),
+  |              ^^ the trait `Default` is not implemented for `NoDef`
+  |
+  = note: required for `()` to implement `grw::graph::dsl::IntoVal<NoDef>`
+  = note: required for `grw::modify::node::new::Node<NoDef, (), grw::edge::Dir<()>>` to implement `IntoNode<NoDef, grw::edge::Dir<()>>`
+  = note: required for `grw::modify::node::new::Node<NoDef, (), grw::edge::Dir<()>>` to implement `Shr`
+help: consider annotating `NoDef` with `#[derive(Default)]`
+  |
+3 + #[derive(Default)]
+4 | struct NoDef(u32);
+  |

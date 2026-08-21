@@ -1,0 +1,25 @@
+warning: unused import: `grw::modify::*`
+ --> tests/compile_fail/undir_shl.rs:1:5
+  |
+1 | use grw::modify::*;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: `grw::edge::Undir<()>` is an undirected edge type — `<<` requires a directed edge
+ --> tests/compile_fail/undir_shl.rs:6:14
+  |
+6 |         N(1) << N(2),
+  |              ^^ `grw::edge::Undir<()>` has no target←source direction
+  |
+  = help: the trait `grw::edge::Tgt` is not implemented for `grw::edge::Undir<()>`
+  = note: use `^` for undirected edges, or switch to `Dir<V>` / `Anydir<V>`
+help: the following other types implement trait `grw::edge::Tgt`
+ --> src/graph/edge.rs
+  |
+  |     impl<V> super::Tgt for super::Dir<V> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::edge::Dir<V>`
+...
+  |     impl<U, D> super::Tgt for super::Anydir<U, D> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Anydir<U, D>`
+  = note: required for `grw::modify::node::new::Node<(), (), grw::edge::Undir<()>>` to implement `Shl`

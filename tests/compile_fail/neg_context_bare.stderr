@@ -1,0 +1,29 @@
+warning: unused import: `grw::search::*`
+ --> tests/compile_fail/neg_context_bare.rs:1:5
+  |
+1 | use grw::search::*;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: the trait bound `(): HasConstraint` is not satisfied
+  --> tests/compile_fail/neg_context_bare.rs:7:13
+   |
+ 7 |       let _ = grw::search![<(), ER>;
+   |  _____________^
+ 8 | |         get(Morphism::Mono) {
+ 9 | |             !X(0)
+10 | |         }
+11 | |     ];
+   | |_____^ the trait `HasConstraint` is not implemented for `()`
+   |
+help: the following other types implement trait `HasConstraint`
+  --> src/search/dsl/mod.rs
+   |
+   | impl<V> HasConstraint for HasVal<V> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `HasVal<V>`
+   | impl HasConstraint for HasPred {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `HasPred`
+   = note: required for `grw::search::dsl::Op<(), grw::edge::Undir<()>>` to implement `From<NegContext<(), (), grw::edge::Undir<()>>>`
+   = note: required for `NegContext<(), (), grw::edge::Undir<()>>` to implement `Into<grw::search::dsl::Op<(), grw::edge::Undir<()>>>`
+   = note: this error originates in the macro `$crate::__search_clusters` which comes from the expansion of the macro `grw::search` (in Nightly builds, run with -Z macro-backtrace for more info)

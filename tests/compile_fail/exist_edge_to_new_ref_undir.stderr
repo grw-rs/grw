@@ -1,0 +1,26 @@
+error[E0277]: exist edge target `grw::modify::node::new::Ref<_, _>` must be an existing node
+ --> tests/compile_fail/exist_edge_to_new_ref_undir.rs:5:31
+  |
+5 |     let _ = X(id::N(1)) & e() ^ n(23);
+  |                               ^ not an existing node — use `x(id)` or `X(id)` here
+  |
+  = help: the trait `IntoExistNode<_, _>` is not implemented for `grw::modify::node::new::Ref<_, _>`
+  = note: `e()` / `!e()` operate on existing graph edges; their target must already exist
+  = note: to connect a new edge to a new node, use `E()` instead of `e()`
+help: the following other types implement trait `IntoExistNode<NV, ER>`
+ --> src/modify/dsl/mod.rs
+  |
+  | / impl<NV, V: IntoOptional<NV>, ER: graph::Edge> IntoExistNode<NV, ER>
+  | |     for node::exist::Node<NV, V, ER>
+  | |____________________________________^ `grw::modify::node::exist::Node<NV, V, ER>`
+...
+  |   impl<NV, ER: graph::Edge> IntoExistNode<NV, ER> for node::exist::Ref<NV, ER> {
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::modify::node::exist::Ref<NV, ER>`
+...
+  | / impl<NV, V: IntoOptional<NV>, ER: graph::Edge> IntoExistNode<NV, ER>
+  | |     for node::translated::Node<NV, V, ER>
+  | |_________________________________________^ `grw::modify::node::translated::Node<NV, V, ER>`
+...
+  |   impl<NV, ER: graph::Edge> IntoExistNode<NV, ER> for node::translated::Ref<NV, ER> {
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::modify::node::translated::Ref<NV, ER>`
+  = note: required for `grw::modify::UndirPending<grw::modify::node::exist::Node<_, (), _>, grw::modify::edge::exist::Edge<(), _, _>>` to implement `BitXor<grw::modify::node::new::Ref<_, _>>`

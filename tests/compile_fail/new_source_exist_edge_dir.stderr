@@ -1,0 +1,21 @@
+error[E0277]: only existing nodes can source an existing-edge operation
+ --> tests/compile_fail/new_source_exist_edge_dir.rs:5:19
+  |
+5 |     let _ = N(12) & (e() >> X(id::N(1)));
+  |                   ^ this is a new node — use `X(id)` or `x(id)` here
+  |
+  = help: the trait `grw::modify::dsl::ExistEdgeSource` is not implemented for `grw::modify::node::new::Node<_, (), _>`
+  = note: `e()` / `!e()` operate on already-present graph edges; the source must exist
+  = note: to attach a new edge to a new node, use `E()` instead of `e()`
+help: the following other types implement trait `grw::modify::dsl::ExistEdgeSource`
+ --> src/modify/dsl/mod.rs
+  |
+  | impl<NV, V, ER: graph::Edge> ExistEdgeSource for node::exist::Node<NV, V, ER> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::modify::node::exist::Node<NV, V, ER>`
+  | impl<NV, ER: graph::Edge> ExistEdgeSource for node::exist::Ref<NV, ER> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::modify::node::exist::Ref<NV, ER>`
+  | impl<NV, V, ER: graph::Edge> ExistEdgeSource for node::translated::Node<NV, V, ER> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::modify::node::translated::Node<NV, V, ER>`
+  | impl<NV, ER: graph::Edge> ExistEdgeSource for node::translated::Ref<NV, ER> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::modify::node::translated::Ref<NV, ER>`
+  = note: required for `grw::modify::node::new::Node<_, (), _>` to implement `BitAnd<grw::modify::edge::exist::Edge<grw::modify::edge::Connected<_, _>, _, _>>`
