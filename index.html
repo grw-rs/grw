@@ -183,6 +183,7 @@
     <nav class="navlinks">
       <a href="#story">The loop</a>
       <a href="#paths">Paths</a>
+      <a href="#perf">vs VF3</a>
       <a href="#deeper">Book</a>
       <a href="#morphisms">Morphisms</a>
       <a href="https://github.com/grw-rs/grw">GitHub ↗</a>
@@ -513,6 +514,26 @@ session.<span class="f">iter</span>()
 ..<span class="n">n</span>(1).<span class="f">dfs</span>().<span class="f">guard</span>(|p| !p.<span class="f">contains</span>(<span class="f">N</span>(2)))                 <span class="c">// prune paths mid-walk</span>
 ..<span class="n">n</span>(1).<span class="f">drive</span>(|n| <span class="f">Some</span>(<span class="f">Explore</span>::<span class="f">One</span>(0)))                   <span class="c">// steer expansion per depth</span></pre>
     </div>
+  </section>
+
+
+  <!-- PERFORMANCE -->
+  <section id="perf">
+    <div class="sec-head">
+      <p class="sec-kicker">Measured, not claimed</p>
+      <h2 class="sec-title">Against <span class="em">VF3.</span></h2>
+      <p class="sec-lede">Head-to-head with <a href="https://github.com/MiviaLab/vf3lib">vf3lib</a> — the reference subgraph-isomorphism implementation — via its C++ API. For every cell both engines enumerate <b>all</b> matches and the counts are verified equal before either timer is trusted. Ratio is VF3 time ÷ GRW time; higher means GRW is faster.</p>
+    </div>
+    <div class="apistrip">
+      <pre><span class="c">// median speedup across patterns, per graph size (undirected, avg degree ~6)</span>
+<span class="f">nodes      edges       iso     subiso    mono</span>
+    154        369     2.2x      5.5x    10.6x
+ 10,458     30,174     2.5x      6.7x    15.9x
+104,374    303,588     2.9x      6.9x    17.9x
+253,122    737,476     3.0x      6.7x    18.9x
+503,122  1,476,678     2.9x      5.9x    15.9x   <span class="c">// 17.2M matches, 0.75s vs 4.7s</span></pre>
+    </div>
+    <p class="sec-lede" style="margin-top:2px">GRW was faster in <b>116 of 125</b> parity-verified measurements; the nine losses are all sub-3&nbsp;ms micro-runs. The mono advantage <b>grows with graph size</b> — 10.6× at 154 nodes, 18.9× at 253k. Beyond 503k the comparison ends for an unexpected reason: vf3lib's own graph builder (<code>ARGEdit::InsertEdge</code>, 97% of CPU under <code>perf</code>) exceeds 45 minutes constructing the 1M-node graph that GRW loads in under a second. Pattern sizes are capped on large graphs (subiso/mono ≤ 3 nodes from 29k up); one machine, single runs, full protocol and all 30 graphs in <a href="https://github.com/grw-rs/grw_vf3_tests">grw_vf3_tests</a>.</p>
   </section>
 
   <!-- GO DEEPER -->
