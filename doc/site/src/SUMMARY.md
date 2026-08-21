@@ -10,6 +10,7 @@
 - [graph! — Construction](./graph.md)
 - [modify! — Mutation](./modify.md)
 - [search! — Pattern Matching](./search.md)
+- [Variable-Length Paths](./paths.md)
 - [Morphisms](./morphisms.md)
 
 # Reference
