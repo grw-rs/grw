@@ -1,0 +1,23 @@
+error[E0277]: `&str` is not a valid path length — expected a `usize` or a range of `usize`
+ --> tests/compile_fail/path_len_not_a_range.rs:3:58
+  |
+3 |     let _ = grw::search::path::Config::new(()).dfs().len("three");
+  |                                                      --- ^^^^^^^ not a path-length bound
+  |                                                      |
+  |                                                      required by a bound introduced by this call
+  |
+  = help: the trait `grw::search::path::Len` is not implemented for `&str`
+  = note: use an exact length like `.len(3)` or a range like `.len(2..5)`, `.len(2..=4)`, `.len(3..)`
+  = help: the following other types implement trait `grw::search::path::Len`:
+            RangeFull
+            RangeTo<usize>
+            std::ops::Range<usize>
+            std::ops::RangeFrom<usize>
+            std::ops::RangeInclusive<usize>
+            std::ops::RangeToInclusive<usize>
+            usize
+note: required by a bound in `Config::<N, Mode, EV>::len`
+ --> src/search/path.rs
+  |
+  |     pub fn len(mut self, bounds: impl Len) -> Self {
+  |                                       ^^^ required by this bound in `Config::<N, Mode, EV>::len`

@@ -1,0 +1,13 @@
+error[E0599]: the method `one` exists for struct `Config<(), Traversal, _>`, but its trait bounds were not satisfied
+ --> tests/compile_fail/path_one_before_navigate.rs:3:54
+  |
+3 |     let _ = grw::search::path::Config::new(()).dfs().one();
+  |                                                      ^^^ method cannot be called on `Config<(), Traversal, _>` due to unsatisfied trait bounds
+  |
+ ::: src/search/path.rs
+  |
+  | pub struct Traversal;
+  | -------------------- doesn't satisfy `Traversal: IsNavigated`
+  |
+  = note: the following trait bounds were not satisfied:
+          `Traversal: IsNavigated`

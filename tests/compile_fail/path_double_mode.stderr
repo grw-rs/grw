@@ -1,0 +1,18 @@
+error[E0599]: the method `navigate` exists for struct `Config<(), Traversal, _>`, but its trait bounds were not satisfied
+ --> tests/compile_fail/path_double_mode.rs:5:10
+  |
+3 |       let _ = grw::search::path::Config::new(())
+  |  _____________-
+4 | |         .dfs()
+5 | |         .navigate(grw::search::path::Dijkstra::counted::<()>());
+  | |         -^^^^^^^^ method cannot be called on `Config<(), Traversal, _>` due to unsatisfied trait bounds
+  | |_________|
+  |
+  |
+ ::: src/search/path.rs
+  |
+  |   pub struct Traversal;
+  |   -------------------- doesn't satisfy `Traversal: IsUnset`
+  |
+  = note: the following trait bounds were not satisfied:
+          `Traversal: IsUnset`

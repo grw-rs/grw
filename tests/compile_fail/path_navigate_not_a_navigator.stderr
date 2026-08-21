@@ -1,0 +1,26 @@
+error[E0277]: `{integer}` is not a path navigator
+ --> tests/compile_fail/path_navigate_not_a_navigator.rs:3:57
+  |
+3 |     let _ = grw::search::path::Config::new(()).navigate(42);
+  |                                                -------- ^^ not a `Navigator`
+  |                                                |
+  |                                                required by a bound introduced by this call
+  |
+  = help: the trait `Navigator<_>` is not implemented for `{integer}`
+  = note: pass `Dijkstra::counted()`, `Dijkstra::weighted(|ev| ..)`, or `AStar::new(weight, heuristic)`
+help: the following other types implement trait `Navigator<EV>`
+ --> src/search/path.rs
+  |
+  |   impl<EV, F: Fn(&EV) -> f64 + Send + Sync + 'static> Navigator<EV> for Dijkstra<F> {
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Dijkstra<F>`
+...
+  | / impl<EV, W, H> Navigator<EV> for AStar<W, H>
+  | | where
+  | |     W: Fn(&EV) -> f64 + Send + Sync + 'static,
+  | |     H: Fn(id::N) -> f64 + Send + Sync + 'static,
+  | |________________________________________________^ `AStar<W, H>`
+note: required by a bound in `Config::<N, Mode>::navigate`
+ --> src/search/path.rs
+  |
+  |     pub fn navigate<EV: 'static, Nav: Navigator<EV>>(self, nav: Nav) -> Config<N, Navigated, EV> {
+  |                                       ^^^^^^^^^^^^^ required by this bound in `Config::<N, Mode>::navigate`
