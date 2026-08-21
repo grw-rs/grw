@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GRW — graph construction, mutation & morphism matching in Rust</title>
-<meta name="description" content="GRW is an embedded graph-rewriting system for Rust: build, transactionally mutate, and pattern-match graphs through operator DSLs, with full control over the six graph morphisms.">
+<meta name="description" content="GRW is an embedded graph-rewriting system for Rust: build, transactionally mutate, and pattern-match graphs through operator DSLs — with variable-length path search and full control over the six graph morphisms.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,560;9..144,660&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -14,6 +14,7 @@
     --text:#e7eaf0; --muted:#8b95a9; --dim:#5b6577;
     --node:#f0a63f; --node-soft:rgba(240,166,63,.14);
     --edge:#46c6d6; --edge-soft:rgba(70,198,214,.12); --edge-line:rgba(70,198,214,.5);
+    --ban:#e2596e; --ban-soft:rgba(226,89,110,.12);
     --maxw:1080px;
   }
   *{box-sizing:border-box}
@@ -51,7 +52,7 @@
     line-height:.98; letter-spacing:-.02em; margin:0 0 20px}
   h1 .em{font-style:italic; font-weight:560; color:var(--node)}
   .lede{font-size:19px; color:#c8cdda; max-width:34ch; margin:0 0 14px}
-  .sub{font-size:15px; color:var(--muted); max-width:42ch; margin:0 0 30px}
+  .sub{font-size:15px; color:var(--muted); max-width:44ch; margin:0 0 30px}
   .sub code{color:#c6ccd9; background:var(--panel2); padding:1px 6px; border-radius:4px; font-size:13px}
   .cta{display:flex; gap:14px; flex-wrap:wrap}
   .btn{display:inline-flex; align-items:center; gap:9px; padding:11px 20px; border-radius:8px;
@@ -69,12 +70,21 @@
   .canvas pre{margin:0; padding:17px 18px 6px; font-size:13px; line-height:1.7; overflow-x:auto}
   .diagram{padding:2px 0 16px; display:flex; justify-content:center}
   /* rust token colors */
-  .k{color:#c58bff} .m{color:var(--edge)} .n{color:var(--node)} .f{color:#e7eaf0} .c{color:var(--dim); font-style:italic} .p{color:#8b95a9}
+  .k{color:#c58bff} .m{color:var(--edge)} .n{color:var(--node)} .f{color:#e7eaf0} .c{color:var(--dim); font-style:italic} .p{color:#8b95a9} .b{color:var(--ban)}
 
   /* graph svg shared */
   .gnode{fill:var(--node)} .gnode-ring{fill:var(--node-soft)}
   .gedge{stroke:var(--edge); stroke-width:2.4; fill:none; stroke-linecap:round}
+  .gedge-dim{stroke:var(--edge); stroke-width:2; fill:none; stroke-linecap:round; opacity:.28}
+  .gpath{stroke:var(--edge); stroke-width:2.4; fill:none; stroke-linecap:round; stroke-dasharray:7 6}
+  .gghost{fill:none; stroke:rgba(240,166,63,.5); stroke-width:1.6; stroke-dasharray:3 4}
+  .gban{stroke:var(--ban); stroke-width:2.2; fill:none; stroke-linecap:round; stroke-dasharray:6 5}
+  .gban-ring{fill:var(--ban-soft)}
+  .gban-node{fill:none; stroke:var(--ban); stroke-width:2; stroke-dasharray:4 4}
   .glabel{fill:#1a1205; font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:600; text-anchor:middle; dominant-baseline:central}
+  .glabel-ban{fill:var(--ban); font-family:"JetBrains Mono",monospace; font-size:12px; font-weight:600; text-anchor:middle; dominant-baseline:central}
+  .gweight{fill:var(--muted); font-family:"JetBrains Mono",monospace; font-size:11px; text-anchor:middle}
+  .gnote{fill:var(--dim); font-family:"JetBrains Mono",monospace; font-size:11px; text-anchor:middle}
 
   @media(prefers-reduced-motion:no-preference){
     .draw{stroke-dasharray:var(--len); stroke-dashoffset:var(--len); animation:draw .9s ease forwards}
@@ -91,7 +101,8 @@
   .sec-title{font-family:Fraunces,serif; font-weight:600; font-size:clamp(28px,4vw,40px);
     letter-spacing:-.015em; margin:0; line-height:1.05}
   .sec-title .em{font-style:italic; color:var(--node)}
-  .sec-lede{color:var(--muted); max-width:56ch; margin:14px 0 0; font-size:16px}
+  .sec-lede{color:var(--muted); max-width:58ch; margin:14px 0 0; font-size:16px}
+  .sec-lede code{color:#c6ccd9; background:var(--panel2); padding:1px 5px; border-radius:4px; font-size:13px}
 
   /* three DSLs */
   .dsls{display:grid; grid-template-columns:repeat(3,1fr); gap:18px}
@@ -107,7 +118,29 @@
     font-size:12px; line-height:1.65; overflow-x:auto; flex:1}
   @media(max-width:820px){.dsls{grid-template-columns:1fr}}
 
-  /* morphisms signature */
+  /* example pairs (code + diagram) */
+  .pair{display:grid; grid-template-columns:1.08fr .92fr; gap:0; background:var(--panel);
+    border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:0 0 20px}
+  .pair .code{padding:4px 0 8px; border-right:1px solid var(--line); display:flex; flex-direction:column}
+  .pair .cap{display:flex; align-items:center; gap:8px; padding:11px 15px; border-bottom:1px solid var(--line);
+    font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--muted)}
+  .pair pre{margin:0; padding:15px 18px; font-size:12.5px; line-height:1.7; overflow-x:auto; flex:1}
+  .pair .art{display:flex; align-items:center; justify-content:center; padding:18px 12px; background:var(--panel2)}
+  @media(max-width:820px){
+    .pair{grid-template-columns:1fr}
+    .pair .code{border-right:0; border-bottom:1px solid var(--line)}
+  }
+
+  /* api strip */
+  .apistrip{background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:0 0 20px}
+  .apistrip pre{margin:0; padding:16px 18px; font-size:12.5px; line-height:1.9; overflow-x:auto}
+
+  .legend{display:flex; gap:14px; flex-wrap:wrap; margin:0 0 26px}
+  .lg{display:inline-flex; align-items:center; gap:8px; font-family:"JetBrains Mono",monospace;
+    font-size:11.5px; color:var(--muted); border:1px solid var(--line); border-radius:20px; padding:5px 13px}
+  .lg svg{display:block}
+
+  /* morphisms */
   .morph{display:grid; grid-template-columns:.9fr 1.1fr; gap:48px; align-items:center}
   .lattice{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px}
   .axes{display:flex; gap:10px; margin:0 0 26px; flex-wrap:wrap}
@@ -154,8 +187,9 @@
     </div>
     <nav class="navlinks">
       <a href="#dsls">DSLs</a>
+      <a href="#paths">Paths</a>
+      <a href="#composed">Search</a>
       <a href="#morphisms">Morphisms</a>
-      <a href="#model">Graph model</a>
       <a href="https://github.com/grw-rs/grw">GitHub ↗</a>
     </nav>
   </div>
@@ -169,10 +203,10 @@
       <p class="eyebrow">Graph rewriting · Rust</p>
       <h1>Graphs as<br>a <span class="em">first-class</span><br>expression.</h1>
       <p class="lede">Construct, transactionally mutate, and pattern-match graphs — inside a Rust process.</p>
-      <p class="sub">Three small DSLs built on <code>macro_rules!</code> — no procedural macros — overload Rust's operators so an edge is just <code>^</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code>. Every fragment is a plain struct you can build and compose in code.</p>
+      <p class="sub">Three small DSLs built on <code>macro_rules!</code> — no procedural macros — overload Rust's operators so an edge is just <code>^</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code> — and a variable-length path is just <code>..</code>. Every fragment is a plain struct you can build and compose in code.</p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/grw-rs/grw">View on GitHub</a>
-        <a class="btn ghost" href="#morphisms">The six morphisms</a>
+        <a class="btn ghost" href="#paths">Path patterns</a>
       </div>
     </div>
     <div class="heroart">
@@ -183,7 +217,6 @@
 ].<span class="f">unwrap</span>();</pre>
         <div class="diagram">
           <svg width="230" height="150" viewBox="0 0 230 150" role="img" aria-label="Triangle graph with nodes 0, 1 and 2">
-            <!-- edges: 0-1, 1-2, 2-0 -->
             <line x1="60" y1="42" x2="170" y2="42" class="gedge draw" style="--len:110"/>
             <line x1="170" y1="42" x2="115" y2="120" class="gedge draw" style="--len:96; animation-delay:.15s"/>
             <line x1="115" y1="120" x2="60" y2="42" class="gedge draw" style="--len:96; animation-delay:.3s"/>
@@ -239,52 +272,178 @@
     </div>
   </section>
 
-  <!-- MORPHISMS (signature) -->
-  <section id="morphisms">
+  <!-- PATHS -->
+  <section id="paths">
     <div class="sec-head">
-      <p class="sec-kicker">The signature</p>
-      <h2 class="sec-title">Six <span class="em">morphisms</span>, one lattice.</h2>
-      <p class="sec-lede">A morphism maps pattern nodes to target nodes while preserving edges. Three independent axes decide how strict that mapping is — and the eight combinations that matter collapse into six named morphisms, ordered from exact to anything-goes.</p>
+      <p class="sec-kicker">Variable-length paths</p>
+      <h2 class="sec-title">A path is just <span class="em">..</span></h2>
+      <p class="sec-lede">Prefix a pattern node with <code>..</code> and the edge becomes a variable-length path: DFS or BFS traversal, length bounds, or cost-ordered navigation with Dijkstra and A&#42; — all yielded by lazy iterators, one path per <code>next()</code>.</p>
     </div>
-    <div class="morph">
-      <div class="lattice">
-        <svg width="100%" viewBox="0 0 360 300" role="img" aria-label="Hasse diagram: the partial order of the six morphisms, Iso at the top, Homo at the bottom">
-          <!-- edges (partial order) -->
-          <g class="gedge">
-            <line x1="180" y1="40" x2="100" y2="110" class="draw" style="--len:107"/>
-            <line x1="180" y1="40" x2="260" y2="110" class="draw" style="--len:107; animation-delay:.1s"/>
-            <line x1="100" y1="110" x2="150" y2="190" class="draw" style="--len:95; animation-delay:.2s"/>
-            <line x1="260" y1="110" x2="150" y2="190" class="draw" style="--len:135; animation-delay:.3s"/>
-            <line x1="260" y1="110" x2="270" y2="190" class="draw" style="--len:81; animation-delay:.4s"/>
-            <line x1="150" y1="190" x2="180" y2="262" class="draw" style="--len:78; animation-delay:.5s"/>
-            <line x1="270" y1="190" x2="180" y2="262" class="draw" style="--len:113; animation-delay:.6s"/>
-          </g>
-          <!-- nodes -->
-          <g class="mlnode"><circle cx="180" cy="40" r="26" class="gnode-ring"/><circle cx="180" cy="40" r="19" class="gnode"/><text x="180" y="40" class="glabel">Iso</text></g>
-          <g class="mlnode"><circle cx="100" cy="110" r="30" class="gnode-ring"/><circle cx="100" cy="110" r="23" class="gnode"/><text x="100" y="110" class="glabel" style="font-size:11px">SubIso</text></g>
-          <g class="mlnode"><circle cx="260" cy="110" r="32" class="gnode-ring"/><circle cx="260" cy="110" r="25" class="gnode"/><text x="260" y="110" class="glabel" style="font-size:10px">EpiMono</text></g>
-          <g class="mlnode"><circle cx="150" cy="190" r="28" class="gnode-ring"/><circle cx="150" cy="190" r="21" class="gnode"/><text x="150" y="190" class="glabel" style="font-size:12px">Mono</text></g>
-          <g class="mlnode"><circle cx="270" cy="190" r="24" class="gnode-ring"/><circle cx="270" cy="190" r="18" class="gnode"/><text x="270" y="190" class="glabel" style="font-size:12px">Epi</text></g>
-          <g class="mlnode"><circle cx="180" cy="262" r="26" class="gnode-ring"/><circle cx="180" cy="262" r="19" class="gnode"/><text x="180" y="262" class="glabel" style="font-size:11px">Homo</text></g>
+
+    <div class="apistrip">
+      <div class="cap" style="display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)"><span class="dot"></span> the path API, on one screen</div>
+      <pre>..<span class="n">n</span>(1).<span class="f">dfs</span>()                                              <span class="c">// deepest-first trails</span>
+..<span class="n">n</span>(1).<span class="f">bfs</span>().<span class="f">len</span>(3..10)                                   <span class="c">// shortest-first, 3–9 edges</span>
+..<span class="n">n</span>(1).<span class="f">navigate</span>(<span class="f">Dijkstra</span>::<span class="f">counted</span>())                      <span class="c">// cheapest by hop count</span>
+..<span class="n">n</span>(1).<span class="f">navigate</span>(<span class="f">Dijkstra</span>::<span class="f">weighted</span>(|ev: &amp;<span class="f">EV</span>| ev.cost))    <span class="c">// cheapest by edge weight</span>
+..<span class="n">n</span>(1).<span class="f">navigate</span>(<span class="f">AStar</span>::<span class="f">new</span>(|ev| ev.cost, |n| h(n))).<span class="f">all</span>()  <span class="c">// every trail, cost-ordered</span>
+..<span class="n">n</span>(1).<span class="f">dfs</span>().<span class="f">guard</span>(|p| !p.<span class="f">contains</span>(<span class="f">N</span>(2)))                 <span class="c">// prune paths mid-walk</span>
+..<span class="n">n</span>(1).<span class="f">drive</span>(|n| <span class="f">Some</span>(<span class="f">Explore</span>::<span class="f">One</span>(0)))                   <span class="c">// steer expansion per depth</span></pre>
+    </div>
+
+    <div class="pair">
+      <div class="code">
+        <div class="cap"><span class="dot"></span> inside a pattern — path as an edge</div>
+        <pre><span class="c">// any path of ≥2 edges between the
+// nodes matched as 0 and 1</span>
+<span class="f">get</span>(<span class="n">Mono</span>) {
+    <span class="n">n</span>(0) ^ ..<span class="n">n</span>(1).<span class="f">dfs</span>().<span class="f">len</span>(2..)
+}</pre>
+      </div>
+      <div class="art">
+        <svg width="290" height="120" viewBox="0 0 290 120" role="img" aria-label="Two matched nodes joined by a variable-length path through unknown intermediate nodes">
+          <path d="M52 60 C 90 26, 120 26, 145 48 S 208 92, 238 62" class="gpath"/>
+          <circle cx="112" cy="38" r="7" class="gghost"/>
+          <circle cx="178" cy="80" r="7" class="gghost"/>
+          <g><circle cx="40" cy="60" r="16" class="gnode-ring"/><circle cx="40" cy="60" r="11" class="gnode"/><text x="40" y="60" class="glabel">0</text></g>
+          <g><circle cx="250" cy="60" r="16" class="gnode-ring"/><circle cx="250" cy="60" r="11" class="gnode"/><text x="250" y="60" class="glabel">1</text></g>
+          <text x="145" y="112" class="gnote">len 2.. — intermediates found, not named</text>
         </svg>
       </div>
-      <div>
-        <div class="axes">
-          <span class="axis"><b>injective</b> · one-to-one</span>
-          <span class="axis"><b>surjective</b> · covers all</span>
-          <span class="axis"><b>induced</b> · exact neighborhood</span>
-        </div>
-        <table class="mtable">
-          <tr><td class="mn">Iso</td><td class="md">Exact match — same shape, same size, same edges.</td></tr>
-          <tr><td class="mn">SubIso</td><td class="md">Find this exact shape inside the target.</td></tr>
-          <tr><td class="mn">EpiMono</td><td class="md">Bijection, but extra edges between matched nodes are OK.</td></tr>
-          <tr><td class="mn">Mono</td><td class="md">Each pattern node gets a unique target; extra edges OK.</td></tr>
-          <tr><td class="mn">Epi</td><td class="md">Must cover all target nodes; can collapse pattern nodes.</td></tr>
-          <tr><td class="mn">Homo</td><td class="md">Anything goes — just preserve edges.</td></tr>
-        </table>
-        <p class="sec-lede" style="margin-top:22px">Going up the lattice adds constraints; going down relaxes them. The <code>meet()</code> of two morphisms is the most relaxed one that still satisfies both.</p>
+    </div>
+
+    <div class="pair">
+      <div class="code">
+        <div class="cap"><span class="dot"></span> navigated — cheapest route wins</div>
+        <pre><span class="k">let</span> cfg = <span class="f">Config</span>::<span class="f">new</span>(())
+    .<span class="f">navigate</span>(<span class="f">Dijkstra</span>::<span class="f">weighted</span>(
+        |ev: &amp;<span class="f">Cost</span>| ev.0 <span class="k">as</span> <span class="f">f64</span>));
+
+<span class="k">let</span> (cost, path) = g
+    .<span class="f">path_navigate</span>(<span class="n">N</span>(0), <span class="n">N</span>(3),
+        follow, cfg, &amp;constraint)
+    .<span class="f">next</span>()
+    .<span class="f">unwrap</span>();
+<span class="c">// cost 2.0 via 0 → 1 → 3</span></pre>
+      </div>
+      <div class="art">
+        <svg width="290" height="150" viewBox="0 0 290 150" role="img" aria-label="Weighted graph where the cheapest path zero one three is highlighted over the expensive route through node two">
+          <line x1="55" y1="75" x2="145" y2="30" class="gedge"/>
+          <line x1="145" y1="30" x2="235" y2="75" class="gedge"/>
+          <line x1="55" y1="75" x2="145" y2="120" class="gedge-dim"/>
+          <line x1="145" y1="120" x2="235" y2="75" class="gedge-dim"/>
+          <text x="92" y="40" class="gweight">1</text>
+          <text x="198" y="40" class="gweight">1</text>
+          <text x="92" y="114" class="gweight">10</text>
+          <text x="198" y="114" class="gweight">1</text>
+          <g><circle cx="40" cy="75" r="15" class="gnode-ring"/><circle cx="40" cy="75" r="10.5" class="gnode"/><text x="40" y="75" class="glabel">0</text></g>
+          <g><circle cx="145" cy="30" r="15" class="gnode-ring"/><circle cx="145" cy="30" r="10.5" class="gnode"/><text x="145" y="30" class="glabel">1</text></g>
+          <g><circle cx="145" cy="120" r="13" style="fill:var(--node-soft)"/><circle cx="145" cy="120" r="9" style="fill:#7a6033"/><text x="145" y="120" class="glabel" style="fill:#0b0e14">2</text></g>
+          <g><circle cx="250" cy="75" r="15" class="gnode-ring"/><circle cx="250" cy="75" r="10.5" class="gnode"/><text x="250" y="75" class="glabel">3</text></g>
+        </svg>
       </div>
     </div>
+
+    <p class="sec-lede" style="margin-top:2px">Results stream lazily — DFS yields deepest trails first, BFS shortest first, navigation in non-decreasing cost. <code>.one()</code> keeps textbook Dijkstra/A&#42; dominance for the single cheapest path; <code>.all()</code> enumerates every trail and lets you decide when to stop pulling.</p>
+  </section>
+
+  <!-- COMPOSED SEARCH -->
+  <section id="composed">
+    <div class="sec-head">
+      <p class="sec-kicker">Search, composed</p>
+      <h2 class="sec-title">Say what must hold — <span class="em">and what must not.</span></h2>
+      <p class="sec-lede">A query is a set of clusters, each with its own morphism: <code>get</code> clusters must be found, <code>ban</code> clusters reject any match they can complete. Negated nodes inline the same power into a single pattern, and paths drop in anywhere an edge can.</p>
+    </div>
+
+    <div class="legend">
+      <span class="lg"><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="gedge"/></svg> edge</span>
+      <span class="lg"><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="gpath"/></svg> variable-length path</span>
+      <span class="lg"><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="gban"/></svg> forbidden</span>
+      <span class="lg"><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" class="gghost"/></svg> unnamed intermediate</span>
+    </div>
+
+    <div class="pair">
+      <div class="code">
+        <div class="cap"><span class="dot"></span> get + ban — no common neighbor</div>
+        <pre><span class="c">// edges whose endpoints do NOT
+// share a common neighbor</span>
+<span class="m">search!</span>[&amp;g,
+    <span class="f">get</span>(<span class="n">Mono</span>) {
+        <span class="n">N</span>(0) ^ <span class="n">N</span>(1)
+    },
+    <span class="b">ban</span>(<span class="n">Mono</span>) {
+        <span class="n">n</span>(0) ^ <span class="n">N</span>(2),
+        <span class="n">n</span>(1) ^ <span class="n">n</span>(2),
+    }
+].<span class="f">unwrap</span>()</pre>
+      </div>
+      <div class="art">
+        <svg width="270" height="160" viewBox="0 0 270 160" role="img" aria-label="A matched edge zero to one, with a banned triangle through a common neighbor two shown crossed out">
+          <line x1="62" y1="118" x2="208" y2="118" class="gedge"/>
+          <line x1="62" y1="118" x2="135" y2="42" class="gban"/>
+          <line x1="208" y1="118" x2="135" y2="42" class="gban"/>
+          <g><circle cx="135" cy="42" r="16" class="gban-ring"/><circle cx="135" cy="42" r="12" class="gban-node"/><text x="135" y="42" class="glabel-ban">2</text></g>
+          <g><circle cx="50" cy="118" r="16" class="gnode-ring"/><circle cx="50" cy="118" r="11" class="gnode"/><text x="50" y="118" class="glabel">0</text></g>
+          <g><circle cx="220" cy="118" r="16" class="gnode-ring"/><circle cx="220" cy="118" r="11" class="gnode"/><text x="220" y="118" class="glabel">1</text></g>
+          <text x="135" y="150" class="gnote">no node 2 may close the triangle</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="pair">
+      <div class="code">
+        <div class="cap"><span class="dot"></span> negated node — an inline ban</div>
+        <pre><span class="c">// same query, one cluster:
+// the ! edge must not exist</span>
+<span class="m">search!</span>[&amp;g,
+    <span class="f">get</span>(<span class="n">Mono</span>) {
+        <span class="n">N</span>(0) ^ <span class="n">N</span>(1),
+        <span class="b">!N</span>(2) ^ <span class="n">n</span>(1)
+    }
+]
+<span class="c">// equivalence with the ban form is
+// checked by the negation-parity suite</span></pre>
+      </div>
+      <div class="art">
+        <svg width="270" height="160" viewBox="0 0 270 160" role="img" aria-label="An edge zero one where a negated node two with a forbidden edge to one is crossed out">
+          <line x1="62" y1="80" x2="208" y2="80" class="gedge"/>
+          <line x1="220" y1="80" x2="220" y2="80" class="gedge"/>
+          <line x1="208" y1="86" x2="150" y2="132" class="gban"/>
+          <g><circle cx="138" cy="138" r="14" class="gban-ring"/><circle cx="138" cy="138" r="11" class="gban-node"/><text x="138" y="138" class="glabel-ban">2</text></g>
+          <line x1="128" y1="148" x2="148" y2="128" class="gban" style="stroke-dasharray:none"/>
+          <g><circle cx="50" cy="80" r="16" class="gnode-ring"/><circle cx="50" cy="80" r="11" class="gnode"/><text x="50" y="80" class="glabel">0</text></g>
+          <g><circle cx="220" cy="80" r="16" class="gnode-ring"/><circle cx="220" cy="80" r="11" class="gnode"/><text x="220" y="80" class="glabel">1</text></g>
+          <text x="135" y="34" class="gnote">!N(2): no node may sit here</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="pair">
+      <div class="code">
+        <div class="cap"><span class="dot"></span> clusters + paths — finding cycles</div>
+        <pre><span class="c">// bind both endpoints to the SAME
+// graph node → paths become cycles</span>
+<span class="m">search!</span>[&lt;(), <span class="f">ER</span>&gt;;
+    <span class="f">get</span>(<span class="n">Homo</span>) { <span class="n">X</span>(0), <span class="n">X</span>(1) },
+    <span class="f">get</span>(<span class="n">Mono</span>) {
+        <span class="n">n</span>(0) ^ ..<span class="n">n</span>(1).<span class="f">dfs</span>().<span class="f">len</span>(2..)
+    }
+]
+<span class="c">// Homo lets 0 and 1 collapse onto one
+// node; the Mono path can't reuse it</span></pre>
+      </div>
+      <div class="art">
+        <svg width="270" height="160" viewBox="0 0 270 160" role="img" aria-label="A single bound node with a variable-length path leaving it and returning — a cycle">
+          <path d="M118 78 C 60 18, 210 18, 152 78" class="gpath"/>
+          <circle cx="98" cy="34" r="7" class="gghost"/>
+          <circle cx="172" cy="34" r="7" class="gghost"/>
+          <g><circle cx="135" cy="95" r="18" class="gnode-ring"/><circle cx="135" cy="95" r="12.5" class="gnode"/><text x="135" y="95" class="glabel">0=1</text></g>
+          <text x="135" y="140" class="gnote">endpoints share one node — a cycle</text>
+        </svg>
+      </div>
+    </div>
+
+    <p class="sec-lede" style="margin-top:2px">Every cluster carries its own morphism — <code>Homo</code> endpoints with a <code>Mono</code> path, <code>SubIso</code> cores with relaxed context. Iterate matches sequentially with a lazy backtracking iterator, or fan the search space across threads with <code>par_iter()</code>.</p>
   </section>
 
   <!-- GRAPH MODEL -->
@@ -309,6 +468,52 @@
         <div class="ops">^ &gt;&gt; &lt;&lt;</div>
         <h4>edge::Anydir&lt;EV&gt;</h4>
         <p>All three at once — undirected plus both directions. Slots: <code>UND</code>, <code>SRC</code>, <code>TGT</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- MORPHISMS -->
+  <section id="morphisms">
+    <div class="sec-head">
+      <p class="sec-kicker">The theory underneath</p>
+      <h2 class="sec-title">Six <span class="em">morphisms</span>, one lattice.</h2>
+      <p class="sec-lede">Every <code>get</code> and <code>ban</code> you saw above names one of these. A morphism maps pattern nodes to target nodes while preserving edges; three independent axes decide how strict that mapping is, and they collapse into six named morphisms, ordered from exact to anything-goes.</p>
+    </div>
+    <div class="morph">
+      <div class="lattice">
+        <svg width="100%" viewBox="0 0 360 300" role="img" aria-label="Hasse diagram: the partial order of the six morphisms, Iso at the top, Homo at the bottom">
+          <g class="gedge">
+            <line x1="180" y1="40" x2="100" y2="110" class="draw" style="--len:107"/>
+            <line x1="180" y1="40" x2="260" y2="110" class="draw" style="--len:107; animation-delay:.1s"/>
+            <line x1="100" y1="110" x2="150" y2="190" class="draw" style="--len:95; animation-delay:.2s"/>
+            <line x1="260" y1="110" x2="150" y2="190" class="draw" style="--len:135; animation-delay:.3s"/>
+            <line x1="260" y1="110" x2="270" y2="190" class="draw" style="--len:81; animation-delay:.4s"/>
+            <line x1="150" y1="190" x2="180" y2="262" class="draw" style="--len:78; animation-delay:.5s"/>
+            <line x1="270" y1="190" x2="180" y2="262" class="draw" style="--len:113; animation-delay:.6s"/>
+          </g>
+          <g class="mlnode"><circle cx="180" cy="40" r="26" class="gnode-ring"/><circle cx="180" cy="40" r="19" class="gnode"/><text x="180" y="40" class="glabel">Iso</text></g>
+          <g class="mlnode"><circle cx="100" cy="110" r="30" class="gnode-ring"/><circle cx="100" cy="110" r="23" class="gnode"/><text x="100" y="110" class="glabel" style="font-size:11px">SubIso</text></g>
+          <g class="mlnode"><circle cx="260" cy="110" r="32" class="gnode-ring"/><circle cx="260" cy="110" r="25" class="gnode"/><text x="260" y="110" class="glabel" style="font-size:10px">EpiMono</text></g>
+          <g class="mlnode"><circle cx="150" cy="190" r="28" class="gnode-ring"/><circle cx="150" cy="190" r="21" class="gnode"/><text x="150" y="190" class="glabel" style="font-size:12px">Mono</text></g>
+          <g class="mlnode"><circle cx="270" cy="190" r="24" class="gnode-ring"/><circle cx="270" cy="190" r="18" class="gnode"/><text x="270" y="190" class="glabel" style="font-size:12px">Epi</text></g>
+          <g class="mlnode"><circle cx="180" cy="262" r="26" class="gnode-ring"/><circle cx="180" cy="262" r="19" class="gnode"/><text x="180" y="262" class="glabel" style="font-size:11px">Homo</text></g>
+        </svg>
+      </div>
+      <div>
+        <div class="axes">
+          <span class="axis"><b>injective</b> · one-to-one</span>
+          <span class="axis"><b>surjective</b> · covers all</span>
+          <span class="axis"><b>induced</b> · exact neighborhood</span>
+        </div>
+        <table class="mtable">
+          <tr><td class="mn">Iso</td><td class="md">Exact match — same shape, same size, same edges.</td></tr>
+          <tr><td class="mn">SubIso</td><td class="md">Find this exact shape inside the target.</td></tr>
+          <tr><td class="mn">EpiMono</td><td class="md">Bijection, but extra edges between matched nodes are OK.</td></tr>
+          <tr><td class="mn">Mono</td><td class="md">Each pattern node gets a unique target; extra edges OK.</td></tr>
+          <tr><td class="mn">Epi</td><td class="md">Must cover all target nodes; can collapse pattern nodes.</td></tr>
+          <tr><td class="mn">Homo</td><td class="md">Anything goes — just preserve edges.</td></tr>
+        </table>
+        <p class="sec-lede" style="margin-top:22px">Going up the lattice adds constraints; going down relaxes them. The <code>meet()</code> of two morphisms is the most relaxed one that still satisfies both.</p>
       </div>
     </div>
   </section>
