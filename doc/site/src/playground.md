@@ -34,7 +34,7 @@ Try GRW directly in your browser. Type `graph!`, `modify!`, or `search!` command
 #pg-editor-wrap { display: flex; gap: 8px; align-items: flex-start; }
 #pg-input { flex: 1; background: var(--sidebar-bg); color: var(--fg); border: 1px solid var(--sidebar-non-existant); padding: 8px; font-family: 'Source Code Pro', monospace; font-size: 13px; border-radius: 4px; resize: vertical; }
 #pg-output-wrap { display: flex; gap: 12px; min-height: 200px; }
-#pg-graph-panel { flex: 1; background: white; border-radius: 6px; padding: 8px; min-height: 200px; }
+#pg-graph-panel { flex: 1; background: var(--sidebar-bg); border-radius: 6px; padding: 8px; min-height: 200px; }
 #pg-result { flex: 1; font-size: 12px; margin: 0; padding: 8px; overflow: auto; max-height: 400px; background: var(--sidebar-bg); border-radius: 6px; }
 #pg-svg text { font-family: monospace; }
 </style>
@@ -56,7 +56,7 @@ function renderGraph(data) {
     const nodes = data.nodes;
     const edges = data.edges;
     const n = nodes.length;
-    if (n === 0) { svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#999">empty graph</text>'; return; }
+    if (n === 0) { svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#8b95a9">empty graph</text>'; return; }
 
     const w = svg.clientWidth || 400;
     const h = 300;
@@ -73,33 +73,33 @@ function renderGraph(data) {
         };
     });
 
-    let html = '<defs><marker id="pg-arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2171b5"/></marker></defs>';
+    let html = '<defs><marker id="pg-arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#46c6d6"/></marker></defs>';
 
     edges.forEach(e => {
         const s = pos[e.src], t = pos[e.tgt];
         if (!s || !t) return;
         const isDir = e.dir === '>>';
-        const col = isDir ? '#2171b5' : '#333';
+        const col = '#46c6d6';
         if (isDir) {
             const dx = t.x - s.x, dy = t.y - s.y;
             const len = Math.sqrt(dx*dx + dy*dy);
             if (len < 1) return;
             const ux = dx/len, uy = dy/len;
-            html += `<line x1="${s.x + ux*nr}" y1="${s.y + uy*nr}" x2="${t.x - ux*(nr+6)}" y2="${t.y - uy*(nr+6)}" stroke="${col}" stroke-width="2" marker-end="url(#pg-arrow)"/>`;
+            html += `<line x1="${s.x + ux*nr}" y1="${s.y + uy*nr}" x2="${t.x - ux*(nr+6)}" y2="${t.y - uy*(nr+6)}" stroke="${col}" stroke-width="2.2" marker-end="url(#pg-arrow)"/>`;
         } else {
-            html += `<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="${col}" stroke-width="2"/>`;
+            html += `<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="${col}" stroke-width="2.2"/>`;
         }
         if (e.val && e.val !== 'Unit' && e.val !== null) {
-            html += `<text x="${(s.x+t.x)/2}" y="${(s.y+t.y)/2 - 6}" text-anchor="middle" font-size="10" fill="#666">${JSON.stringify(e.val)}</text>`;
+            html += `<text x="${(s.x+t.x)/2}" y="${(s.y+t.y)/2 - 6}" text-anchor="middle" font-size="11" fill="#8b95a9">${JSON.stringify(e.val)}</text>`;
         }
     });
 
     nodes.forEach(nd => {
         const p = pos[nd.id];
-        html += `<circle cx="${p.x}" cy="${p.y}" r="${nr}" fill="#f0f0f0" stroke="#333" stroke-width="2"/>`;
-        html += `<text x="${p.x}" y="${p.y + 4}" text-anchor="middle" font-size="12" fill="#333">${nd.id}</text>`;
+        html += `<circle cx="${p.x}" cy="${p.y}" r="${nr}" fill="#f0a63f"/>`;
+        html += `<text x="${p.x}" y="${p.y + 4}" text-anchor="middle" font-size="14" font-weight="700" fill="#0d0a03">${nd.id}</text>`;
         if (nd.val && nd.val !== 'Unit' && nd.val !== null) {
-            html += `<text x="${p.x}" y="${p.y + nr + 14}" text-anchor="middle" font-size="9" fill="#666">${JSON.stringify(nd.val)}</text>`;
+            html += `<text x="${p.x}" y="${p.y + nr + 14}" text-anchor="middle" font-size="11" fill="#8b95a9">${JSON.stringify(nd.val)}</text>`;
         }
     });
 
