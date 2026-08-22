@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-27a8fe6c.js";
+            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-29ac6ec0.js"></script>
@@ -183,9 +183,9 @@
 <p>Pattern: path <strong>A — B — C</strong> (3 nodes, 2 edges). Target: triangle <strong>0 — 1 — 2 — 0</strong> (3 nodes, 3 edges).</p>
 <h3 id="mapping-a0-b1-c2"><a class="header" href="#mapping-a0-b1-c2">Mapping: A→0, B→1, C→2</a></h3>
 <p>The required edges (A—B, B—C) are present in the target. But there’s an <strong>extra edge 0—2</strong> that the pattern doesn’t mention.</p>
-<p><img src="img/morph-mono-accept.svg" alt="mono accept">
+<p><svg viewbox="0 0 296 165" style="max-width:296px;display:block;margin:0.8em auto" role="img" aria-label="mono accept"><line x1="71" y1="103" x2="135" y2="54" stroke="#46c6d6" stroke-width="2.2" /><line x1="74" y1="113" x2="222" y2="113" stroke="#46c6d6" stroke-width="2.2" stroke-dasharray="5 5" opacity="0.4" /><line x1="161" y1="54" x2="225" y2="103" stroke="#46c6d6" stroke-width="2.2" /><circle cx="58" cy="113" r="16" fill="#f0a63f22" /><circle cx="58" cy="113" r="11" fill="#f0a63f" /><text x="58" y="117" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">0</text><text x="58" y="91" text-anchor="middle" font-family="monospace" font-size="11" fill="#46c6d6">A</text><circle cx="148" cy="44" r="16" fill="#f0a63f22" /><circle cx="148" cy="44" r="11" fill="#f0a63f" /><text x="148" y="48" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">1</text><text x="148" y="22" text-anchor="middle" font-family="monospace" font-size="11" fill="#46c6d6">B</text><circle cx="238" cy="113" r="16" fill="#f0a63f22" /><circle cx="238" cy="113" r="11" fill="#f0a63f" /><text x="238" y="117" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">2</text><text x="238" y="91" text-anchor="middle" font-family="monospace" font-size="11" fill="#46c6d6">C</text><text x="148" y="124" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#8b95a9">extra</text></svg>
 <em>Mono: <strong>accept</strong> — extra edge is fine</em></p>
-<p><img src="img/morph-subiso-reject.svg" alt="subiso reject">
+<p><svg viewbox="0 0 296 165" style="max-width:296px;display:block;margin:0.8em auto" role="img" aria-label="subiso reject"><line x1="71" y1="103" x2="135" y2="54" stroke="#46c6d6" stroke-width="2.2" /><line x1="74" y1="113" x2="222" y2="113" stroke="#e2596e" stroke-width="2.2" stroke-dasharray="6 5" /><line x1="142" y1="107" x2="154" y2="119" stroke="#e2596e" stroke-width="2" /><line x1="142" y1="119" x2="154" y2="107" stroke="#e2596e" stroke-width="2" /><line x1="161" y1="54" x2="225" y2="103" stroke="#46c6d6" stroke-width="2.2" /><circle cx="58" cy="113" r="14" fill="#e2596e1f" /><circle cx="58" cy="113" r="11" fill="none" stroke="#e2596e" stroke-width="2" stroke-dasharray="4 4" /><text x="58" y="117" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#e2596e">0</text><text x="58" y="91" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">A</text><circle cx="148" cy="44" r="14" fill="#e2596e1f" /><circle cx="148" cy="44" r="11" fill="none" stroke="#e2596e" stroke-width="2" stroke-dasharray="4 4" /><text x="148" y="48" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#e2596e">1</text><text x="148" y="22" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">B</text><circle cx="238" cy="113" r="14" fill="#e2596e1f" /><circle cx="238" cy="113" r="11" fill="none" stroke="#e2596e" stroke-width="2" stroke-dasharray="4 4" /><text x="238" y="117" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#e2596e">2</text><text x="238" y="91" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">C</text><text x="148" y="124" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#e2596e">reject</text></svg>
 <em>SubIso: <strong>reject</strong> — extra edge violates induced constraint</em></p>
 <div class="table-wrapper">
 <table>
@@ -204,7 +204,7 @@
 </div>
 <h3 id="collapsing-a0-b1-c1"><a class="header" href="#collapsing-a0-b1-c1">Collapsing: A→0, B→1, C→1</a></h3>
 <p>C maps to the same target node as B — a <strong>collapse</strong>.</p>
-<p><img src="img/morph-homo-collapse.svg" alt="homo collapse">
+<p><svg viewbox="0 0 207 120" style="max-width:207px;display:block;margin:0.8em auto" role="img" aria-label="homo collapse"><line x1="74" y1="50" x2="133" y2="50" stroke="#46c6d6" stroke-width="2.2" /><circle cx="58" cy="50" r="16" fill="#f0a63f22" /><circle cx="58" cy="50" r="11" fill="#f0a63f" /><text x="58" y="54" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">0</text><text x="58" y="28" text-anchor="middle" font-family="monospace" font-size="11" fill="#46c6d6">A</text><circle cx="149" cy="50" r="16" fill="#f0a63f22" /><circle cx="149" cy="50" r="11" fill="#f0a63f" /><text x="149" y="54" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">1</text><text x="149" y="28" text-anchor="middle" font-family="monospace" font-size="11" fill="#46c6d6">B,C</text></svg>
 <em>Homo: <strong>accept</strong> — collapse allowed</em></p>
 <div class="table-wrapper">
 <table>
