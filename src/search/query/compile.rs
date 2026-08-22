@@ -562,6 +562,27 @@ pub fn compile<NV, ER: graph::Edge>(
         pattern_degrees[i] = seen.len();
     }
 
+    // Degree lower bound valid under mixed morphisms: only injective
+    // neighbors are forced onto pairwise-distinct targets; non-injective
+    // neighbors may all collapse onto one (or onto an injective neighbor's
+    // target), so together they force at most one extra distinct neighbor.
+    let mut effective_degrees = vec![0usize; node_count];
+    for i in 0..node_count {
+        let mut seen = smallvec::SmallVec::<[usize; 8]>::new();
+        let mut inj = 0usize;
+        let mut any_free = false;
+        for &(neighbor_idx, _, negated, edge_idx) in &adj[i] {
+            if !negated
+                && !flat.edges[edge_idx].ban_only
+                && !seen.contains(&neighbor_idx)
+            {
+                seen.push(neighbor_idx);
+                if node_morphism[neighbor_idx].is_injective() { inj += 1; } else { any_free = true; }
+            }
+        }
+        effective_degrees[i] = inj + usize::from(any_free && inj == 0);
+    }
+
     let neighbor_degree_profile: Vec<Vec<usize>> = (0..node_count).map(|i| {
         if flat.nodes[i].negated || flat.nodes[i].ban_only { return Vec::new(); }
         let mut seen = smallvec::SmallVec::<[usize; 8]>::new();
@@ -572,8 +593,8 @@ pub fn compile<NV, ER: graph::Edge>(
                 && !seen.contains(&neighbor_idx)
             {
                 seen.push(neighbor_idx);
-                if node_morphism[neighbor_idx] != Morphism::Homo {
-                    reqs.push(pattern_degrees[neighbor_idx]);
+                if node_morphism[neighbor_idx].is_injective() {
+                    reqs.push(effective_degrees[neighbor_idx]);
                 }
             }
         }
@@ -674,6 +695,8 @@ pub fn compile<NV, ER: graph::Edge>(
 
     let has_ban_clusters = !ban_clusters.is_empty();
     let has_surjective = node_morphism.iter().any(|m| m.is_surjective());
+    let has_non_injective = node_morphism.iter().enumerate()
+        .any(|(i, m)| !m.is_injective() && !flat.nodes[i].negated && !flat.nodes[i].ban_only);
     let is_injective: Vec<bool> = node_morphism.iter()
         .map(|m| m.is_injective())
         .collect();
@@ -738,6 +761,8 @@ pub fn compile<NV, ER: graph::Edge>(
         ban_clusters,
         search_order,
         pattern_degrees,
+        effective_degrees,
+        has_non_injective,
         has_ban_clusters,
         has_surjective,
         is_injective,

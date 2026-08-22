@@ -27,3 +27,13 @@ pub(crate) struct Count;
 
 impl Emit for Collect { const COUNT_ONLY: bool = false; }
 impl Emit for Count { const COUNT_ONLY: bool = true; }
+
+pub(crate) trait Inj {
+    const MIXED: bool;
+}
+
+pub(crate) struct AllInjective;
+pub(crate) struct MixedMorphisms;
+
+impl Inj for AllInjective { const MIXED: bool = false; }
+impl Inj for MixedMorphisms { const MIXED: bool = true; }

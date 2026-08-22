@@ -63,9 +63,11 @@ pub struct Query<NV, ER: graph::Edge> {
     pub(crate) ban_clusters: Vec<BanCluster>,
     pub(crate) search_order: Vec<usize>,
     pub(crate) pattern_degrees: Vec<usize>,
+    pub(crate) effective_degrees: Vec<usize>,
     pub(crate) has_ban_clusters: bool,
     pub(crate) has_surjective: bool,
     pub(crate) is_injective: Vec<bool>,
+    pub(crate) has_non_injective: bool,
     pub(crate) pattern_adj_bits: Vec<u64>,
     pub(crate) has_predicates: bool,
     pub(crate) node_has_predicates: Vec<bool>,
@@ -153,11 +155,11 @@ impl<NV, ER: graph::Edge> Unresolved<NV, ER> {
             .copied().collect();
         for (i, &ci) in all_pinned.iter().enumerate() {
             let morphism_i = self.query.node_morphism[ci];
-            if morphism_i == Morphism::Homo { continue; }
+            if !morphism_i.is_injective() { continue; }
             let target_i = bindings[ci].expect("validated above");
             for &cj in &all_pinned[(i + 1)..] {
                 let morphism_j = self.query.node_morphism[cj];
-                if morphism_j == Morphism::Homo { continue; }
+                if !morphism_j.is_injective() { continue; }
                 let target_j = bindings[cj].expect("validated above");
                 if target_i == target_j {
                     return Err(BindError::Collision {

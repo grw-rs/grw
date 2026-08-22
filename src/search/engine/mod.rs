@@ -1329,15 +1329,16 @@ impl Shared {
         let positive_count = search_order.len();
         let all_iso = search_order.iter()
             .all(|&i| query.node_morphism[i] == Morphism::Iso);
-        let any_injective = search_order.iter()
-            .any(|&i| query.node_morphism[i].is_injective());
+        let injective_count = search_order.iter()
+            .filter(|&&i| query.node_morphism[i].is_injective())
+            .count();
 
+        // Only injective nodes need pairwise-distinct targets; non-injective
+        // nodes may collapse, so they never contribute to the pigeonhole.
         let exhausted = if all_iso {
             target.nodes.len() != positive_count
-        } else if any_injective {
-            target.nodes.len() < positive_count
         } else {
-            false
+            target.nodes.len() < injective_count
         };
 
         let val_filtered = index.compute_val_filtered(query);
@@ -1447,17 +1448,19 @@ impl<R: ReverseLookup> State<R> {
         let positive_count = search_order.len();
         let all_iso = search_order.iter()
             .all(|&i| query.node_morphism[i] == Morphism::Iso);
-        let any_injective = search_order.iter()
-            .any(|&i| query.node_morphism[i].is_injective());
 
+        let injective_count = search_order.iter()
+            .filter(|&&i| query.node_morphism[i].is_injective())
+            .count();
+
+        // Only injective nodes need pairwise-distinct targets; non-injective
+        // nodes may collapse, so they never contribute to the pigeonhole.
         let exhausted = if positive_count == 0 {
             false
         } else if all_iso {
             target.nodes.len() != positive_count
-        } else if any_injective {
-            target.nodes.len() < positive_count
         } else {
-            false
+            target.nodes.len() < injective_count
         } || (query.has_surjective && positive_count < target.nodes.len());
 
 
@@ -1503,6 +1506,16 @@ impl<R: ReverseLookup> State<R> {
 }
 
 impl<R: ReverseLookup> State<R> {
+    /// Excluded set for injective path constraints: only injective bindings
+    /// participate — non-injective nodes reserve nothing, so a path may pass
+    /// through their targets.
+    pub(crate) fn injective_excluded(&self, is_injective: &[bool]) -> Vec<id::N> {
+        self.mapping.iter().enumerate()
+            .filter(|&(pi, &m)| m != UNMAPPED && is_injective[pi])
+            .map(|(_, &m)| id::N(m as Id))
+            .collect()
+    }
+
     /// Reset for a fresh root binding without reallocating the O(node_count)
     /// reverse lookup: clears only the entries actually set (walked via
     /// `mapping`, ≤ pattern_count of them) and reuses every buffer. This is
@@ -1598,10 +1611,7 @@ impl<R: ReverseLookup> State<R> {
                     };
                     let pc = crate::search::path::PathConstraint::from_morphism(
                         ctx.query.edges[edge_idx].path_morphism,
-                        &self.mapping.iter()
-                            .filter(|&&m| m != UNMAPPED)
-                            .map(|&m| id::N(m as Id))
-                            .collect::<Vec<_>>(),
+                        &self.injective_excluded(&ctx.query.is_injective),
                     );
                     let has_path = crate::search::path::execute_paths(
                         ctx.target,
@@ -2099,10 +2109,7 @@ impl<R: ReverseLookup> State<R> {
                         };
                         let pc = crate::search::path::PathConstraint::from_morphism(
                             pe.path_morphism,
-                            &self.mapping.iter()
-                                .filter(|&&m| m != UNMAPPED)
-                                .map(|&m| id::N(m as Id))
-                                .collect::<Vec<_>>(),
+                            &self.injective_excluded(&ctx.query.is_injective),
                         );
                         let found: Vec<Vec<id::N>> = crate::search::path::execute_paths(
                             ctx.target,

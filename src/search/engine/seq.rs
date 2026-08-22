@@ -121,14 +121,15 @@ impl<R: ReverseLookup> State<R> {
     pub(crate) fn initial_candidates<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>) -> Vec<id::N> {
         let depth0_idx = self.search_order[0];
         let morphism = ctx.query.node_morphism[depth0_idx];
-        let pattern_degree = ctx.query.pattern_degrees[depth0_idx];
+        let exact_iso = !ctx.query.has_non_injective;
+        let pattern_degree = if exact_iso { ctx.query.pattern_degrees[depth0_idx] } else { ctx.query.effective_degrees[depth0_idx] };
         let is_injective = ctx.query.is_injective[depth0_idx];
 
         if let Some(&Some(target_n)) = self.bindings.get(depth0_idx) {
             let mut result = Vec::new();
             let target_degree = ctx.index.degree(*target_n) as usize;
             let degree_ok = match morphism {
-                Morphism::Iso => target_degree == pattern_degree,
+                Morphism::Iso => if exact_iso { target_degree == pattern_degree } else { target_degree >= pattern_degree },
                 Morphism::SubIso | Morphism::EpiMono | Morphism::Mono => target_degree >= pattern_degree,
                 Morphism::Epi | Morphism::Homo => true,
             };
@@ -157,7 +158,7 @@ impl<R: ReverseLookup> State<R> {
         for &n in pool {
             let target_degree = ctx.index.degree(*n) as usize;
             match morphism {
-                Morphism::Iso => { if target_degree != pattern_degree { continue; } }
+                Morphism::Iso => { if exact_iso { if target_degree != pattern_degree { continue; } } else if target_degree < pattern_degree { continue; } }
                 Morphism::SubIso | Morphism::EpiMono | Morphism::Mono => { if target_degree < pattern_degree { continue; } }
                 Morphism::Epi | Morphism::Homo => {}
             }
@@ -211,7 +212,8 @@ impl<R: ReverseLookup> State<R> {
 
         if let Some(anchor) = self.best_mapped_neighbor(ctx, pattern_idx) {
             let morphism = ctx.query.node_morphism[pattern_idx];
-            let pattern_degree = ctx.query.pattern_degrees[pattern_idx];
+            let exact_iso = !ctx.query.has_non_injective;
+            let pattern_degree = if exact_iso { ctx.query.pattern_degrees[pattern_idx] } else { ctx.query.effective_degrees[pattern_idx] };
             let is_injective = ctx.query.is_injective[pattern_idx];
             let anchor_raw: u32 = *anchor;
             let can_fast_verify = ER::SLOT_COUNT == 1
@@ -241,7 +243,7 @@ impl<R: ReverseLookup> State<R> {
                     let target_degree = ctx.index.degree(raw) as usize;
                     match morphism {
                         Morphism::Iso => {
-                            if target_degree != pattern_degree { return false; }
+                            if exact_iso { if target_degree != pattern_degree { return false; } } else if target_degree < pattern_degree { return false; }
                         }
                         Morphism::SubIso | Morphism::EpiMono | Morphism::Mono => {
                             if target_degree < pattern_degree { return false; }
@@ -286,10 +288,7 @@ impl<R: ReverseLookup> State<R> {
                                     };
                                     let pc = crate::search::path::PathConstraint::from_morphism(
                                         ctx.query.edges[edge_idx].path_morphism,
-                                        &self.mapping.iter()
-                                            .filter(|&&m| m != super::UNMAPPED)
-                                            .map(|&m| crate::id::N(m as crate::Id))
-                                            .collect::<Vec<_>>(),
+                                        &self.injective_excluded(&ctx.query.is_injective),
                                     );
                                     let has_path = crate::search::path::execute_paths(
                                         ctx.target, id::N(raw as Id), id::N(mapped_raw as Id),
@@ -309,7 +308,8 @@ impl<R: ReverseLookup> State<R> {
             return;
         }
 
-        let pattern_degree = ctx.query.pattern_degrees[pattern_idx];
+        let exact_iso = !ctx.query.has_non_injective;
+        let pattern_degree = if exact_iso { ctx.query.pattern_degrees[pattern_idx] } else { ctx.query.effective_degrees[pattern_idx] };
         let morphism = ctx.query.node_morphism[pattern_idx];
         let is_injective = ctx.query.is_injective[pattern_idx];
 
@@ -323,7 +323,7 @@ impl<R: ReverseLookup> State<R> {
                 let target_degree = ctx.index.degree(*n) as usize;
                 match morphism {
                     Morphism::Iso => {
-                        if target_degree != pattern_degree { return false; }
+                        if exact_iso { if target_degree != pattern_degree { return false; } } else if target_degree < pattern_degree { return false; }
                     }
                     Morphism::SubIso | Morphism::EpiMono | Morphism::Mono => {
                         if target_degree < pattern_degree { return false; }
@@ -427,7 +427,8 @@ impl<R: ReverseLookup> State<R> {
         let anchor_raw: u32 = *anchor;
 
         let morphism = ctx.query.node_morphism[leaf_pi];
-        let pattern_degree = ctx.query.pattern_degrees[leaf_pi];
+        let exact_iso = !ctx.query.has_non_injective;
+        let pattern_degree = if exact_iso { ctx.query.pattern_degrees[leaf_pi] } else { ctx.query.effective_degrees[leaf_pi] };
         let is_injective = ctx.query.is_injective[leaf_pi];
         let can_fast = ER::SLOT_COUNT == 1 && !ctx.query.node_has_predicates[leaf_pi] && leaf_pi < 64;
 
@@ -456,7 +457,7 @@ impl<R: ReverseLookup> State<R> {
             let target_degree = ctx.index.degree(raw) as usize;
             match morphism {
                 Morphism::Iso => {
-                    if target_degree != pattern_degree { continue; }
+                    if exact_iso { if target_degree != pattern_degree { continue; } } else if target_degree < pattern_degree { continue; }
                 }
                 Morphism::SubIso | Morphism::EpiMono | Morphism::Mono => {
                     if target_degree < pattern_degree { continue; }
@@ -554,6 +555,7 @@ impl<R: ReverseLookup> State<R> {
         EP: feature::Edge,
         BP: feature::Ban,
         EM: feature::Emit,
+        IJ: feature::Inj,
         I: Index<NV, ER>,
         W: crate::watch::Watcher<NV, ER>,
     >(&mut self, ctx: &Ctx<'a, NV, ER, I>, watcher: &mut W) -> (Option<Match>, usize) {
@@ -605,7 +607,9 @@ impl<R: ReverseLookup> State<R> {
                             watcher.on_unbind(depth - 1, prev_local_id);
                         }
                         self.mapping[prev_pattern_idx] = super::UNMAPPED;
-                        self.reverse.clear(prev_target);
+                        if !IJ::MIXED || ctx.query.is_injective[prev_pattern_idx] {
+                            self.reverse.clear(prev_target);
+                        }
                     }
                 }
 
@@ -652,7 +656,9 @@ impl<R: ReverseLookup> State<R> {
             }
 
             self.mapping[pattern_idx] = *candidate;
-            self.reverse.set(*candidate, pattern_idx as u32);
+            if !IJ::MIXED || ctx.query.is_injective[pattern_idx] {
+                self.reverse.set(*candidate, pattern_idx as u32);
+            }
 
             if W::ACTIVE {
                 let local_id = ctx.query.nodes[pattern_idx].local_id;
@@ -672,7 +678,7 @@ impl<R: ReverseLookup> State<R> {
                         watcher.on_unbind(depth, local_id);
                     }
                     self.mapping[pattern_idx] = super::UNMAPPED;
-                    self.reverse.clear(*candidate);
+                    if !IJ::MIXED || ctx.query.is_injective[pattern_idx] { self.reverse.clear(*candidate); }
                     continue;
                 }
             }
@@ -694,10 +700,7 @@ impl<R: ReverseLookup> State<R> {
                         };
                         let pc = crate::search::path::PathConstraint::from_morphism(
                             pe.path_morphism,
-                            &self.mapping.iter()
-                                .filter(|&&m| m != super::UNMAPPED)
-                                .map(|&m| crate::id::N(m as crate::Id))
-                                .collect::<Vec<_>>(),
+                            &self.injective_excluded(&ctx.query.is_injective),
                         );
                         if let Some(path) = crate::search::path::execute_paths(
                             ctx.target, id::N(src_raw as crate::Id), id::N(tgt_raw as crate::Id),
@@ -730,7 +733,7 @@ impl<R: ReverseLookup> State<R> {
                             let local_id = ctx.query.nodes[pattern_idx].local_id;
                             watcher.on_unbind(depth, local_id);
                             self.mapping[pattern_idx] = super::UNMAPPED;
-                            self.reverse.clear(*candidate);
+                            if !IJ::MIXED || ctx.query.is_injective[pattern_idx] { self.reverse.clear(*candidate); }
                             match control {
                                 crate::watch::Control::Stop => {
                                     self.exhausted = true;
@@ -740,7 +743,7 @@ impl<R: ReverseLookup> State<R> {
                             }
                         } else {
                             self.mapping[pattern_idx] = super::UNMAPPED;
-                            self.reverse.clear(*candidate);
+                            if !IJ::MIXED || ctx.query.is_injective[pattern_idx] { self.reverse.clear(*candidate); }
                             return (Some(result), 0);
                         }
                     }
@@ -750,7 +753,7 @@ impl<R: ReverseLookup> State<R> {
                     watcher.on_unbind(depth, local_id);
                 }
                 self.mapping[pattern_idx] = super::UNMAPPED;
-                self.reverse.clear(*candidate);
+                if !IJ::MIXED || ctx.query.is_injective[pattern_idx] { self.reverse.clear(*candidate); }
                 continue;
             }
 
@@ -800,7 +803,7 @@ impl<R: ReverseLookup> State<R> {
                     watcher.on_unbind(depth, local_id);
                 }
                 self.mapping[pattern_idx] = super::UNMAPPED;
-                self.reverse.clear(*candidate);
+                if !IJ::MIXED || ctx.query.is_injective[pattern_idx] { self.reverse.clear(*candidate); }
                 continue;
             }
 
@@ -821,11 +824,16 @@ macro_rules! dispatch_advance {
         match (
             $ctx.query.has_predicates,
             $ctx.query.has_ban_clusters,
+            $ctx.query.has_non_injective,
         ) {
-            (false, false) => $state.advance::<_, _, feature::PlainEdges, feature::NoBans, $emit, _, _>($ctx, $watcher),
-            (false, true)  => $state.advance::<_, _, feature::PlainEdges, feature::WithBans, $emit, _, _>($ctx, $watcher),
-            (true, false)  => $state.advance::<_, _, feature::PredEdges, feature::NoBans, $emit, _, _>($ctx, $watcher),
-            (true, true)   => $state.advance::<_, _, feature::PredEdges, feature::WithBans, $emit, _, _>($ctx, $watcher),
+            (false, false, false) => $state.advance::<_, _, feature::PlainEdges, feature::NoBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
+            (false, true, false)  => $state.advance::<_, _, feature::PlainEdges, feature::WithBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
+            (true, false, false)  => $state.advance::<_, _, feature::PredEdges, feature::NoBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
+            (true, true, false)   => $state.advance::<_, _, feature::PredEdges, feature::WithBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
+            (false, false, true) => $state.advance::<_, _, feature::PlainEdges, feature::NoBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
+            (false, true, true)  => $state.advance::<_, _, feature::PlainEdges, feature::WithBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
+            (true, false, true)  => $state.advance::<_, _, feature::PredEdges, feature::NoBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
+            (true, true, true)   => $state.advance::<_, _, feature::PredEdges, feature::WithBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
         }
     };
 }
