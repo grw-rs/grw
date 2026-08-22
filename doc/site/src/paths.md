@@ -5,11 +5,11 @@ path**. Everything else about the pattern stays the same — a path drops in
 anywhere an edge can.
 
 ```rust,ignore
-..n(1).dfs()                                              // deepest-first trails
+..n(1).dfs()                                              // deepest-first simple paths
 ..n(1).bfs().len(3..10)                                   // shortest-first, 3–9 edges
 ..n(1).navigate(Dijkstra::counted())                      // cheapest by hop count
 ..n(1).navigate(Dijkstra::weighted(|ev: &EV| ev.cost))    // cheapest by edge weight
-..n(1).navigate(AStar::new(|ev| ev.cost, |n| h(n))).all() // every trail, cost-ordered
+..n(1).navigate(AStar::new(|ev| ev.cost, |n| h(n))).all() // every simple path, cost-ordered
 ..n(1).dfs().guard(|p| !p.contains(N(2)))                 // prune paths mid-walk
 ..n(1).drive(|n| Some(Explore::One(0)))                   // steer expansion per depth
 ```

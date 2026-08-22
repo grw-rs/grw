@@ -11,6 +11,7 @@
 - [modify! — Mutation](./modify.md)
 - [search! — Pattern Matching](./search.md)
 - [Variable-Length Paths](./paths.md)
+- [Mixing Clusters & Morphisms](./mixed-morphisms.md)
 - [Morphisms](./morphisms.md)
 
 # Reference

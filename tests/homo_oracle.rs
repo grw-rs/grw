@@ -10,7 +10,6 @@ use grw::search::dsl;
 use grw::search::{self, Morphism, Search, Seq, Par, RevCsr};
 use rayon::iter::ParallelIterator;
 
-type ER = grw::edge::Undir<()>;
 
 struct Rng(u64);
 impl Rng {
