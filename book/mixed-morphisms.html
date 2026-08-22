@@ -221,8 +221,8 @@ bind the <em>same</em> node.</p>
   <path d="M150 70 C 100 8, 240 8, 190 70" fill="none" stroke="#46c6d6" stroke-width="2.4" stroke-dasharray="7 6" />
   <circle cx="132" cy="30" r="6" fill="none" stroke="#f0a63f88" stroke-width="1.6" stroke-dasharray="3 4" />
   <circle cx="205" cy="30" r="6" fill="none" stroke="#f0a63f88" stroke-width="1.6" stroke-dasharray="3 4" />
-  <circle cx="170" cy="82" r="17" fill="#f0a63f22" /><circle cx="170" cy="82" r="12" fill="#f0a63f" />
-  <text x="170" y="86" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0=1</text>
+  <circle cx="170" cy="82" r="21" fill="#f0a63f26" /><circle cx="170" cy="82" r="15" fill="#f0a63f" />
+  <text x="170" y="86" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">0=1</text>
   <text x="170" y="118" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">free endpoints may be the same node</text>
 </svg>
 <h2 id="free-nodes-never-add-multiplicity"><a class="header" href="#free-nodes-never-add-multiplicity">Free nodes never add multiplicity</a></h2>
@@ -234,13 +234,13 @@ not say that: node <code>2</code> is free and not adjacent to <code>1</code>, so
 always available — the target edge serving <code>0—1</code> serves <code>2—0</code> too.</p>
 <svg viewbox="0 0 440 150" style="max-width:440px;display:block;margin:1em auto" role="img" aria-label="A free witness node collapsing onto the mono neighbor it duplicates">
   <line x1="100" y1="70" x2="230" y2="70" stroke="#46c6d6" stroke-width="2.2" />
-  <circle cx="84" cy="70" r="16" fill="#f0a63f22" /><circle cx="84" cy="70" r="11" fill="#f0a63f" />
-  <text x="84" y="74" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">0</text>
-  <circle cx="246" cy="70" r="16" fill="#f0a63f22" /><circle cx="246" cy="70" r="11" fill="#f0a63f" />
-  <text x="246" y="74" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">1</text>
+  <circle cx="84" cy="70" r="20" fill="#f0a63f26" /><circle cx="84" cy="70" r="14" fill="#f0a63f" />
+  <text x="84" y="74" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">0</text>
+  <circle cx="246" cy="70" r="20" fill="#f0a63f26" /><circle cx="246" cy="70" r="14" fill="#f0a63f" />
+  <text x="246" y="74" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">1</text>
   <line x1="110" y1="56" x2="300" y2="26" stroke="#46c6d6" stroke-width="2" stroke-dasharray="5 5" />
-  <circle cx="318" cy="24" r="12" fill="none" stroke="#f0a63f" stroke-width="2" stroke-dasharray="4 4" />
-  <text x="318" y="28" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#f0a63f">2</text>
+  <circle cx="318" cy="24" r="14" fill="none" stroke="#f0a63f" stroke-width="2.2" stroke-dasharray="4 4" />
+  <text x="318" y="28" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#f0a63f">2</text>
   <path d="M310 38 C 290 58, 272 62, 262 64" fill="none" stroke="#8b95a9" stroke-width="1.6" stroke-dasharray="3 4" marker-end="url(#collapse-arrow)" />
   <defs><marker id="collapse-arrow" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#8b95a9" /></marker></defs>
   <text x="220" y="128" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">2 may alias 1 — the pattern asserts no second neighbor</text>
@@ -257,11 +257,11 @@ pattern, unless the target has a self-loop — its own edge would have to map
 to <code>x—x</code>:</p>
 <svg viewbox="0 0 460 120" style="max-width:460px;display:block;margin:1em auto" role="img" aria-label="Adjacent collapse requires a self-loop on the target">
   <line x1="70" y1="60" x2="160" y2="60" stroke="#46c6d6" stroke-width="2.2" />
-  <circle cx="55" cy="60" r="11" fill="#f0a63f" /><text x="55" y="64" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0</text>
-  <circle cx="175" cy="60" r="11" fill="#f0a63f" /><text x="175" y="64" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">1</text>
+  <circle cx="55" cy="60" r="14" fill="#f0a63f" /><text x="55" y="64" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">0</text>
+  <circle cx="175" cy="60" r="14" fill="#f0a63f" /><text x="175" y="64" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">1</text>
   <text x="115" y="95" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">Homo: 0 ^ 1</text>
   <text x="240" y="64" text-anchor="middle" font-family="monospace" font-size="14" fill="#8b95a9">⇒</text>
-  <circle cx="320" cy="60" r="11" fill="#f0a63f" /><text x="320" y="64" text-anchor="middle" font-family="monospace" font-size="10" font-weight="600" fill="#1a1205">0=1</text>
+  <circle cx="320" cy="60" r="14" fill="#f0a63f" /><text x="320" y="64" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">0=1</text>
   <path d="M328 50 C 352 28, 352 92, 328 70" fill="none" stroke="#46c6d6" stroke-width="2.2" />
   <text x="382" y="46" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">needs x—x</text>
   <text x="330" y="102" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">merge legal only if the loop exists</text>
@@ -283,10 +283,10 @@ through an injective binding.</li>
 share.</li>
 </ul>
 <svg viewbox="0 0 440 150" style="max-width:440px;display:block;margin:1em auto" role="img" aria-label="Two paths forced through one interior: rejected under Mono, accepted under Homo">
-  <circle cx="60" cy="75" r="11" fill="#f0a63f" /><text x="60" y="79" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0</text>
-  <circle cx="220" cy="40" r="9" fill="#46c6d6" /><text x="220" y="22" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">x</text>
-  <circle cx="380" cy="75" r="11" fill="#f0a63f" /><text x="380" y="79" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">2</text>
-  <circle cx="220" cy="110" r="11" fill="#f0a63f" /><text x="220" y="114" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">1</text>
+  <circle cx="60" cy="75" r="14" fill="#f0a63f" /><text x="60" y="79" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">0</text>
+  <circle cx="220" cy="40" r="11" fill="#46c6d6" /><text x="220" y="22" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">x</text>
+  <circle cx="380" cy="75" r="14" fill="#f0a63f" /><text x="380" y="79" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">2</text>
+  <circle cx="220" cy="110" r="14" fill="#f0a63f" /><text x="220" y="114" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">1</text>
   <path d="M72 68 C 120 45, 170 40, 209 40" fill="none" stroke="#46c6d6" stroke-width="2.2" stroke-dasharray="6 5" />
   <path d="M231 40 C 280 40, 330 48, 368 68" fill="none" stroke="#46c6d6" stroke-width="2.2" stroke-dasharray="6 5" />
   <path d="M215 100 C 205 80, 210 60, 217 50" fill="none" stroke="#e2596e" stroke-width="2" stroke-dasharray="4 4" />
