@@ -1503,6 +1503,25 @@ impl<R: ReverseLookup> State<R> {
 }
 
 impl<R: ReverseLookup> State<R> {
+    /// Reset for a fresh root binding without reallocating the O(node_count)
+    /// reverse lookup: clears only the entries actually set (walked via
+    /// `mapping`, ≤ pattern_count of them) and reuses every buffer. This is
+    /// what keeps parallel search O(V) instead of O(V²) — a fresh
+    /// `create_reverse()` per root was a full-graph allocation + fill.
+    pub(crate) fn rebind(&mut self, exhausted: bool, bindings: Vec<Option<id::N>>) {
+        for i in 0..self.mapping.len() {
+            let m = self.mapping[i];
+            if m != UNMAPPED {
+                self.reverse.clear(m);
+                self.mapping[i] = UNMAPPED;
+            }
+        }
+        self.stack.clear();
+        self.forward_verified_depths = 0;
+        self.bindings = bindings;
+        self.exhausted = exhausted;
+    }
+
     pub(crate) fn any_slot_pred_matches<NV, ER: graph::Edge, I: Index<NV, ER>>(
         &self,
         ctx: &Ctx<'_, NV, ER, I>,

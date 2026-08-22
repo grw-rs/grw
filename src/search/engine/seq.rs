@@ -895,6 +895,17 @@ impl<'g, NV, ER: graph::Edge, W: crate::watch::Watcher<NV, ER>> Iterator for Wat
 }
 
 impl<R: ReverseLookup> State<R> {
+    /// Count all remaining matches without materializing a single `Match` —
+    /// dispatches with `feature::Count`, which skips `build_match` and fuses
+    /// leaf counting. One call runs the search to exhaustion.
+    pub(crate) fn stream_count<'a, NV, ER: graph::Edge, I: Index<NV, ER>>(
+        &mut self,
+        ctx: &Ctx<'a, NV, ER, I>,
+    ) -> usize {
+        let mut watcher = crate::watch::Silent;
+        dispatch_advance!(self, ctx, feature::Count, &mut watcher).1
+    }
+
     pub(crate) fn stream_fold<'a, NV, ER: graph::Edge, I: Index<NV, ER>, A>(
         &mut self,
         ctx: &Ctx<'a, NV, ER, I>,
