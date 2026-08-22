@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-36f706f0.js";
+            window.path_to_searchindex_js = "searchindex-27a8fe6c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-7bfa8634.js"></script>
+        <script src="toc-29ac6ec0.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -813,11 +813,11 @@ let session = search![&amp;g,
 <p>Prefix a pattern node with <code>..</code> and the edge becomes a <strong>variable-length
 path</strong>. Everything else about the pattern stays the same — a path drops in
 anywhere an edge can.</p>
-<pre><code class="language-rust ignore">..n(1).dfs()                                              // deepest-first trails
+<pre><code class="language-rust ignore">..n(1).dfs()                                              // deepest-first simple paths
 ..n(1).bfs().len(3..10)                                   // shortest-first, 3–9 edges
 ..n(1).navigate(Dijkstra::counted())                      // cheapest by hop count
 ..n(1).navigate(Dijkstra::weighted(|ev: &amp;EV| ev.cost))    // cheapest by edge weight
-..n(1).navigate(AStar::new(|ev| ev.cost, |n| h(n))).all() // every trail, cost-ordered
+..n(1).navigate(AStar::new(|ev| ev.cost, |n| h(n))).all() // every simple path, cost-ordered
 ..n(1).dfs().guard(|p| !p.contains(N(2)))                 // prune paths mid-walk
 ..n(1).drive(|n| Some(Explore::One(0)))                   // steer expansion per depth</code></pre>
 <h2 id="traversal-dfs--bfs--drive"><a class="header" href="#traversal-dfs--bfs--drive">Traversal: <code>dfs</code> / <code>bfs</code> / <code>drive</code></a></h2>
@@ -905,6 +905,147 @@ to multi-path matches.</p>
 <p>Standalone iterators are plain: <code>g.path_search(..)</code> yields <code>Vec&lt;id::N&gt;</code> per
 <code>next()</code>, <code>g.path_navigate(..)</code> yields <code>(cost, Vec&lt;id::N&gt;)</code> in non-decreasing
 cost order.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="mixing-clusters--morphisms"><a class="header" href="#mixing-clusters--morphisms">Mixing Clusters &amp; Morphisms</a></h1>
+<p>Every cluster carries its own morphism — and patterns may combine clusters
+freely. This page defines exactly what such mixtures mean, one rule at a
+time, with the corner cases drawn out.</p>
+<h2 id="the-distinctness-rule"><a class="header" href="#the-distinctness-rule">The distinctness rule</a></h2>
+<blockquote>
+<p><strong>Two pattern nodes may bind the same target node iff they are not both
+injective.</strong></p>
+</blockquote>
+<p>Nodes defined in an injective cluster (<code>Iso</code>, <code>SubIso</code>, <code>EpiMono</code>, <code>Mono</code>)
+form one <strong>injective population</strong>: pairwise distinct, across <em>all</em> clusters.
+Nodes defined in a free cluster (<code>Homo</code>, <code>Epi</code>) reserve nothing and respect
+no reservations — in both directions:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>pair</th><th>may collide?</th></tr>
+</thead>
+<tbody>
+<tr><td>injective ↔ injective, same cluster</td><td><strong>never</strong></td></tr>
+<tr><td>injective ↔ injective, different clusters</td><td><strong>never</strong></td></tr>
+<tr><td>injective ↔ free</td><td>yes</td></tr>
+<tr><td>free ↔ free</td><td>yes</td></tr>
+</tbody>
+</table>
+</div>
+<p>Distinctness is never implicit. If you need two nodes to be genuinely
+different, put both in the injective population — that is the <em>only</em>
+guarantee. Conversely, a <code>Homo</code> node means “some node, possibly one you
+already matched.”</p>
+<h2 id="a-nodes-morphism-comes-from-its-defining-cluster"><a class="header" href="#a-nodes-morphism-comes-from-its-defining-cluster">A node’s morphism comes from its defining cluster</a></h2>
+<p><code>N(x)</code> defines a node; <code>n(x)</code> references it. References never tighten:</p>
+<pre><code class="language-rust">grw::search![&lt;NV, ER&gt;;
+    get(Homo) { N(0), N(1) },                       // 0, 1 are free
+    get(Mono) { n(0) ^ ..n(1).dfs().len(1..) }      // referencing them
+]                                                    // does not change that</code></pre>
+<p>Nodes <code>0</code> and <code>1</code> stay free even though a <code>Mono</code> cluster uses them — which
+is exactly what lets this pattern find <strong>cycles</strong>: both path endpoints may
+bind the <em>same</em> node.</p>
+<svg viewbox="0 0 420 130" style="max-width:420px;display:block;margin:1em auto" role="img" aria-label="Cycle: homo endpoints collapse onto one node, the mono path loops back">
+  <path d="M150 70 C 100 8, 240 8, 190 70" fill="none" stroke="#46c6d6" stroke-width="2.4" stroke-dasharray="7 6" />
+  <circle cx="132" cy="30" r="6" fill="none" stroke="#f0a63f88" stroke-width="1.6" stroke-dasharray="3 4" />
+  <circle cx="205" cy="30" r="6" fill="none" stroke="#f0a63f88" stroke-width="1.6" stroke-dasharray="3 4" />
+  <circle cx="170" cy="82" r="17" fill="#f0a63f22" /><circle cx="170" cy="82" r="12" fill="#f0a63f" />
+  <text x="170" y="86" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0=1</text>
+  <text x="170" y="118" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">free endpoints may be the same node</text>
+</svg>
+<h2 id="free-nodes-never-add-multiplicity"><a class="header" href="#free-nodes-never-add-multiplicity">Free nodes never add multiplicity</a></h2>
+<p>The subtlest consequence. Consider a <code>Mono</code> edge plus a free witness:</p>
+<pre><code class="language-rust">get(Mono) { N(0) ^ N(1) },       // an edge A—B
+get(Homo) { N(2) ^ n(0) }        // "and 0 has a neighbor"</code></pre>
+<p>You might read this as “node 0 has a <em>second</em> neighbor besides 1.” It does
+not say that: node <code>2</code> is free and not adjacent to <code>1</code>, so <code>m(2) = m(1)</code> is
+always available — the target edge serving <code>0—1</code> serves <code>2—0</code> too.</p>
+<svg viewbox="0 0 440 150" style="max-width:440px;display:block;margin:1em auto" role="img" aria-label="A free witness node collapsing onto the mono neighbor it duplicates">
+  <line x1="100" y1="70" x2="230" y2="70" stroke="#46c6d6" stroke-width="2.2" />
+  <circle cx="84" cy="70" r="16" fill="#f0a63f22" /><circle cx="84" cy="70" r="11" fill="#f0a63f" />
+  <text x="84" y="74" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">0</text>
+  <circle cx="246" cy="70" r="16" fill="#f0a63f22" /><circle cx="246" cy="70" r="11" fill="#f0a63f" />
+  <text x="246" y="74" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">1</text>
+  <line x1="110" y1="56" x2="300" y2="26" stroke="#46c6d6" stroke-width="2" stroke-dasharray="5 5" />
+  <circle cx="318" cy="24" r="12" fill="none" stroke="#f0a63f" stroke-width="2" stroke-dasharray="4 4" />
+  <text x="318" y="28" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#f0a63f">2</text>
+  <path d="M310 38 C 290 58, 272 62, 262 64" fill="none" stroke="#8b95a9" stroke-width="1.6" stroke-dasharray="3 4" marker-end="url(#collapse-arrow)" />
+  <defs><marker id="collapse-arrow" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#8b95a9" /></marker></defs>
+  <text x="220" y="128" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">2 may alias 1 — the pattern asserts no second neighbor</text>
+</svg>
+<p>The pattern’s true meaning: “edge 0—1 exists, and 0 has <em>some</em> neighbor” —
+trivially satisfied by node 1 itself. Want a genuinely second neighbor?
+Define node 2 in a <code>Mono</code> cluster.</p>
+<p><strong>Counting inherits this.</strong> Free-node matches include every aliased
+configuration. If you are counting distinct structures — fan-outs, distinct
+witnesses — use injective clusters.</p>
+<h2 id="collapsing-onto-a-neighbor-needs-a-self-loop"><a class="header" href="#collapsing-onto-a-neighbor-needs-a-self-loop">Collapsing onto a neighbor needs a self-loop</a></h2>
+<p>A free node can never collapse onto a node it is <em>adjacent to</em> in the
+pattern, unless the target has a self-loop — its own edge would have to map
+to <code>x—x</code>:</p>
+<svg viewbox="0 0 460 120" style="max-width:460px;display:block;margin:1em auto" role="img" aria-label="Adjacent collapse requires a self-loop on the target">
+  <line x1="70" y1="60" x2="160" y2="60" stroke="#46c6d6" stroke-width="2.2" />
+  <circle cx="55" cy="60" r="11" fill="#f0a63f" /><text x="55" y="64" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0</text>
+  <circle cx="175" cy="60" r="11" fill="#f0a63f" /><text x="175" y="64" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">1</text>
+  <text x="115" y="95" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">Homo: 0 ^ 1</text>
+  <text x="240" y="64" text-anchor="middle" font-family="monospace" font-size="14" fill="#8b95a9">⇒</text>
+  <circle cx="320" cy="60" r="11" fill="#f0a63f" /><text x="320" y="64" text-anchor="middle" font-family="monospace" font-size="10" font-weight="600" fill="#1a1205">0=1</text>
+  <path d="M328 50 C 352 28, 352 92, 328 70" fill="none" stroke="#46c6d6" stroke-width="2.2" />
+  <text x="382" y="46" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">needs x—x</text>
+  <text x="330" y="102" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">merge legal only if the loop exists</text>
+</svg>
+<p>Self-loops are first-class in the graph model (<code>N(0) ^ n(0)</code>), so this is a
+real capability — but on loop-free targets, adjacent free nodes are
+effectively distinct.</p>
+<h2 id="paths-under-mixed-morphisms"><a class="header" href="#paths-under-mixed-morphisms">Paths under mixed morphisms</a></h2>
+<p>Variable-length paths interact with the population rule in three ways:</p>
+<ul>
+<li><strong>Interiors are always node-simple.</strong> A path never revisits a node,
+regardless of morphism — <code>Homo</code> paths are simple paths, not walks.
+Endpoints may still close into a cycle (above).</li>
+<li><strong>Interiors avoid the injective population only.</strong> A path may pass
+<em>through</em> a target that a free node happens to occupy; it may never pass
+through an injective binding.</li>
+<li><strong>Cross-path interior sharing is morphism-driven.</strong> Two path edges in a
+<code>Mono</code> cluster must use disjoint interiors; in a <code>Homo</code> cluster they may
+share.</li>
+</ul>
+<svg viewbox="0 0 440 150" style="max-width:440px;display:block;margin:1em auto" role="img" aria-label="Two paths forced through one interior: rejected under Mono, accepted under Homo">
+  <circle cx="60" cy="75" r="11" fill="#f0a63f" /><text x="60" y="79" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0</text>
+  <circle cx="220" cy="40" r="9" fill="#46c6d6" /><text x="220" y="22" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">x</text>
+  <circle cx="380" cy="75" r="11" fill="#f0a63f" /><text x="380" y="79" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">2</text>
+  <circle cx="220" cy="110" r="11" fill="#f0a63f" /><text x="220" y="114" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">1</text>
+  <path d="M72 68 C 120 45, 170 40, 209 40" fill="none" stroke="#46c6d6" stroke-width="2.2" stroke-dasharray="6 5" />
+  <path d="M231 40 C 280 40, 330 48, 368 68" fill="none" stroke="#46c6d6" stroke-width="2.2" stroke-dasharray="6 5" />
+  <path d="M215 100 C 205 80, 210 60, 217 50" fill="none" stroke="#e2596e" stroke-width="2" stroke-dasharray="4 4" />
+  <text x="220" y="140" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">both paths need x: Mono cluster → no match · Homo cluster → match</text>
+</svg>
+<h2 id="surjective-clusters-epi-epimono"><a class="header" href="#surjective-clusters-epi-epimono">Surjective clusters (<code>Epi</code>, <code>EpiMono</code>)</a></h2>
+<p>Surjectivity is checked against the <strong>whole query’s</strong> bindings: every target
+node must be the image of some pattern node. Two nuances:</p>
+<ul>
+<li>Free clusters’ bindings count toward coverage.</li>
+<li><strong>Path interiors do not count.</strong> A path edge asserts “a path exists” — its
+interior nodes are witnesses, not part of the pattern’s image. An <code>Epi</code>
+pattern whose explicit nodes cannot cover the target has no matches, even
+if its paths sweep every node.</li>
+</ul>
+<h2 id="advanced-induced-morphisms-in-mixtures"><a class="header" href="#advanced-induced-morphisms-in-mixtures">Advanced: induced morphisms in mixtures</a></h2>
+<p><code>SubIso</code> and <code>Iso</code> add the <em>induced</em> axis: extra target edges between
+matched nodes are forbidden. In a mixed pattern this check runs against the
+<strong>injective population</strong> — a <code>SubIso</code> node rejects candidates with target
+edges to any injective binding that the pattern doesn’t mirror, while free
+bindings are invisible to it. Mixing induced clusters with free clusters is
+rarely what you want; prefer <code>Mono</code> + <code>Homo</code> mixtures unless you
+specifically need exact neighborhoods.</p>
+<h2 id="rules-of-thumb"><a class="header" href="#rules-of-thumb">Rules of thumb</a></h2>
+<ol>
+<li><strong>Distinct entities → one injective population.</strong> Any number of clusters;
+injectivity composes across them.</li>
+<li><strong>“Possibly the same node” → <code>Homo</code>.</strong> That is its entire purpose.</li>
+<li><strong>Counting distinct structures → no free nodes</strong> in the counted part.</li>
+<li><strong>Cycles → free endpoints + an injective path cluster</strong> referencing them.</li>
+</ol>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="morphisms"><a class="header" href="#morphisms">Morphisms</a></h1>
 <p>A <strong>morphism</strong> is a mapping from pattern nodes to target nodes that preserves edges — if two nodes are connected in the pattern, their mapped counterparts must be connected in the target.</p>

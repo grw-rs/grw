@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Variable-Length Paths - GRW — Graph Rewriting in Rust</title>
+        <title>Mixing Clusters &amp; Morphisms - GRW — Graph Rewriting in Rust</title>
 
 
         <!-- Custom HTML head -->
@@ -178,112 +178,156 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="variable-length-paths"><a class="header" href="#variable-length-paths">Variable-Length Paths</a></h1>
-<p>Prefix a pattern node with <code>..</code> and the edge becomes a <strong>variable-length
-path</strong>. Everything else about the pattern stays the same — a path drops in
-anywhere an edge can.</p>
-<pre><code class="language-rust ignore">..n(1).dfs()                                              // deepest-first simple paths
-..n(1).bfs().len(3..10)                                   // shortest-first, 3–9 edges
-..n(1).navigate(Dijkstra::counted())                      // cheapest by hop count
-..n(1).navigate(Dijkstra::weighted(|ev: &amp;EV| ev.cost))    // cheapest by edge weight
-..n(1).navigate(AStar::new(|ev| ev.cost, |n| h(n))).all() // every simple path, cost-ordered
-..n(1).dfs().guard(|p| !p.contains(N(2)))                 // prune paths mid-walk
-..n(1).drive(|n| Some(Explore::One(0)))                   // steer expansion per depth</code></pre>
-<h2 id="traversal-dfs--bfs--drive"><a class="header" href="#traversal-dfs--bfs--drive">Traversal: <code>dfs</code> / <code>bfs</code> / <code>drive</code></a></h2>
-<p><code>dfs()</code> yields deepest trails first, <code>bfs()</code> shortest first. Both are <strong>lazy</strong>
-— each <code>next()</code> computes exactly one complete path by backtracking.</p>
-<p><code>drive(f)</code> steers a DFS: at each expansion step, the closure receives the
-number of candidate continuations <code>n</code> and answers with an
-<a href="#steering-with-explore"><code>Explore</code></a> decision — or <code>None</code> to prune the tip.</p>
-<h2 id="length-bounds-len"><a class="header" href="#length-bounds-len">Length bounds: <code>len</code></a></h2>
-<p><code>.len(bounds)</code> constrains the number of <strong>edges</strong> in the path. Any <code>usize</code>
-range works, and a bare <code>usize</code> means an exact length:</p>
-<pre><code class="language-rust ignore">.len(3)       // exactly 3 edges
-.len(2..5)    // 2, 3 or 4
-.len(2..=4)   // same, inclusive
-.len(1..)     // at least one (the default)
-.len(0..)     // include the trivial self-path when from == to</code></pre>
-<h2 id="navigation-dijkstra--astar"><a class="header" href="#navigation-dijkstra--astar">Navigation: <code>Dijkstra</code> / <code>AStar</code></a></h2>
-<p><code>navigate(nav)</code> orders results by <strong>cost</strong> instead of traversal order. The
-navigator supplies a non-negative per-edge cost; A* adds an admissible
-per-node heuristic that steers exploration without changing which path is
-cheapest.</p>
-<pre><code class="language-rust ignore">let cfg = Config::new(())
-    .navigate(Dijkstra::weighted(|ms: &amp;u32| *ms as f64));
-
-let (cost, path) = g
-    .path_navigate(N(0), N(3), outgoing, cfg, &amp;constraint)
-    .next()
-    .unwrap();</code></pre>
-<p>Two result modes:</p>
+                        <h1 id="mixing-clusters--morphisms"><a class="header" href="#mixing-clusters--morphisms">Mixing Clusters &amp; Morphisms</a></h1>
+<p>Every cluster carries its own morphism — and patterns may combine clusters
+freely. This page defines exactly what such mixtures mean, one rule at a
+time, with the corner cases drawn out.</p>
+<h2 id="the-distinctness-rule"><a class="header" href="#the-distinctness-rule">The distinctness rule</a></h2>
+<blockquote>
+<p><strong>Two pattern nodes may bind the same target node iff they are not both
+injective.</strong></p>
+</blockquote>
+<p>Nodes defined in an injective cluster (<code>Iso</code>, <code>SubIso</code>, <code>EpiMono</code>, <code>Mono</code>)
+form one <strong>injective population</strong>: pairwise distinct, across <em>all</em> clusters.
+Nodes defined in a free cluster (<code>Homo</code>, <code>Epi</code>) reserve nothing and respect
+no reservations — in both directions:</p>
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Mode</th><th>Meaning</th></tr>
+<tr><th>pair</th><th>may collide?</th></tr>
 </thead>
 <tbody>
-<tr><td><code>.one()</code> <em>(default)</em></td><td>The single cheapest path. Textbook Dijkstra/A* node dominance — <code>O((V+E) log V)</code>.</td></tr>
-<tr><td><code>.all()</code></td><td>Every trail, in non-decreasing cost. No dominance; the frontier can grow — you decide when to stop pulling.</td></tr>
+<tr><td>injective ↔ injective, same cluster</td><td><strong>never</strong></td></tr>
+<tr><td>injective ↔ injective, different clusters</td><td><strong>never</strong></td></tr>
+<tr><td>injective ↔ free</td><td>yes</td></tr>
+<tr><td>free ↔ free</td><td>yes</td></tr>
 </tbody>
 </table>
 </div>
-<h2 id="guards"><a class="header" href="#guards">Guards</a></h2>
-<p><code>.guard(pred)</code> rejects paths (including partial ones) during the walk. The
-predicate receives the path <strong>tip-first</strong> as a lazy, allocation-free view —
-decide from a short suffix and return early:</p>
-<pre><code class="language-rust ignore">.dfs().guard(|p| !p.contains(id::N(2)))</code></pre>
-<h2 id="steering-with-explore"><a class="header" href="#steering-with-explore">Steering with <code>Explore</code></a></h2>
-<p>The <code>drive</code> closure picks which continuation indices <code>0..n</code> to expand:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Decision</th><th>Meaning</th></tr>
-</thead>
-<tbody>
-<tr><td><code>Explore::All</code></td><td>expand every candidate</td></tr>
-<tr><td><code>Explore::One(i)</code></td><td>only the <code>i</code>-th</td></tr>
-<tr><td><code>Explore::Len(l)</code></td><td>the first <code>min(l, n)</code></td></tr>
-<tr><td><code>Explore::Steps(s)</code></td><td>exactly the listed indices</td></tr>
-<tr><td><code>None</code></td><td>prune this tip</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="paths-inside-search"><a class="header" href="#paths-inside-search">Paths inside <code>search!</code></a></h2>
-<p>Inside a pattern, the path’s endpoints are pattern nodes and the morphism
-governs the <strong>intermediates</strong>: a <code>Mono</code> path can’t reuse nodes bound
-elsewhere in the match, a <code>SubIso</code> path additionally rejects branched
-intermediates. Bind both endpoints to the same node and paths become
-<strong>cycle detection</strong>:</p>
-<pre><code class="language-rust ignore">let session = search![&amp;g,
-    get(Homo) { N(0), N(1) },            // endpoints may collapse
-    get(Mono) { n(0) &gt;&gt; ..n(1).dfs().len(1..) }
-].unwrap();
-
-let cycles = session.iter()
-    .filter(|m| m[0] == m[1] &amp;&amp; !m.path(0).is_empty())
-    .count();</code></pre>
-<h2 id="consuming-path-results"><a class="header" href="#consuming-path-results">Consuming path results</a></h2>
-<p>One <code>Match</code> fixes the endpoints — but several concrete paths may realize the
-same binding. They hang off the match, per path edge:</p>
-<pre><code class="language-rust ignore">m.path(0)          // &amp;[id::N] — full node sequence of the first path edge
-m.path_count(0)    // how many alternatives were found
-m.next_paths()     // step to the next combination (odometer, rightmost first)</code></pre>
-<p><code>next_paths_injective()</code> additionally keeps intermediates <strong>across different
-path edges</strong> mutually distinct — that is how <code>Mono</code>/<code>SubIso</code> semantics extend
-to multi-path matches.</p>
-<p>Standalone iterators are plain: <code>g.path_search(..)</code> yields <code>Vec&lt;id::N&gt;</code> per
-<code>next()</code>, <code>g.path_navigate(..)</code> yields <code>(cost, Vec&lt;id::N&gt;)</code> in non-decreasing
-cost order.</p>
+<p>Distinctness is never implicit. If you need two nodes to be genuinely
+different, put both in the injective population — that is the <em>only</em>
+guarantee. Conversely, a <code>Homo</code> node means “some node, possibly one you
+already matched.”</p>
+<h2 id="a-nodes-morphism-comes-from-its-defining-cluster"><a class="header" href="#a-nodes-morphism-comes-from-its-defining-cluster">A node’s morphism comes from its defining cluster</a></h2>
+<p><code>N(x)</code> defines a node; <code>n(x)</code> references it. References never tighten:</p>
+<pre><code class="language-rust">grw::search![&lt;NV, ER&gt;;
+    get(Homo) { N(0), N(1) },                       // 0, 1 are free
+    get(Mono) { n(0) ^ ..n(1).dfs().len(1..) }      // referencing them
+]                                                    // does not change that</code></pre>
+<p>Nodes <code>0</code> and <code>1</code> stay free even though a <code>Mono</code> cluster uses them — which
+is exactly what lets this pattern find <strong>cycles</strong>: both path endpoints may
+bind the <em>same</em> node.</p>
+<svg viewbox="0 0 420 130" style="max-width:420px;display:block;margin:1em auto" role="img" aria-label="Cycle: homo endpoints collapse onto one node, the mono path loops back">
+  <path d="M150 70 C 100 8, 240 8, 190 70" fill="none" stroke="#46c6d6" stroke-width="2.4" stroke-dasharray="7 6" />
+  <circle cx="132" cy="30" r="6" fill="none" stroke="#f0a63f88" stroke-width="1.6" stroke-dasharray="3 4" />
+  <circle cx="205" cy="30" r="6" fill="none" stroke="#f0a63f88" stroke-width="1.6" stroke-dasharray="3 4" />
+  <circle cx="170" cy="82" r="17" fill="#f0a63f22" /><circle cx="170" cy="82" r="12" fill="#f0a63f" />
+  <text x="170" y="86" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0=1</text>
+  <text x="170" y="118" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">free endpoints may be the same node</text>
+</svg>
+<h2 id="free-nodes-never-add-multiplicity"><a class="header" href="#free-nodes-never-add-multiplicity">Free nodes never add multiplicity</a></h2>
+<p>The subtlest consequence. Consider a <code>Mono</code> edge plus a free witness:</p>
+<pre><code class="language-rust">get(Mono) { N(0) ^ N(1) },       // an edge A—B
+get(Homo) { N(2) ^ n(0) }        // "and 0 has a neighbor"</code></pre>
+<p>You might read this as “node 0 has a <em>second</em> neighbor besides 1.” It does
+not say that: node <code>2</code> is free and not adjacent to <code>1</code>, so <code>m(2) = m(1)</code> is
+always available — the target edge serving <code>0—1</code> serves <code>2—0</code> too.</p>
+<svg viewbox="0 0 440 150" style="max-width:440px;display:block;margin:1em auto" role="img" aria-label="A free witness node collapsing onto the mono neighbor it duplicates">
+  <line x1="100" y1="70" x2="230" y2="70" stroke="#46c6d6" stroke-width="2.2" />
+  <circle cx="84" cy="70" r="16" fill="#f0a63f22" /><circle cx="84" cy="70" r="11" fill="#f0a63f" />
+  <text x="84" y="74" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">0</text>
+  <circle cx="246" cy="70" r="16" fill="#f0a63f22" /><circle cx="246" cy="70" r="11" fill="#f0a63f" />
+  <text x="246" y="74" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#1a1205">1</text>
+  <line x1="110" y1="56" x2="300" y2="26" stroke="#46c6d6" stroke-width="2" stroke-dasharray="5 5" />
+  <circle cx="318" cy="24" r="12" fill="none" stroke="#f0a63f" stroke-width="2" stroke-dasharray="4 4" />
+  <text x="318" y="28" text-anchor="middle" font-family="monospace" font-size="12" font-weight="600" fill="#f0a63f">2</text>
+  <path d="M310 38 C 290 58, 272 62, 262 64" fill="none" stroke="#8b95a9" stroke-width="1.6" stroke-dasharray="3 4" marker-end="url(#collapse-arrow)" />
+  <defs><marker id="collapse-arrow" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#8b95a9" /></marker></defs>
+  <text x="220" y="128" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">2 may alias 1 — the pattern asserts no second neighbor</text>
+</svg>
+<p>The pattern’s true meaning: “edge 0—1 exists, and 0 has <em>some</em> neighbor” —
+trivially satisfied by node 1 itself. Want a genuinely second neighbor?
+Define node 2 in a <code>Mono</code> cluster.</p>
+<p><strong>Counting inherits this.</strong> Free-node matches include every aliased
+configuration. If you are counting distinct structures — fan-outs, distinct
+witnesses — use injective clusters.</p>
+<h2 id="collapsing-onto-a-neighbor-needs-a-self-loop"><a class="header" href="#collapsing-onto-a-neighbor-needs-a-self-loop">Collapsing onto a neighbor needs a self-loop</a></h2>
+<p>A free node can never collapse onto a node it is <em>adjacent to</em> in the
+pattern, unless the target has a self-loop — its own edge would have to map
+to <code>x—x</code>:</p>
+<svg viewbox="0 0 460 120" style="max-width:460px;display:block;margin:1em auto" role="img" aria-label="Adjacent collapse requires a self-loop on the target">
+  <line x1="70" y1="60" x2="160" y2="60" stroke="#46c6d6" stroke-width="2.2" />
+  <circle cx="55" cy="60" r="11" fill="#f0a63f" /><text x="55" y="64" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0</text>
+  <circle cx="175" cy="60" r="11" fill="#f0a63f" /><text x="175" y="64" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">1</text>
+  <text x="115" y="95" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">Homo: 0 ^ 1</text>
+  <text x="240" y="64" text-anchor="middle" font-family="monospace" font-size="14" fill="#8b95a9">⇒</text>
+  <circle cx="320" cy="60" r="11" fill="#f0a63f" /><text x="320" y="64" text-anchor="middle" font-family="monospace" font-size="10" font-weight="600" fill="#1a1205">0=1</text>
+  <path d="M328 50 C 352 28, 352 92, 328 70" fill="none" stroke="#46c6d6" stroke-width="2.2" />
+  <text x="382" y="46" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">needs x—x</text>
+  <text x="330" y="102" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">merge legal only if the loop exists</text>
+</svg>
+<p>Self-loops are first-class in the graph model (<code>N(0) ^ n(0)</code>), so this is a
+real capability — but on loop-free targets, adjacent free nodes are
+effectively distinct.</p>
+<h2 id="paths-under-mixed-morphisms"><a class="header" href="#paths-under-mixed-morphisms">Paths under mixed morphisms</a></h2>
+<p>Variable-length paths interact with the population rule in three ways:</p>
+<ul>
+<li><strong>Interiors are always node-simple.</strong> A path never revisits a node,
+regardless of morphism — <code>Homo</code> paths are simple paths, not walks.
+Endpoints may still close into a cycle (above).</li>
+<li><strong>Interiors avoid the injective population only.</strong> A path may pass
+<em>through</em> a target that a free node happens to occupy; it may never pass
+through an injective binding.</li>
+<li><strong>Cross-path interior sharing is morphism-driven.</strong> Two path edges in a
+<code>Mono</code> cluster must use disjoint interiors; in a <code>Homo</code> cluster they may
+share.</li>
+</ul>
+<svg viewbox="0 0 440 150" style="max-width:440px;display:block;margin:1em auto" role="img" aria-label="Two paths forced through one interior: rejected under Mono, accepted under Homo">
+  <circle cx="60" cy="75" r="11" fill="#f0a63f" /><text x="60" y="79" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">0</text>
+  <circle cx="220" cy="40" r="9" fill="#46c6d6" /><text x="220" y="22" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">x</text>
+  <circle cx="380" cy="75" r="11" fill="#f0a63f" /><text x="380" y="79" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">2</text>
+  <circle cx="220" cy="110" r="11" fill="#f0a63f" /><text x="220" y="114" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#1a1205">1</text>
+  <path d="M72 68 C 120 45, 170 40, 209 40" fill="none" stroke="#46c6d6" stroke-width="2.2" stroke-dasharray="6 5" />
+  <path d="M231 40 C 280 40, 330 48, 368 68" fill="none" stroke="#46c6d6" stroke-width="2.2" stroke-dasharray="6 5" />
+  <path d="M215 100 C 205 80, 210 60, 217 50" fill="none" stroke="#e2596e" stroke-width="2" stroke-dasharray="4 4" />
+  <text x="220" y="140" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">both paths need x: Mono cluster → no match · Homo cluster → match</text>
+</svg>
+<h2 id="surjective-clusters-epi-epimono"><a class="header" href="#surjective-clusters-epi-epimono">Surjective clusters (<code>Epi</code>, <code>EpiMono</code>)</a></h2>
+<p>Surjectivity is checked against the <strong>whole query’s</strong> bindings: every target
+node must be the image of some pattern node. Two nuances:</p>
+<ul>
+<li>Free clusters’ bindings count toward coverage.</li>
+<li><strong>Path interiors do not count.</strong> A path edge asserts “a path exists” — its
+interior nodes are witnesses, not part of the pattern’s image. An <code>Epi</code>
+pattern whose explicit nodes cannot cover the target has no matches, even
+if its paths sweep every node.</li>
+</ul>
+<h2 id="advanced-induced-morphisms-in-mixtures"><a class="header" href="#advanced-induced-morphisms-in-mixtures">Advanced: induced morphisms in mixtures</a></h2>
+<p><code>SubIso</code> and <code>Iso</code> add the <em>induced</em> axis: extra target edges between
+matched nodes are forbidden. In a mixed pattern this check runs against the
+<strong>injective population</strong> — a <code>SubIso</code> node rejects candidates with target
+edges to any injective binding that the pattern doesn’t mirror, while free
+bindings are invisible to it. Mixing induced clusters with free clusters is
+rarely what you want; prefer <code>Mono</code> + <code>Homo</code> mixtures unless you
+specifically need exact neighborhoods.</p>
+<h2 id="rules-of-thumb"><a class="header" href="#rules-of-thumb">Rules of thumb</a></h2>
+<ol>
+<li><strong>Distinct entities → one injective population.</strong> Any number of clusters;
+injectivity composes across them.</li>
+<li><strong>“Possibly the same node” → <code>Homo</code>.</strong> That is its entire purpose.</li>
+<li><strong>Counting distinct structures → no free nodes</strong> in the counted part.</li>
+<li><strong>Cycles → free endpoints + an injective path cluster</strong> referencing them.</li>
+</ol>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="search.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="paths.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="mixed-morphisms.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="morphisms.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -293,11 +337,11 @@ cost order.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="search.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="paths.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="mixed-morphisms.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="morphisms.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

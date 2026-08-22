@@ -137,7 +137,7 @@
   .ptable tr.hl td{background:rgba(240,166,63,.05)}
   .ptable td.mor{text-align:left; color:var(--edge); font-weight:600}
 
-  .deeper{display:grid; grid-template-columns:repeat(4,1fr); gap:16px}
+  .deeper{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
   .dcard{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 18px 16px;
     display:block; transition:border-color .16s, transform .16s}
   .dcard:hover{border-color:var(--node); transform:translateY(-3px); text-decoration:none}
@@ -515,11 +515,11 @@ session.<span class="f">iter</span>()
       <p class="sec-lede">Prefix a pattern node with <code>..</code> and the edge becomes a variable-length path: traversal, length bounds, or cost-ordered navigation — all lazy, one path per <code>next()</code>. <a href="book/paths.html">Full chapter in the book →</a></p>
     </div>
     <div class="apistrip">
-      <pre>..<span class="n">n</span>(1).<span class="f">dfs</span>()                                              <span class="c">// deepest-first trails</span>
+      <pre>..<span class="n">n</span>(1).<span class="f">dfs</span>()                                              <span class="c">// deepest-first simple paths</span>
 ..<span class="n">n</span>(1).<span class="f">bfs</span>().<span class="f">len</span>(3..10)                                   <span class="c">// shortest-first, 3–9 edges</span>
 ..<span class="n">n</span>(1).<span class="f">navigate</span>(<span class="f">Dijkstra</span>::<span class="f">counted</span>())                      <span class="c">// cheapest by hop count</span>
 ..<span class="n">n</span>(1).<span class="f">navigate</span>(<span class="f">Dijkstra</span>::<span class="f">weighted</span>(|ev: &amp;<span class="f">EV</span>| ev.cost))    <span class="c">// cheapest by edge weight</span>
-..<span class="n">n</span>(1).<span class="f">navigate</span>(<span class="f">AStar</span>::<span class="f">new</span>(|ev| ev.cost, |n| h(n))).<span class="f">all</span>()  <span class="c">// every trail, cost-ordered</span>
+..<span class="n">n</span>(1).<span class="f">navigate</span>(<span class="f">AStar</span>::<span class="f">new</span>(|ev| ev.cost, |n| h(n))).<span class="f">all</span>()  <span class="c">// every simple path, cost-ordered</span>
 ..<span class="n">n</span>(1).<span class="f">dfs</span>().<span class="f">guard</span>(|p| !p.<span class="f">contains</span>(<span class="f">N</span>(2)))                 <span class="c">// prune paths mid-walk</span>
 ..<span class="n">n</span>(1).<span class="f">drive</span>(|n| <span class="f">Some</span>(<span class="f">Explore</span>::<span class="f">One</span>(0)))                   <span class="c">// steer expansion per depth</span></pre>
     </div>
@@ -567,6 +567,7 @@ session.<span class="f">iter</span>()
       <a class="dcard" href="book/search.html"><h4>search!</h4><p>Clusters, negation, context nodes, predicates, the Match struct.</p><span class="go">book/search →</span></a>
       <a class="dcard" href="book/paths.html"><h4>Paths</h4><p>DFS/BFS, length bounds, Dijkstra and A*, guards, steering, consuming.</p><span class="go">book/paths →</span></a>
       <a class="dcard" href="book/morphisms.html"><h4>Morphisms</h4><p>The six mappings, their lattice, and when to reach for each.</p><span class="go">book/morphisms →</span></a>
+      <a class="dcard" href="book/mixed-morphisms.html"><h4>Mixing clusters</h4><p>The distinctness rule, aliasing, self-loops, paths — every combination drawn out.</p><span class="go">book/mixed-morphisms →</span></a>
       <a class="dcard" href="book/persistence.html"><h4>Persistence</h4><p>Binary graph format with layout-hash validation.</p><span class="go">book/persistence →</span></a>
       <a class="dcard" href="book/playground.html"><h4>Playground</h4><p>Run GRW in your browser — compiled to WebAssembly.</p><span class="go">book/playground →</span></a>
     </div>
@@ -639,7 +640,7 @@ session.<span class="f">iter</span>()
           <tr><td class="mn">Epi</td><td class="md">Must cover all target nodes; can collapse pattern nodes.</td></tr>
           <tr><td class="mn">Homo</td><td class="md">Anything goes — just preserve edges.</td></tr>
         </table>
-        <p class="sec-lede" style="margin-top:22px">Going up the lattice adds constraints; going down relaxes them. The <code>meet()</code> of two morphisms is the most relaxed one that still satisfies both.</p>
+        <p class="sec-lede" style="margin-top:22px">Going up the lattice adds constraints; going down relaxes them. The <code>meet()</code> of two morphisms is the most relaxed one that still satisfies both. Clusters with different morphisms compose under one rule — two nodes may share a target iff they are not both injective — with the nuances drawn out in <a href="book/mixed-morphisms.html">Mixing Clusters &amp; Morphisms</a>.</p>
       </div>
     </div>
   </section>
