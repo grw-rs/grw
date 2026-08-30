@@ -12,7 +12,7 @@
 | `ban(morphism) { ... }` | Forbidden pattern cluster — matches are rejected |
 | `N(id)` | Pattern node |
 | `n(id)` | Reference to pattern node |
-| `^` `>>` `<<` | Edge operators (same as `graph!`) |
+| `^` `>>` `<<` | Edge operators (same as `mgraph!`) |
 | `!N(id)` | Negated node — the edge must NOT exist |
 | `N(id).val(v)` | Node value — exact match |
 | `N(id).test(\|v\| ...)` | Node value predicate |
@@ -28,7 +28,7 @@ use grw::*;
 use grw::graph::edge;
 
 // target graph: triangle
-let g: graph::Undir0 = graph![
+let g: graph::MUndir0 = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 

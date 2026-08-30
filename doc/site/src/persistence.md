@@ -11,7 +11,7 @@ use std::path::Path;
 g.save(Path::new("my_graph.grw")).unwrap();
 
 // load
-let g2: graph::Undir0 = Graph::load(Path::new("my_graph.grw")).unwrap();
+let g2: graph::MUndir0 = MGraph::load(Path::new("my_graph.grw")).unwrap();
 ```
 
 ## Binary Format
@@ -36,7 +36,7 @@ When loading, GRW validates that the types match:
 
 ```rust
 // this will fail: type mismatch
-let result = Graph::<i64, edge::Undir<i64>>::load(Path::new("u32_graph.grw"));
+let result = MGraph::<i64, edge::Undir<i64>>::load(Path::new("u32_graph.grw"));
 // Error: "node value layout mismatch: file has type `u32`, expected `i64`"
 ```
 

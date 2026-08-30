@@ -92,10 +92,10 @@ macro_rules! search {
             $crate::__search_clusters!(@acc [] $($body)*);
         $crate::search::query::compile(clusters)
     }};
-    [graph ! [$($g:tt)*], $($body:tt)*] => {{
+    [mgraph ! [$($g:tt)*], $($body:tt)*] => {{
         #[allow(unused_imports)]
         use $crate::search::dsl::*;
-        $crate::graph![$($g)*]
+        $crate::mgraph![$($g)*]
             .map_err(|e| $crate::search::error::Search::GraphBuild(Box::new(e)))
             .and_then(|__g| {
                 let clusters = $crate::__search_clusters!(@acc [] $($body)*);
@@ -124,6 +124,7 @@ macro_rules! search {
 mod tests {
     use super::*;
     use crate::edge;
+    use crate::graph::Graph as _;
     use crate::id;
     use crate::Id;
 
@@ -184,7 +185,7 @@ mod tests {
 
     #[test]
     fn search_session_graph_form() {
-        let g = crate::graph![<(), ER>; N(0) ^ N(1)].unwrap();
+        let g = crate::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
         let session = search![&g, get(Morphism::Mono) { N(0) ^ N(1) }].unwrap();
         let matches: Vec<_> = session.iter().collect();
         assert_eq!(matches.len(), 2);
@@ -192,7 +193,7 @@ mod tests {
 
     #[test]
     fn search_session_into_iter() {
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -211,14 +212,14 @@ mod tests {
 
     #[test]
     fn search_session_bound_pattern_errors() {
-        let g = crate::graph![<(), ER>; N(0) ^ N(1)].unwrap();
+        let g = crate::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
         let result = search![&g, get(Morphism::Mono) { X(0) ^ N(1) }];
         assert!(matches!(result, Err(error::Search::BoundPatternInSession)));
     }
 
     #[test]
     fn search_session_count() {
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -230,7 +231,7 @@ mod tests {
     #[test]
     fn search_inline_graph_for_loop() {
         let mut count = 0;
-        for _m in search![graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)],
+        for _m in search![mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)],
             get(Morphism::Iso) {
                 N(0) ^ N(1),
                 n(1) ^ N(2),
@@ -244,7 +245,7 @@ mod tests {
 
     #[test]
     fn search_inline_graph_count() {
-        let count = search![graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)],
+        let count = search![mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)],
             get(Morphism::Mono) { N(0) ^ N(1) }
         ].unwrap().count();
         assert_eq!(count, 6);
@@ -252,7 +253,7 @@ mod tests {
 
     #[test]
     fn search_session_consuming_into_iter() {
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -270,7 +271,7 @@ mod tests {
 
     #[test]
     fn search_session_consuming_count() {
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -281,7 +282,7 @@ mod tests {
 
     fn run_search(
         search: Search<(), ER>,
-        target: crate::graph::Graph<(), ER>,
+        target: crate::graph::MGraph<(), ER>,
     ) -> usize {
         let Search::Resolved(r) = search
         else { panic!("unexpected context nodes") };
@@ -292,7 +293,7 @@ mod tests {
 
     #[test]
     fn iso_single_edge_matches_single_edge() {
-        let target = crate::graph![<(), ER>; N(0) ^ N(1)].unwrap();
+        let target = crate::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
         let pattern = search![<(), ER>;
             get(Morphism::Iso) { N(0) ^ N(1) }
         ];
@@ -302,7 +303,7 @@ mod tests {
 
     #[test]
     fn iso_triangle_six_automorphisms() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -320,7 +321,7 @@ mod tests {
 
     #[test]
     fn iso_no_match_different_sizes() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(2) ^ N(3)
@@ -334,7 +335,7 @@ mod tests {
 
     #[test]
     fn iso_no_match_wrong_structure() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -351,7 +352,7 @@ mod tests {
 
     #[test]
     fn mono_edge_in_triangle() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -365,7 +366,7 @@ mod tests {
 
     #[test]
     fn mono_path_in_triangle() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -382,7 +383,7 @@ mod tests {
 
     #[test]
     fn mono_no_match() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2)
         ].unwrap();
@@ -399,7 +400,7 @@ mod tests {
 
     #[test]
     fn sub_iso_path_in_triangle_no_match() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -416,7 +417,7 @@ mod tests {
 
     #[test]
     fn sub_iso_vs_mono_difference() {
-        let graph = crate::graph![<(), ER>;
+        let graph = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -450,7 +451,7 @@ mod tests {
 
     #[test]
     fn homo_allows_non_injective() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1)
         ].unwrap();
         let pattern = search![<(), ER>;
@@ -464,7 +465,7 @@ mod tests {
 
     #[test]
     fn mixed_morphisms_across_clusters() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(2) ^ N(3)
@@ -486,7 +487,7 @@ mod tests {
 
     fn run_valued_search(
         search: Search<i32, VER>,
-        target: crate::graph::Graph<i32, VER>,
+        target: crate::graph::MGraph<i32, VER>,
     ) -> usize {
         let Search::Resolved(r) = search
         else { panic!("unexpected context nodes") };
@@ -497,7 +498,7 @@ mod tests {
 
     #[test]
     fn neg_freestanding_val_bail() {
-        let target = crate::graph![<i32, VER>;
+        let target = crate::mgraph![<i32, VER>;
             N(0).val(10) ^ N(1).val(20)
         ].unwrap();
         let pattern = search![<i32, VER>;
@@ -526,7 +527,7 @@ mod tests {
 
     #[test]
     fn neg_freestanding_no_pred_bail() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1)
         ].unwrap();
         let pattern = search![<(), ER>;
@@ -540,7 +541,7 @@ mod tests {
 
     #[test]
     fn neg_connected_reject_third_neighbor() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -556,7 +557,7 @@ mod tests {
 
     #[test]
     fn neg_connected_partial_reject() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(0) ^ N(2)
         ].unwrap();
@@ -571,7 +572,7 @@ mod tests {
 
     #[test]
     fn neg_connected_allow_when_no_third() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1)
         ].unwrap();
         let pattern = search![<(), ER>;
@@ -585,7 +586,7 @@ mod tests {
 
     #[test]
     fn neg_connected_val_pred_reject() {
-        let target = crate::graph![<i32, VER>;
+        let target = crate::mgraph![<i32, VER>;
             N(0).val(1) ^ N(1).val(42),
             n(0) ^ N(2).val(99)
         ].unwrap();
@@ -607,7 +608,7 @@ mod tests {
 
     #[test]
     fn neg_connected_val_pred_allow() {
-        let target = crate::graph![<i32, VER>;
+        let target = crate::mgraph![<i32, VER>;
             N(0).val(1) ^ N(1).val(20)
         ].unwrap();
         let pattern = search![<i32, VER>;
@@ -621,7 +622,7 @@ mod tests {
 
     #[test]
     fn neg_context_val_freestanding() {
-        let graph = crate::graph![<i32, VER>;
+        let graph = crate::mgraph![<i32, VER>;
             N(0).val(42) ^ N(1).val(10)
         ].unwrap();
         let target = graph.index(RevCsr);
@@ -654,7 +655,7 @@ mod tests {
 
     #[test]
     fn positive_context_val_assertion() {
-        let graph = crate::graph![<i32, VER>;
+        let graph = crate::mgraph![<i32, VER>;
             N(0).val(42) ^ N(1).val(10)
         ].unwrap();
         let target = graph.index(RevCsr);
@@ -693,7 +694,7 @@ mod tests {
 
     #[test]
     fn neg_connected_explicit_neg_edge_reject() {
-        let target = crate::graph![<i32, VER>;
+        let target = crate::mgraph![<i32, VER>;
             N(0).val(1) ^ N(1).val(42)
         ].unwrap();
         let pattern = search![<i32, VER>;
@@ -712,7 +713,7 @@ mod tests {
 
     #[test]
     fn neg_connected_explicit_neg_edge_reject_all() {
-        let target = crate::graph![<i32, VER>;
+        let target = crate::mgraph![<i32, VER>;
             N(0).val(42) ^ N(1).val(42)
         ].unwrap();
         let pattern = search![<i32, VER>;
@@ -726,7 +727,7 @@ mod tests {
 
     #[test]
     fn neg_freestanding_isolated_subiso() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             N(2)
         ].unwrap();
@@ -744,7 +745,7 @@ mod tests {
 
     #[test]
     fn neg_two_negated_connected() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(0) ^ N(2)
         ].unwrap();
@@ -760,7 +761,7 @@ mod tests {
 
     #[test]
     fn neg_two_negated_connected_one_absent() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1)
         ].unwrap();
         let pattern = search![<(), ER>;
@@ -775,7 +776,7 @@ mod tests {
 
     #[test]
     fn neg_context_with_edge_connected() {
-        let graph = crate::graph![<i32, VER>;
+        let graph = crate::mgraph![<i32, VER>;
             N(0).val(1) ^ N(1).val(2)
         ].unwrap();
         let target = graph.index(RevCsr);
@@ -796,7 +797,7 @@ mod tests {
 
     #[test]
     fn homo_context_same_target_no_self_loop() {
-        let graph = crate::graph![<(), ER>;
+        let graph = crate::mgraph![<(), ER>;
             N(0) ^ N(1)
         ].unwrap();
         let target = graph.index(RevCsr);
@@ -817,7 +818,7 @@ mod tests {
     #[test]
     fn sub_iso_rejects_extra_edges_anydir() {
         type AER = crate::graph::edge::Anydir<()>;
-        let graph = crate::graph![<(), AER>;
+        let graph = crate::mgraph![<(), AER>;
             N(0) >> (N(1) ^ N(2)),
             n(0) << n(1)
         ].unwrap();
@@ -834,7 +835,7 @@ mod tests {
 
     #[test]
     fn neg_multi_cluster() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -853,7 +854,7 @@ mod tests {
 
     #[test]
     fn ban_cluster_positive_node_on_path() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(2) ^ N(3)
@@ -873,7 +874,7 @@ mod tests {
 
     #[test]
     fn ban_cluster_rejects_when_triangle_exists() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -893,7 +894,7 @@ mod tests {
 
     #[test]
     fn ban_cluster_partial_reject() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2),
@@ -923,7 +924,7 @@ mod tests {
 
     #[test]
     fn ban_cluster_neg_node_in_ban() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(2) ^ N(3)
@@ -942,7 +943,7 @@ mod tests {
 
     #[test]
     fn ban_cluster_no_ban_only_nodes() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2)
         ].unwrap();
@@ -961,7 +962,7 @@ mod tests {
 
     #[test]
     fn ban_cluster_shared_edge_still_enforces() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)
@@ -981,7 +982,7 @@ mod tests {
 
     #[test]
     fn neg_homo_allows_duplicate_mapping() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1)
         ].unwrap();
         let pattern = search![<(), ER>;
@@ -997,7 +998,7 @@ mod tests {
 
     fn run_dir_search(
         search: Search<(), DER>,
-        target: crate::graph::Graph<(), DER>,
+        target: crate::graph::MGraph<(), DER>,
     ) -> usize {
         let Search::Resolved(r) = search
         else { panic!("unexpected context nodes") };
@@ -1006,11 +1007,11 @@ mod tests {
         Seq::search(&query, &target).count()
     }
 
-    fn dir_graph(nodes: &[u32], edges: &[(u32, u32)]) -> crate::graph::Dir0 {
+    fn dir_graph(nodes: &[u32], edges: &[(u32, u32)]) -> crate::graph::MDir0 {
         use crate::graph::edge::dir;
         let ns: Vec<u32> = nodes.to_vec();
         let es: Vec<dir::E<u32>> = edges.iter().map(|&(a, b)| dir::E::D(a, b)).collect();
-        crate::graph::Dir0::try_from((ns, es)).unwrap()
+        crate::graph::MDir0::try_from((ns, es)).unwrap()
     }
 
     #[test]
@@ -1090,7 +1091,7 @@ mod tests {
 
     fn run_anydir_search(
         search: Search<(), AER>,
-        target: crate::graph::Graph<(), AER>,
+        target: crate::graph::MGraph<(), AER>,
     ) -> usize {
         let Search::Resolved(r) = search
         else { panic!("unexpected context nodes") };
@@ -1103,7 +1104,7 @@ mod tests {
         nodes: &[u32],
         dir_edges: &[(u32, u32)],
         undir_edges: &[(u32, u32)],
-    ) -> crate::graph::Anydir0 {
+    ) -> crate::graph::MAnydir0 {
         use crate::graph::edge::anydir;
         let ns: Vec<u32> = nodes.to_vec();
         let mut es: Vec<anydir::E<u32>> = Vec::new();
@@ -1113,7 +1114,7 @@ mod tests {
         for &(a, b) in undir_edges {
             es.push(anydir::E::U(a, b));
         }
-        crate::graph::Anydir0::try_from((ns, es)).unwrap()
+        crate::graph::MAnydir0::try_from((ns, es)).unwrap()
     }
 
     #[test]
@@ -1348,7 +1349,7 @@ mod tests {
 
     #[test]
     fn any_edge_undir() {
-        let target = crate::graph![<(), ER>; N(0) ^ N(1)].unwrap();
+        let target = crate::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
         let pattern = search![<(), ER>;
             get(Morphism::Mono) { N(0) % N(1) }
         ];
@@ -1378,7 +1379,7 @@ mod tests {
 
     #[test]
     fn any_edge_negated() {
-        let graph = crate::graph![<(), ER>;
+        let graph = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(0) ^ N(2)
         ].unwrap();
@@ -1403,7 +1404,7 @@ mod tests {
     #[test]
     fn any_edge_with_pred() {
         type VER2 = edge::Undir<i32>;
-        let graph = crate::graph![<(), VER2>;
+        let graph = crate::mgraph![<(), VER2>;
             N(0) ^ N(1),
             n(0) & E().val(5) ^ N(2)
         ].unwrap();
@@ -1424,7 +1425,7 @@ mod tests {
     fn bound_path_edge_multihop() {
         // Chain: 0→1→2→3 (directed, weight 1)
         type AER = crate::graph::edge::Anydir<u8>;
-        let graph = crate::graph![<(), AER>;
+        let graph = crate::mgraph![<(), AER>;
             N(0) & E().val(1u8) >> N(1),
             n(1) & E().val(1u8) >> N(2),
             n(2) & E().val(1u8) >> N(3)
@@ -1460,7 +1461,7 @@ mod tests {
     fn bound_path_edge_with_typed_pred() {
         // Chain: 0→1→2 (label 1), 0→2 shortcut (label 2)
         type AER = crate::graph::edge::Anydir<u8>;
-        let graph = crate::graph![<(), AER>;
+        let graph = crate::mgraph![<(), AER>;
             N(0) & E().val(1u8) >> N(1),
             n(1) & E().val(1u8) >> N(2),
             n(0) & E().val(2u8) >> n(2)
@@ -1492,7 +1493,7 @@ mod tests {
     #[test]
     fn homo_cycle_via_path() {
         // Square: 0-1-2-3-0
-        let graph = crate::graph![<(), ER>;
+        let graph = crate::mgraph![<(), ER>;
             N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0)
         ].unwrap();
         let target = graph.index(RevCsr);
@@ -1518,7 +1519,7 @@ mod tests {
         use crate::search::path::Dijkstra;
         type W = crate::graph::edge::Undir<u32>;
         // 0—1(1)—3(1) => cost 2 ; 0—2(5)—3(1) => cost 6
-        let graph = crate::graph![<(), W>;
+        let graph = crate::mgraph![<(), W>;
             N(0) & E().val(1u32) ^ N(1),
             n(1) & E().val(1u32) ^ N(3),
             n(0) & E().val(5u32) ^ N(2),
@@ -1545,7 +1546,7 @@ mod tests {
 
     #[test]
     fn any_edge_in_ban() {
-        let target = crate::graph![<(), ER>;
+        let target = crate::mgraph![<(), ER>;
             N(0) ^ N(1),
             n(1) ^ N(2),
             n(0) ^ n(2)

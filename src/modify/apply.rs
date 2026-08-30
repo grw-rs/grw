@@ -3,8 +3,8 @@ use crate::modify::Node;
 use crate::modify::edge::{self, Edge};
 use crate::modify::error::{Apply, apply};
 use crate::modify::node::{Bind, Exist, New};
-use crate::graph::{self, Graph, EdgeRec};
-use crate::{NR, id};
+use crate::graph::{self, MGraph, EdgeRec};
+use crate::{Id, NR, id};
 use std::collections::BTreeSet;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -31,45 +31,99 @@ impl<NV, ER: graph::Edge> Default for Modification<NV, ER> {
 }
 
 #[derive(Clone, Copy)]
-enum NewRef {
+pub(crate) enum NewRef {
     Named(LocalId),
     Anon(id::N),
 }
 
 #[derive(Clone, Copy)]
-enum Endpoint {
+pub(crate) enum Endpoint {
     New(NewRef),
     Exist(id::N),
 }
 
-struct AddEdge<ER: graph::Edge> {
-    source: Endpoint,
-    slot: ER::Slot,
-    val: ER::Val,
-    target: Endpoint,
+pub(crate) struct AddEdge<ER: graph::Edge> {
+    pub(crate) source: Endpoint,
+    pub(crate) slot: ER::Slot,
+    pub(crate) val: ER::Val,
+    pub(crate) target: Endpoint,
 }
 
-struct SwapEdge<ER: graph::Edge> {
-    source: Endpoint,
-    slot: ER::Slot,
-    val: ER::Val,
-    target: Endpoint,
+pub(crate) struct SwapEdge<ER: graph::Edge> {
+    pub(crate) source: Endpoint,
+    pub(crate) slot: ER::Slot,
+    pub(crate) val: ER::Val,
+    pub(crate) target: Endpoint,
 }
 
-struct RemoveEdge<ER: graph::Edge> {
-    source: Endpoint,
-    slot: ER::Slot,
-    target: Endpoint,
+pub(crate) struct RemoveEdge<ER: graph::Edge> {
+    pub(crate) source: Endpoint,
+    pub(crate) slot: ER::Slot,
+    pub(crate) target: Endpoint,
 }
 
-struct FlatOps<NV, ER: graph::Edge> {
-    new_named: Vec<(LocalId, NV)>,
-    new_anon: Vec<(id::N, NV)>,
-    exist_nodes: Vec<(id::N, Option<NV>)>,
-    add_edges: Vec<AddEdge<ER>>,
-    swap_edges: Vec<SwapEdge<ER>>,
-    remove_edges: Vec<RemoveEdge<ER>>,
-    remove_nodes: Vec<id::N>,
+/// `source`/`target` keep the DSL's direction and are what `Apply::Edge`
+/// payloads carry; `nr`/`slot` are the canonical storage key. The two must be
+/// derived together — every lookup and every error payload in both graph
+/// impls comes from here.
+pub(crate) struct EdgeKey<ER: graph::Edge> {
+    pub(crate) source: id::N,
+    pub(crate) target: id::N,
+    pub(crate) nr: NR<id::N>,
+    pub(crate) slot: ER::Slot,
+}
+
+impl<ER: graph::Edge> EdgeKey<ER> {
+    pub(crate) fn n1(&self) -> id::N {
+        *self.nr.n1()
+    }
+    pub(crate) fn n2(&self) -> id::N {
+        *self.nr.n2()
+    }
+}
+
+pub(crate) trait EdgeOp<ER: graph::Edge> {
+    fn source(&self) -> Endpoint;
+    fn slot(&self) -> ER::Slot;
+    fn target(&self) -> Endpoint;
+
+    fn key(&self, local_map: &FxHashMap<LocalId, id::N>) -> EdgeKey<ER> {
+        let source = resolve_endpoint(self.source(), local_map);
+        let target = resolve_endpoint(self.target(), local_map);
+        let (nr, slot): (NR<id::N>, ER::Slot) =
+            ER::edge(self.slot(), (*source, *target)).into();
+        EdgeKey { source, target, nr, slot }
+    }
+}
+
+macro_rules! impl_edge_op {
+    ($op:ident) => {
+        impl<ER: graph::Edge> EdgeOp<ER> for $op<ER> {
+            fn source(&self) -> Endpoint {
+                self.source
+            }
+            fn slot(&self) -> ER::Slot {
+                self.slot
+            }
+            fn target(&self) -> Endpoint {
+                self.target
+            }
+        }
+    };
+}
+
+impl_edge_op!(AddEdge);
+impl_edge_op!(SwapEdge);
+impl_edge_op!(RemoveEdge);
+
+pub(crate) struct FlatOps<NV, ER: graph::Edge> {
+    pub(crate) new_named: Vec<(LocalId, NV)>,
+    pub(crate) new_anon: Vec<(id::N, NV)>,
+    pub(crate) exist_nodes: Vec<(id::N, Option<NV>)>,
+    pub(crate) add_edges: Vec<AddEdge<ER>>,
+    pub(crate) swap_edges: Vec<SwapEdge<ER>>,
+    pub(crate) remove_edges: Vec<RemoveEdge<ER>>,
+    pub(crate) remove_nodes: Vec<id::N>,
 }
 
 impl<NV, ER: graph::Edge> Default for FlatOps<NV, ER> {
@@ -86,7 +140,7 @@ impl<NV, ER: graph::Edge> Default for FlatOps<NV, ER> {
     }
 }
 
-fn flatten_node<NV, ER: graph::Edge>(
+pub(crate) fn flatten_node<NV, ER: graph::Edge>(
     node: Node<NV, ER>,
     flat: &mut FlatOps<NV, ER>,
     alloc: &mut impl FnMut() -> id::N,
@@ -177,7 +231,7 @@ fn flatten_edge<NV, ER: graph::Edge>(
     }
 }
 
-fn resolve_endpoint(ep: Endpoint, local_map: &FxHashMap<LocalId, id::N>) -> id::N {
+pub(crate) fn resolve_endpoint(ep: Endpoint, local_map: &FxHashMap<LocalId, id::N>) -> id::N {
     match ep {
         Endpoint::New(NewRef::Named(local)) => local_map[&local],
         Endpoint::New(NewRef::Anon(id)) => id,
@@ -185,21 +239,77 @@ fn resolve_endpoint(ep: Endpoint, local_map: &FxHashMap<LocalId, id::N>) -> id::
     }
 }
 
-impl<NV: Sync, ER: graph::Edge> Graph<NV, ER> {
+/// Must replay the mutation phase's remove → swap → add order over a
+/// multiplicity overlay on the pre-batch graph: any divergence changes which
+/// batches are accepted. `slot_count` reports the pre-batch graph's edge count
+/// for a canonical `(n1, n2, slot)` key.
+pub(crate) fn validate_edge_ops<NV, ER: graph::Edge>(
+    flat: &FlatOps<NV, ER>,
+    local_map: &FxHashMap<LocalId, id::N>,
+    slot_count: impl Fn(id::N, id::N, ER::Slot) -> usize,
+) -> Result<(), Apply> {
+    let mut delta: FxHashMap<(NR<id::N>, ER::Slot), isize> = FxHashMap::default();
+
+    let present = |delta: &FxHashMap<(NR<id::N>, ER::Slot), isize>, nr: NR<id::N>, slot: ER::Slot| {
+        slot_count(*nr.n1(), *nr.n2(), slot) as isize
+            + delta.get(&(nr, slot)).copied().unwrap_or(0)
+            > 0
+    };
+
+    for remove_edge in &flat.remove_edges {
+        let key = remove_edge.key(local_map);
+        if !present(&delta, key.nr, key.slot) {
+            return Err(Apply::Edge(apply::Edge::NotFound(key.source, key.target)));
+        }
+        *delta.entry((key.nr, key.slot)).or_insert(0) -= 1;
+    }
+
+    for swap_edge in &flat.swap_edges {
+        let key = swap_edge.key(local_map);
+        if !present(&delta, key.nr, key.slot) {
+            return Err(Apply::Edge(apply::Edge::NotFound(key.source, key.target)));
+        }
+    }
+
+    for add_edge in &flat.add_edges {
+        let key = add_edge.key(local_map);
+        if present(&delta, key.nr, key.slot) {
+            return Err(Apply::Edge(apply::Edge::Duplicate(key.source, key.target)));
+        }
+        *delta.entry((key.nr, key.slot)).or_insert(0) += 1;
+    }
+
+    Ok(())
+}
+
+impl<NV: Sync, ER: graph::Edge> MGraph<NV, ER> {
     pub(crate) fn apply_ops(
         &mut self,
         ops: Vec<Node<NV, ER>>,
     ) -> Result<Modification<NV, ER>, Apply> {
+        let mut allocated: Vec<Id> = Vec::new();
+        match self.apply_validated(ops, &mut allocated) {
+            Ok(modification) => Ok(modification),
+            Err(err) => {
+                allocated.into_iter().for_each(|raw| self.nodes.free_ids.push_id(raw));
+                Err(err)
+            }
+        }
+    }
+
+    fn apply_validated(
+        &mut self,
+        ops: Vec<Node<NV, ER>>,
+        allocated: &mut Vec<Id>,
+    ) -> Result<Modification<NV, ER>, Apply> {
         let mut flat = FlatOps::default();
 
         {
+            let free_ids = &mut self.nodes.free_ids;
             let mut alloc = || {
-                id::N(
-                    self.nodes
-                        .free_ids
-                        .pop_id()
-                        .expect("exhausted node id space"),
-                )
+                let raw = free_ids.pop_id().expect("exhausted node id space");
+                allocated.push(raw);
+                id::N(raw)
             };
             ops.into_iter().for_each(|op| {
                 flatten_node(op, &mut flat, &mut alloc);
@@ -220,16 +330,16 @@ impl<NV: Sync, ER: graph::Edge> Graph<NV, ER> {
             .map_or(Ok(()), |nid| Err(Apply::Node(apply::Node::NotFound(nid))))?;
 
         let mut local_map = FxHashMap::default();
-        flat.new_named.iter().for_each(|(local, _)| {
-            local_map.entry(*local).or_insert_with(|| {
-                id::N(
-                    self.nodes
-                        .free_ids
-                        .pop_id()
-                        .expect("exhausted node id space"),
-                )
+        {
+            let free_ids = &mut self.nodes.free_ids;
+            flat.new_named.iter().for_each(|(local, _)| {
+                local_map.entry(*local).or_insert_with(|| {
+                    let raw = free_ids.pop_id().expect("exhausted node id space");
+                    allocated.push(raw);
+                    id::N(raw)
+                });
             });
-        });
+        }
 
         flat.remove_nodes
             .iter()
@@ -257,14 +367,15 @@ impl<NV: Sync, ER: graph::Edge> Graph<NV, ER> {
 
         let mut seen_swaps = BTreeSet::new();
         for swap_edge in &flat.swap_edges {
-            let source_id = resolve_endpoint(swap_edge.source, &local_map);
-            let target_id = resolve_endpoint(swap_edge.target, &local_map);
-            let def = ER::edge(swap_edge.slot, (*source_id, *target_id));
-            let (nr, stored_slot): (NR<id::N>, ER::Slot) = def.into();
-            if !seen_swaps.insert((nr, stored_slot)) {
-                return Err(Apply::Edge(apply::Edge::SwapConflict(source_id, target_id)));
+            let key = swap_edge.key(&local_map);
+            if !seen_swaps.insert((key.nr, key.slot)) {
+                return Err(Apply::Edge(apply::Edge::SwapConflict(key.source, key.target)));
             }
         }
+
+        validate_edge_ops(&flat, &local_map, |n1, n2, slot| {
+            self.edges_between(n1, n2).filter(|(s, _)| *s == slot).count()
+        })?;
 
         let mut result = Modification {
             new_node_ids: local_map.clone(),
@@ -300,13 +411,11 @@ impl<NV: Sync, ER: graph::Edge> Graph<NV, ER> {
             }
         }
 
-        flat.remove_edges.iter().try_for_each(|remove_edge| {
-            let source_id = resolve_endpoint(remove_edge.source, &local_map);
-            let target_id = resolve_endpoint(remove_edge.target, &local_map);
-            let def = ER::edge(remove_edge.slot, (*source_id, *target_id));
-            let (nr, stored_slot): (NR<id::N>, ER::Slot) = def.into();
-            let n1 = *nr.n1();
-            let n2 = *nr.n2();
+        for remove_edge in &flat.remove_edges {
+            let key = remove_edge.key(&local_map);
+            let (nr, stored_slot) = (key.nr, key.slot);
+            let n1 = key.n1();
+            let n2 = key.n2();
 
             let eid = self.nodes.get_node(n1)
                 .into_iter()
@@ -316,40 +425,32 @@ impl<NV: Sync, ER: graph::Edge> Graph<NV, ER> {
                         .as_ref()
                         .map(|r| r.slot == stored_slot)
                         .unwrap_or(false)
-                });
+                })
+                .expect("edge presence decided by validate_edge_ops");
 
-            match eid {
-                Some(eid) => {
-                    let rec = self.edges.store[*eid as usize].take().unwrap();
-                    self.edges.count -= 1;
-                    self.edges.free_ids.push_id(*eid);
-                    result.removed_edges.push((eid, nr, rec.slot, rec.val));
+            let rec = self.edges.store[*eid as usize].take().unwrap();
+            self.edges.count -= 1;
+            self.edges.free_ids.push_id(*eid);
+            result.removed_edges.push((eid, nr, rec.slot, rec.val));
 
-                    let n1_deg_before = self.nodes.get_node(n1).unwrap().adj.len();
-                    self.nodes.get_node_mut(n1).unwrap().adj.remove_entry(n2, eid);
-                    let n1_deg_after = self.nodes.get_node(n1).unwrap().adj.len();
-                    self.degrees_move(n1, n1_deg_before, n1_deg_after);
+            let n1_deg_before = self.nodes.get_node(n1).unwrap().adj.len();
+            self.nodes.get_node_mut(n1).unwrap().adj.remove_entry(n2, eid);
+            let n1_deg_after = self.nodes.get_node(n1).unwrap().adj.len();
+            self.degrees_move(n1, n1_deg_before, n1_deg_after);
 
-                    if !nr.is_cycle() {
-                        let n2_deg_before = self.nodes.get_node(n2).unwrap().adj.len();
-                        self.nodes.get_node_mut(n2).unwrap().adj.remove_entry(n1, eid);
-                        let n2_deg_after = self.nodes.get_node(n2).unwrap().adj.len();
-                        self.degrees_move(n2, n2_deg_before, n2_deg_after);
-                    }
-
-                    Ok(())
-                }
-                None => Err(Apply::Edge(apply::Edge::NotFound(source_id, target_id))),
+            if !nr.is_cycle() {
+                let n2_deg_before = self.nodes.get_node(n2).unwrap().adj.len();
+                self.nodes.get_node_mut(n2).unwrap().adj.remove_entry(n1, eid);
+                let n2_deg_after = self.nodes.get_node(n2).unwrap().adj.len();
+                self.degrees_move(n2, n2_deg_before, n2_deg_after);
             }
-        })?;
+        }
 
-        flat.swap_edges.into_iter().try_for_each(|swap_edge| {
-            let source_id = resolve_endpoint(swap_edge.source, &local_map);
-            let target_id = resolve_endpoint(swap_edge.target, &local_map);
-            let def = ER::edge(swap_edge.slot, (*source_id, *target_id));
-            let (nr, stored_slot): (NR<id::N>, ER::Slot) = def.into();
-            let n1 = *nr.n1();
-            let n2 = *nr.n2();
+        for swap_edge in flat.swap_edges {
+            let key = swap_edge.key(&local_map);
+            let (nr, stored_slot) = (key.nr, key.slot);
+            let n1 = key.n1();
+            let n2 = key.n2();
 
             let eid = self.nodes.get_node(n1)
                 .into_iter()
@@ -359,30 +460,19 @@ impl<NV: Sync, ER: graph::Edge> Graph<NV, ER> {
                         .as_ref()
                         .map(|r| r.slot == stored_slot)
                         .unwrap_or(false)
-                });
+                })
+                .expect("edge presence decided by validate_edge_ops");
 
-            match eid {
-                Some(eid) => {
-                    let rec = self.edges.store[*eid as usize].as_mut().unwrap();
-                    let old_val = std::mem::replace(&mut rec.val, swap_edge.val);
-                    result.swapped_edge_vals.push((eid, nr, stored_slot, old_val));
-                    Ok(())
-                }
-                None => Err(Apply::Edge(apply::Edge::NotFound(source_id, target_id))),
-            }
-        })?;
+            let rec = self.edges.store[*eid as usize].as_mut().unwrap();
+            let old_val = std::mem::replace(&mut rec.val, swap_edge.val);
+            result.swapped_edge_vals.push((eid, nr, stored_slot, old_val));
+        }
 
-        flat.add_edges.into_iter().try_for_each(|add_edge| {
-            let source_id = resolve_endpoint(add_edge.source, &local_map);
-            let target_id = resolve_endpoint(add_edge.target, &local_map);
-            let def = ER::edge(add_edge.slot, (*source_id, *target_id));
-            let (nr, stored_slot): (NR<id::N>, ER::Slot) = def.into();
-            let n1 = *nr.n1();
-            let n2 = *nr.n2();
-
-            if self.edges_between(n1, n2).any(|(s, _)| s == stored_slot) {
-                return Err(Apply::Edge(apply::Edge::Duplicate(source_id, target_id)));
-            }
+        for add_edge in flat.add_edges {
+            let key = add_edge.key(&local_map);
+            let (nr, stored_slot) = (key.nr, key.slot);
+            let n1 = key.n1();
+            let n2 = key.n2();
 
             let eid_raw = self.edges.free_ids.pop_id().expect("exhausted edge id space");
             let eid = id::E(eid_raw);
@@ -405,9 +495,7 @@ impl<NV: Sync, ER: graph::Edge> Graph<NV, ER> {
                 let n2_deg_after = self.nodes.get_node(n2).unwrap().adj.len();
                 self.degrees_move(n2, n2_deg_before, n2_deg_after);
             }
-
-            Ok(())
-        })?;
+        }
 
         for nid in flat.remove_nodes {
             let node = self.nodes.get_node(nid).unwrap();

@@ -16,9 +16,9 @@ fn is_dir(slot: anydir::Slot, _: &AnyVal<u8>) -> bool {
     matches!(slot, anydir::Slot::Dir(End::Src))
 }
 
-fn diamond() -> grw::Graph<(), ER> {
+fn diamond() -> grw::MGraph<(), ER> {
     // 0 → 1 → 3, 0 → 2 → 3
-    grw::graph![<(), ER>;
+    grw::mgraph![<(), ER>;
         N(0) >> N(1), n(1) >> N(3),
         n(0) >> N(2), n(2) >> n(3)
     ]
@@ -69,7 +69,7 @@ fn navigated_configs_annotation_free() {
 
 #[test]
 fn search_macro_paths_annotation_free() {
-    let _g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
+    let _g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
 
     // free-node refs on a path, defined in a sibling cluster (as in path_coverage)
     let search = grw::search![<(), ER>;

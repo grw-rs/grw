@@ -5,7 +5,7 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 use grw::graph::edge;
-use grw::graph::{self, Graph};
+use grw::graph::{self, MGraph};
 use grw::modify::{self, LocalId, Node};
 use grw::modify::node::{Bind, Exist, New};
 use grw::{Id, NR, id};
@@ -127,7 +127,7 @@ struct StepStats {
 }
 
 fn replay_step(
-    graph: &mut Graph<(), edge::Undir<()>>,
+    graph: &mut MGraph<(), edge::Undir<()>>,
     shadow: &mut Shadow<edge::Undir<()>>,
     rng: &mut SmallRng,
     step: usize,
@@ -382,7 +382,7 @@ fn replay_step(
 }
 
 fn roundtrip_check(
-    graph: &Graph<(), edge::Undir<()>>,
+    graph: &MGraph<(), edge::Undir<()>>,
     shadow: &Shadow<edge::Undir<()>>,
     step: usize,
 ) -> bool {
@@ -403,7 +403,7 @@ fn roundtrip_check(
         shadow.edges.len(),
     );
 
-    let _rebuilt: Graph<(), edge::Undir<()>> = shadow.to_vecs().try_into().unwrap_or_else(|_| {
+    let _rebuilt: MGraph<(), edge::Undir<()>> = shadow.to_vecs().try_into().unwrap_or_else(|_| {
         panic!(
             "step {step}: shadow rebuild failed (seed=42)\n\
              shadow: {} nodes, {} edges",
@@ -436,7 +436,7 @@ fn roundtrip_check(
 #[test]
 fn replay_chaos_seed42() {
     let mut rng = SmallRng::seed_from_u64(42);
-    let mut graph = Graph::<(), edge::Undir<()>>::default();
+    let mut graph = MGraph::<(), edge::Undir<()>>::default();
     let mut shadow = Shadow::<edge::Undir<()>>::new();
 
     for step in 0..=15 {

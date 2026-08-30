@@ -2,7 +2,7 @@ use crate::{search, Id};
 use crate::edge::undir::E::U;
 use crate::graph;
 
-pub(crate) fn t_undir_36_47() -> graph::Undir0 {
+pub(crate) fn t_undir_36_47() -> graph::MUndir0 {
     (
         36 as Id,
         vec![

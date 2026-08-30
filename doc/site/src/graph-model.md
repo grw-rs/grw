@@ -1,6 +1,6 @@
 # Graph Model
 
-A graph `Graph<NV, ER>` is parameterized by two type parameters:
+A graph `MGraph<NV, ER>` is parameterized by two type parameters:
 
 - **`NV`** — node value type (use `()` for no attributes)
 - **`ER`** — edge relation type, which determines the edge topology
@@ -28,22 +28,22 @@ Common configurations have convenient aliases:
 
 ```rust
 // Undirected
-type Undir0      = Graph<(), edge::Undir<()>>;      // no attributes
-type UndirN<NV>  = Graph<NV, edge::Undir<()>>;      // node values only
-type UndirE<EV>  = Graph<(), edge::Undir<EV>>;      // edge values only
-type Undir<N, E> = Graph<NV, edge::Undir<EV>>;      // both
+type MUndir0      = MGraph<(), edge::Undir<()>>;      // no attributes
+type MUndirN<NV>  = MGraph<NV, edge::Undir<()>>;      // node values only
+type MUndirE<EV>  = MGraph<(), edge::Undir<EV>>;      // edge values only
+type MUndir<N, E> = MGraph<NV, edge::Undir<EV>>;      // both
 
 // Directed
-type Dir0         = Graph<(), edge::Dir<()>>;
-type DirN<NV>     = Graph<NV, edge::Dir<()>>;
-type DirE<EV>     = Graph<(), edge::Dir<EV>>;
-type Dir<NV, EV>  = Graph<NV, edge::Dir<EV>>;
+type MDir0         = MGraph<(), edge::Dir<()>>;
+type MDirN<NV>     = MGraph<NV, edge::Dir<()>>;
+type MDirE<EV>     = MGraph<(), edge::Dir<EV>>;
+type MDir<NV, EV>  = MGraph<NV, edge::Dir<EV>>;
 
 // Anydirected
-type Anydir0         = Graph<(), edge::Anydir<()>>;
-type AnydirN<NV>     = Graph<NV, edge::Anydir<()>>;
-type AnydirE<EV>     = Graph<(), edge::Anydir<EV>>;
-type Anydir<NV, EV>  = Graph<NV, edge::Anydir<EV>>;
+type MAnydir0         = MGraph<(), edge::Anydir<()>>;
+type MAnydirN<NV>     = MGraph<NV, edge::Anydir<()>>;
+type MAnydirE<EV>     = MGraph<(), edge::Anydir<EV>>;
+type MAnydir<NV, EV>  = MGraph<NV, edge::Anydir<EV>>;
 ```
 
 ## Node and Edge Access

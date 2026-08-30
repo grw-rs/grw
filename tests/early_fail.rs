@@ -5,7 +5,7 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 use grw::graph::edge;
-use grw::graph::{self, Undir0};
+use grw::graph::{self, MUndir0};
 use grw::modify::{self, LocalId, Node};
 use grw::modify::node::{Bind, Exist, New};
 use grw::{Id, NR, id};
@@ -101,7 +101,7 @@ struct RemoveEdgePlan {
 }
 
 fn chaos_step(
-    graph: &mut Undir0,
+    graph: &mut MUndir0,
     shadow: &mut Shadow,
     rng: &mut SmallRng,
     step: usize,
@@ -319,7 +319,7 @@ fn chaos_step(
     assert_eq!(graph.node_count(), shadow.nodes.len(), "step {step}: node count");
     assert_eq!(graph.edge_count(), shadow.edges.len(), "step {step}: edge count");
 
-    let _rebuilt: Undir0 = shadow.to_vecs().try_into().unwrap();
+    let _rebuilt: MUndir0 = shadow.to_vecs().try_into().unwrap();
 
     let actual_hist = degree_histogram(graph.to_vecs());
     let expected_hist = degree_histogram(shadow.to_vecs());
@@ -333,7 +333,7 @@ fn chaos_step(
 fn find_early_fail() {
     let seed = 13u64;
     let mut rng = SmallRng::seed_from_u64(seed);
-    let mut g = Undir0::default();
+    let mut g = MUndir0::default();
     let mut s = Shadow::new();
     for step in 0..60 {
         chaos_step(

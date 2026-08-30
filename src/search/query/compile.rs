@@ -746,6 +746,20 @@ pub fn compile<NV, ER: graph::Edge>(
         }
     }
 
+    // Same 64-node domain as `pattern_adj_bits`: the two masks are read by the
+    // same shift, so the symmetric induced check only arms itself where both
+    // are meaningful. Patterns wider than that keep the arrival-order-only
+    // behaviour they had before.
+    let mut induced_bits = 0u64;
+    for (ni, m) in node_morphism.iter().enumerate() {
+        if ni < 64 && m.is_induced() {
+            induced_bits |= 1u64 << ni;
+        }
+    }
+    let has_mixed_induced = node_count <= 64
+        && induced_bits != 0
+        && node_morphism.iter().any(|m| m.is_injective() && !m.is_induced());
+
     let mut query = Query {
         nodes: flat.nodes,
         edges: flat.edges,
@@ -768,6 +782,8 @@ pub fn compile<NV, ER: graph::Edge>(
         is_injective,
         has_paths,
         pattern_adj_bits,
+        induced_bits,
+        has_mixed_induced,
         has_predicates,
         node_has_predicates,
         node_has_neg_adj,

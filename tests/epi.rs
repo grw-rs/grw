@@ -4,7 +4,7 @@ use grw::search::{self, Session};
 type UER = grw::graph::edge::Undir<()>;
 
 fn count<NV: Clone, ER: graph::Edge + 'static>(
-    g: &graph::Graph<NV, ER>,
+    g: &graph::MGraph<NV, ER>,
     compiled: search::Search<NV, ER>,
 ) -> usize
 where
@@ -20,7 +20,7 @@ where
 
 #[test]
 fn epi_single_edge_exact_cover() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(Epi) { N(0) ^ N(1) }
@@ -32,7 +32,7 @@ fn epi_single_edge_exact_cover() {
 
 #[test]
 fn epi_fails_not_enough_pattern_nodes() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1), N(2)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(Epi) { N(0) ^ N(1) }
@@ -44,7 +44,7 @@ fn epi_fails_not_enough_pattern_nodes() {
 
 #[test]
 fn epi_triangle_pattern_on_triangle() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(0) ^ n(2)
@@ -60,7 +60,7 @@ fn epi_triangle_pattern_on_triangle() {
 
 #[test]
 fn epi_allows_non_injective() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(Epi) { N(0) ^ N(1), n(0) ^ N(2) }
@@ -72,7 +72,7 @@ fn epi_allows_non_injective() {
 
 #[test]
 fn epi_rejects_uncovered_node() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(0) ^ n(2),
@@ -93,7 +93,7 @@ fn epi_rejects_uncovered_node() {
 
 #[test]
 fn epi_vs_homo_extra_target_node() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1), N(2)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2)].unwrap();
 
     let epi = count(&g, search![<(), UER>;
         get(Epi) { N(0) ^ N(1) }
@@ -114,7 +114,7 @@ fn epi_vs_homo_extra_target_node() {
 
 #[test]
 fn epimono_exact_bijection() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(EpiMono) { N(0) ^ N(1) }
@@ -126,7 +126,7 @@ fn epimono_exact_bijection() {
 
 #[test]
 fn epimono_fails_too_few_target() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(EpiMono) { N(0) ^ N(1), n(0) ^ N(2) }
@@ -138,7 +138,7 @@ fn epimono_fails_too_few_target() {
 
 #[test]
 fn epimono_fails_too_many_target() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1), N(2)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(EpiMono) { N(0) ^ N(1) }
@@ -150,7 +150,7 @@ fn epimono_fails_too_many_target() {
 
 #[test]
 fn epimono_allows_extra_edges() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(0) ^ n(2)

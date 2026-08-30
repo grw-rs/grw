@@ -16,7 +16,7 @@ use grw::graph::edge::{AnyVal, End};
 use grw::modify::dsl::*;
 use grw::search::path::{self, AStar, Config, Dijkstra, PathConstraint};
 
-type GrwGraph = grw::Graph<(), grw::edge::Anydir<u8>>;
+type GrwGraph = grw::MGraph<(), grw::edge::Anydir<u8>>;
 
 fn is_directed_src(slot: anydir::Slot, _ev: &AnyVal<u8>) -> bool {
     matches!(slot, anydir::Slot::Dir(End::Src))
@@ -26,7 +26,7 @@ fn is_directed_src(slot: anydir::Slot, _ev: &AnyVal<u8>) -> bool {
 
 /// A→B (w=1) → D, A→C (w=10) → D.  Two paths with different costs.
 fn build_astar_graph() -> GrwGraph {
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     // 0=A, 1=B, 2=C, 3=D
     for _ in 0..4 {
         g.modify(vec![N_().val(()).into()]).unwrap();
@@ -43,7 +43,7 @@ fn build_astar_graph() -> GrwGraph {
 }
 
 fn build_chain(n: usize) -> GrwGraph {
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..n {
         g.modify(vec![N_().val(()).into()]).unwrap();
     }
@@ -56,7 +56,7 @@ fn build_chain(n: usize) -> GrwGraph {
 }
 
 fn build_diamond() -> GrwGraph {
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..4 {
         g.modify(vec![N_().val(()).into()]).unwrap();
     }
@@ -148,7 +148,7 @@ fn lazy_dfs_next_yields_one_path() {
 #[test]
 fn lazy_bfs_shortest_first() {
     // Build graph with short path (0→3) and long path (0→1→2→3)
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..4 {
         g.modify(vec![N_().val(()).into()]).unwrap();
     }
@@ -310,7 +310,7 @@ fn build_random_directed(seed: u64, nodes: usize, edges: usize) -> GrwGraph {
     use std::collections::HashSet;
 
     let mut rng = SmallRng::seed_from_u64(seed);
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..nodes {
         g.modify(vec![N_().val(()).into()]).unwrap();
     }
@@ -411,7 +411,7 @@ fn iterator_respects_guard() {
 #[test]
 fn constraint_mono_via_unified_api() {
     // Build fork: 0→1→2→3, 0→5→3
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..6 {
         g.modify(vec![N_().val(()).into()]).unwrap();
     }
@@ -457,7 +457,7 @@ fn constraint_mono_via_unified_api() {
 /// Edge insertion order: D-path first → DFS explores it first (LIFO).
 fn build_algo_comparison_graph() -> GrwGraph {
     // S=0, D=1, E=2, T=3, B=4, C=5, A=6
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..7 {
         g.modify(vec![N_().val(()).into()]).unwrap();
     }
@@ -538,7 +538,7 @@ fn grid_pos(id: u32) -> (f64, f64) { ((id % GRID) as f64, (id / GRID) as f64) }
 /// and stays near it, while Dijkstra explores expensive terrain uniformly
 /// in all directions before reaching the target.
 fn build_highway_grid() -> GrwGraph {
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..(GRID * GRID) {
         g.modify(vec![N_().val(()).into()]).unwrap();
     }

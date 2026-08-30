@@ -16,7 +16,7 @@ use grw::search::{self, Search};
 use grw::Id;
 
 type ER = edge::Undir<()>;
-type ShagraGraph = grw::graph::Undir0;
+type ShagraGraph = grw::graph::MUndir0;
 
 // ── Graph construction helpers ───────────────────────────────────────
 
@@ -586,7 +586,7 @@ fn validate_match_edges(
 
 #[test]
 fn iso_triangle_six_automorphisms() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)
     ].unwrap();
 
@@ -605,7 +605,7 @@ fn iso_triangle_six_automorphisms() {
 
 #[test]
 fn iso_no_match_different_structure() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
 
@@ -613,7 +613,7 @@ fn iso_no_match_different_structure() {
     let pattern_edges = vec![(10, 11), (11, 12), (10, 12)];
     let grw_results = grw_matches_with(Morphism::Iso, &pattern_edges, &target, &pattern_ids);
 
-    let pattern_graph = grw::graph![<(), ER>;
+    let pattern_graph = grw::mgraph![<(), ER>;
         N(10) ^ N(11), n(11) ^ N(12), n(10) ^ n(12)
     ].unwrap();
     let (pg_pattern, pg_pattern_ids) = to_petgraph(&pattern_graph);
@@ -628,7 +628,7 @@ fn iso_no_match_different_structure() {
 
 #[test]
 fn subiso_path_in_triangle_zero() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)
     ].unwrap();
 
@@ -637,7 +637,7 @@ fn subiso_path_in_triangle_zero() {
 
     let grw_results = grw_matches_with(Morphism::SubIso, &pattern_edges, &target, &pattern_ids);
 
-    let pattern_graph = grw::graph![<(), ER>;
+    let pattern_graph = grw::mgraph![<(), ER>;
         N(10) ^ N(11), n(11) ^ N(12)
     ].unwrap();
     let (pg_pattern, pg_pattern_ids) = to_petgraph(&pattern_graph);
@@ -650,7 +650,7 @@ fn subiso_path_in_triangle_zero() {
 
 #[test]
 fn subiso_edge_in_path() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
 
@@ -659,7 +659,7 @@ fn subiso_edge_in_path() {
 
     let grw_results = grw_matches_with(Morphism::SubIso, &pattern_edges, &target, &pattern_ids);
 
-    let pattern_graph = grw::graph![<(), ER>; N(10) ^ N(11)].unwrap();
+    let pattern_graph = grw::mgraph![<(), ER>; N(10) ^ N(11)].unwrap();
     let (pg_pattern, pg_pattern_ids) = to_petgraph(&pattern_graph);
     let (pg_target, pg_target_ids) = to_petgraph(&target);
     let pg_results = petgraph_matches(&pg_pattern, &pg_target, &pg_pattern_ids, &pg_target_ids);
@@ -672,7 +672,7 @@ fn subiso_edge_in_path() {
 
 #[test]
 fn mono_edge_in_triangle() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)
     ].unwrap();
 
@@ -682,7 +682,7 @@ fn mono_edge_in_triangle() {
     let grw_results = grw_matches_with(Morphism::Mono, &pattern_edges, &target, &pattern_ids);
 
     let (pg_pattern, pg_pattern_ids) = to_petgraph(
-        &grw::graph![<(), ER>; N(10) ^ N(11)].unwrap(),
+        &grw::mgraph![<(), ER>; N(10) ^ N(11)].unwrap(),
     );
     let (pg_target, pg_target_ids) = to_petgraph(&target);
     let pg_results = petgraph_matches(&pg_pattern, &pg_target, &pg_pattern_ids, &pg_target_ids);
@@ -693,7 +693,7 @@ fn mono_edge_in_triangle() {
 
 #[test]
 fn mono_path_in_triangle_finds_more_than_subiso() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)
     ].unwrap();
 
@@ -712,7 +712,7 @@ fn mono_path_in_triangle_finds_more_than_subiso() {
 
 #[test]
 fn homo_allows_non_injective_mapping() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1)
     ].unwrap();
 
@@ -966,7 +966,7 @@ fn petgraph_subiso_large() {
 
 #[test]
 fn neg_mono_edge_excludes_adjacent() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)
     ].unwrap();
 
@@ -989,7 +989,7 @@ fn neg_mono_edge_excludes_adjacent() {
 
 #[test]
 fn neg_mono_path_not_triangle() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)
     ].unwrap();
 
@@ -1006,7 +1006,7 @@ fn neg_mono_path_not_triangle() {
 
 #[test]
 fn neg_mono_negated_only() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
 
@@ -1027,7 +1027,7 @@ fn neg_mono_negated_only() {
 
 #[test]
 fn neg_homo_negated_edge() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
 
@@ -1043,7 +1043,7 @@ fn neg_homo_negated_edge() {
 
 #[test]
 fn neg_iso_with_negated_edges() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
 
@@ -1060,7 +1060,7 @@ fn neg_iso_with_negated_edges() {
 
 #[test]
 fn neg_subiso_with_negated_edges() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)
     ].unwrap();
 
@@ -1359,7 +1359,7 @@ fn grw_neg_node_matches_with(
 
 #[test]
 fn neg_node_mono_connected_reject() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(0) ^ n(2)
     ].unwrap();
 
@@ -1383,7 +1383,7 @@ fn neg_node_mono_connected_reject() {
 
 #[test]
 fn neg_node_mono_connected_allow() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
 
@@ -1407,7 +1407,7 @@ fn neg_node_mono_connected_allow() {
 
 #[test]
 fn neg_node_subiso_connected() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3),
         n(0) ^ n(2), n(1) ^ n(3)
     ].unwrap();
@@ -1431,7 +1431,7 @@ fn neg_node_subiso_connected() {
 
 #[test]
 fn neg_node_iso_reject() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
 
@@ -1707,7 +1707,7 @@ fn oracle_neg_node_homo_sweep() {
 
 #[test]
 fn neg_node_freestanding_bare_bail() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
     let Search::Resolved(r) = grw::search![<(), ER>;
@@ -1722,7 +1722,7 @@ fn neg_node_freestanding_bare_bail() {
 
 #[test]
 fn neg_node_freestanding_with_positive() {
-    let target = grw::graph![<(), ER>;
+    let target = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2)
     ].unwrap();
     let Search::Resolved(r) = grw::search![<(), ER>;
@@ -1745,7 +1745,7 @@ fn neg_node_freestanding_with_positive() {
 use grw::graph::edge::dir;
 
 type DirER = edge::Dir<()>;
-type DirGraph = grw::graph::Dir0;
+type DirGraph = grw::graph::MDir0;
 
 // ── Dir graph construction helpers ──────────────────────────────────
 

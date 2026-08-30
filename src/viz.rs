@@ -1,4 +1,4 @@
-use crate::graph::{self, Graph, edge};
+use crate::graph::{self, MGraph, edge};
 use crate::search::engine::Match;
 use crate::Id;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -56,7 +56,7 @@ fn fmt_val(v: &impl Debug) -> Option<String> {
 }
 
 pub fn to_dot<NV: Debug, ER: graph::Edge<Val: Debug> + DotEdge>(
-    graph: &Graph<NV, ER>,
+    graph: &MGraph<NV, ER>,
     matches: &[Match],
 ) -> String {
     let keyword = if ER::use_digraph() { "digraph" } else { "graph" };
@@ -139,7 +139,7 @@ pub fn to_dot<NV: Debug, ER: graph::Edge<Val: Debug> + DotEdge>(
 }
 
 pub fn to_dot_traced<NV: Debug, ER: graph::Edge<Val: Debug> + DotEdge>(
-    graph: &Graph<NV, ER>,
+    graph: &MGraph<NV, ER>,
     m: &Match,
     labels: &FxHashMap<Id, String>,
     context_nodes: &FxHashSet<Id>,
@@ -232,7 +232,7 @@ pub fn to_dot_traced<NV: Debug, ER: graph::Edge<Val: Debug> + DotEdge>(
 }
 
 pub fn render<NV: Debug, ER: graph::Edge<Val: Debug> + DotEdge>(
-    graph: &Graph<NV, ER>,
+    graph: &MGraph<NV, ER>,
     matches: &[Match],
 ) {
     let dot = to_dot(graph, matches);
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn undir_basic_dot() {
-        let g: graph::Undir0 = Graph::try_from(
+        let g: graph::MUndir0 = MGraph::try_from(
             vec![edge::undir::E::U(0, 1), edge::undir::E::U(1, 2)]
         ).unwrap();
         let dot = to_dot(&g, &[]);
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn dir_basic_dot() {
-        let g: graph::Dir0 = Graph::try_from(
+        let g: graph::MDir0 = MGraph::try_from(
             vec![edge::dir::E::D(0, 1), edge::dir::E::D(1, 2)]
         ).unwrap();
         let dot = to_dot(&g, &[]);
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn anydir_mixed_dot() {
-        let g: graph::Anydir0 = Graph::try_from(
+        let g: graph::MAnydir0 = MGraph::try_from(
             vec![edge::anydir::E::D(0, 1), edge::anydir::E::U(1, 2)]
         ).unwrap();
         let dot = to_dot(&g, &[]);
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn undir_with_match_highlights_nodes() {
         type ER = edge::Undir<()>;
-        let g: graph::Undir0 = Graph::try_from(
+        let g: graph::MUndir0 = MGraph::try_from(
             vec![edge::undir::E::U(0, 1), edge::undir::E::U(1, 2), edge::undir::E::U(2, 3)]
         ).unwrap();
 

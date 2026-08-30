@@ -405,8 +405,8 @@ impl PathConstraint {
     }
 
     /// Does the completed `path` satisfy the induced (exact-neighborhood) rule?
-    pub fn accept_path_induced<NV, E: crate::graph::Edge>(
-        &self, path: &[id::N], graph: &crate::graph::Graph<NV, E>,
+    pub fn accept_path_induced<NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>>(
+        &self, path: &[id::N], graph: &G,
     ) -> bool {
         if !self.induced { return true; }
         for &node in &path[1..path.len().saturating_sub(1)] {
@@ -574,8 +574,8 @@ enum AlgoState {
 
 /// Lazy traversal iterator (`.dfs()`/`.bfs()`/`.drive()`): yields one complete
 /// path per `next()`, backtracking on demand.
-pub struct PathIter<'g, NV, E: crate::graph::Edge, F> {
-    graph: &'g crate::graph::Graph<NV, E>,
+pub struct PathIter<'g, NV, E: crate::graph::Edge, G, F> {
+    graph: &'g G,
     edge_pred: F,
     to: id::N,
     min_len: usize,
@@ -585,9 +585,10 @@ pub struct PathIter<'g, NV, E: crate::graph::Edge, F> {
     constraint: &'g PathConstraint,
     algo: AlgoState,
     pending: Vec<Vec<id::N>>,
+    _marker: std::marker::PhantomData<fn() -> (NV, E)>,
 }
 
-impl<'g, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool> PathIter<'g, NV, E, F> {
+impl<'g, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool> PathIter<'g, NV, E, G, F> {
     fn advance_dfs(&mut self) -> Option<Vec<id::N>> {
         let Self { graph, edge_pred, to, min_len, max_len, guard, drive, constraint, algo, pending, .. } = self;
         let guard_fn = guard.as_deref();
@@ -758,7 +759,7 @@ impl<'g, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool> PathIter<'g
     }
 }
 
-impl<'g, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool> Iterator for PathIter<'g, NV, E, F> {
+impl<'g, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool> Iterator for PathIter<'g, NV, E, G, F> {
     type Item = Vec<id::N>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -830,8 +831,8 @@ impl<'a> Iterator for PrevWalk<'a> {
 
 /// Lazy navigated iterator (`.navigate(..)`): yields `(cost, path)` pairs in
 /// non-decreasing cost order.
-pub struct CostPathIter<'g, NV, E: crate::graph::Edge, F> {
-    graph: &'g crate::graph::Graph<NV, E>,
+pub struct CostPathIter<'g, NV, E: crate::graph::Edge, G, F> {
+    graph: &'g G,
     edge_pred: F,
     to: id::N,
     min_len: usize,
@@ -852,9 +853,10 @@ pub struct CostPathIter<'g, NV, E: crate::graph::Edge, F> {
     /// The trivial zero-length path `[from]`, emitted once when `from == to`
     /// and `min_len == 0` (no edge reused, start == end).
     trivial: Option<Vec<id::N>>,
+    _marker: std::marker::PhantomData<fn() -> NV>,
 }
 
-impl<'g, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool> CostPathIter<'g, NV, E, F> {
+impl<'g, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool> CostPathIter<'g, NV, E, G, F> {
     fn advance(&mut self) -> Option<(f64, Vec<id::N>)> {
         if self.done { return None; }
         if let Some(p) = self.trivial.take() {
@@ -972,7 +974,7 @@ impl<'g, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool> CostPathIte
     }
 }
 
-impl<'g, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool> Iterator for CostPathIter<'g, NV, E, F> {
+impl<'g, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool> Iterator for CostPathIter<'g, NV, E, G, F> {
     type Item = (f64, Vec<id::N>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -982,8 +984,8 @@ impl<'g, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool> Iterator fo
 
 // ── Construction helpers ───────────────────────────────────────────
 
-fn build_path_iter<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool>(
-    graph: &'a crate::graph::Graph<NV, E>,
+fn build_path_iter<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool>(
+    graph: &'a G,
     from: id::N, to: id::N,
     edge_pred: F,
     min_len: usize, max_len: usize,
@@ -991,7 +993,7 @@ fn build_path_iter<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> boo
     drive: Option<Arc<dyn Fn(u8) -> Option<Explore> + Send + Sync>>,
     is_bfs: bool,
     constraint: &'a PathConstraint,
-) -> PathIter<'a, NV, E, F> {
+) -> PathIter<'a, NV, E, G, F> {
     let algo = if is_bfs {
         AlgoState::Bfs(BfsState {
             queue: VecDeque::from([(from, 0, 0)]),
@@ -1012,11 +1014,12 @@ fn build_path_iter<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> boo
         graph, edge_pred, to, min_len, max_len,
         guard, drive, constraint, algo,
         pending,
+        _marker: std::marker::PhantomData,
     }
 }
 
-fn build_cost_path_iter<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool>(
-    graph: &'a crate::graph::Graph<NV, E>,
+fn build_cost_path_iter<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool>(
+    graph: &'a G,
     from: id::N, to: id::N,
     edge_pred: F,
     min_len: usize, max_len: usize,
@@ -1024,7 +1027,7 @@ fn build_cost_path_iter<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -
     nav: NavRef<'a, E::Val>,
     mode: NavMode,
     constraint: &'a PathConstraint,
-) -> CostPathIter<'a, NV, E, F> {
+) -> CostPathIter<'a, NV, E, G, F> {
     let mut heap = std::collections::BinaryHeap::new();
     let zero = NotNan::new(0.0).unwrap();
     heap.push(std::cmp::Reverse(CostEntry {
@@ -1039,18 +1042,19 @@ fn build_cost_path_iter<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -
         graph, edge_pred, to, min_len, max_len,
         guard, constraint, nav, mode, heap, seq: 0, trivial, best,
         prev: FxHashMap::default(), done: false,
+        _marker: std::marker::PhantomData,
     }
 }
 
-// ── Public dispatch (called from Graph methods) ─────────────────────
+// ── Public dispatch (called from MGraph methods) ─────────────────────
 
-pub(crate) fn execute<'a, NV, E: crate::graph::Edge>(
-    graph: &'a crate::graph::Graph<NV, E>,
+pub(crate) fn execute<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>>(
+    graph: &'a G,
     from: id::N, to: id::N,
     edge_pred: &'a dyn Fn(E::Slot, &E::Val) -> bool,
     config: &Config<()>,
     constraint: &'a PathConstraint,
-) -> PathIter<'a, NV, E, &'a dyn Fn(E::Slot, &E::Val) -> bool> {
+) -> PathIter<'a, NV, E, G, &'a dyn Fn(E::Slot, &E::Val) -> bool> {
     let max_len = config.max_len.unwrap_or(graph.node_count() + 1);
     let (is_bfs, drive) = match &config.driver {
         Driver::Stack(d) => (false, d.clone()),
@@ -1066,13 +1070,13 @@ pub(crate) fn execute<'a, NV, E: crate::graph::Edge>(
 }
 
 
-pub(crate) fn execute_owned<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool + 'a>(
-    graph: &'a crate::graph::Graph<NV, E>,
+pub(crate) fn execute_owned<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool + 'a>(
+    graph: &'a G,
     from: id::N, to: id::N,
     edge_pred: F,
     config: Config<(), Traversal>,
     constraint: &'a PathConstraint,
-) -> PathIter<'a, NV, E, F> {
+) -> PathIter<'a, NV, E, G, F> {
     let max_len = config.max_len.unwrap_or(graph.node_count() + 1);
     let (is_bfs, drive) = match config.driver {
         Driver::Stack(d) => (false, d),
@@ -1087,13 +1091,13 @@ pub(crate) fn execute_owned<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Va
     )
 }
 
-pub(crate) fn execute_nav_owned<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E::Val) -> bool + 'a>(
-    graph: &'a crate::graph::Graph<NV, E>,
+pub(crate) fn execute_nav_owned<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool + 'a>(
+    graph: &'a G,
     from: id::N, to: id::N,
     edge_pred: F,
     config: Config<(), Navigated, E::Val>,
     constraint: &'a PathConstraint,
-) -> CostPathIter<'a, NV, E, F> {
+) -> CostPathIter<'a, NV, E, G, F> {
     let max_len = config.max_len.unwrap_or(graph.node_count() + 1);
     let Driver::Navigate(nav, mode) = config.driver else { unreachable!() };
     build_cost_path_iter(
@@ -1107,8 +1111,8 @@ pub(crate) fn execute_nav_owned<'a, NV, E: crate::graph::Edge, F: Fn(E::Slot, &E
 /// in the compiled `Query`) and yield matched paths as node lists. Dispatches on
 /// the driver — dfs/bfs traversal, or cost-navigation borrowing the navigator.
 /// Navigated paths come out cheapest-first.
-pub(crate) fn execute_paths<'a, NV, E: crate::graph::Edge>(
-    graph: &'a crate::graph::Graph<NV, E>,
+pub(crate) fn execute_paths<'a, NV: 'a, E: crate::graph::Edge + 'a, G: crate::graph::Graph<NV, E>>(
+    graph: &'a G,
     from: id::N, to: id::N,
     edge_pred: &'a dyn Fn(E::Slot, &E::Val) -> bool,
     config: &'a Config<(), Unset, E::Val>,
@@ -1144,7 +1148,7 @@ mod repro_tests {
     /// 2-node "cycles" like [0,1,0], [0,3,0].
     #[test]
     fn undirected_cycle_from_node_to_itself() {
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0)
         ].unwrap();
 
@@ -1176,7 +1180,7 @@ mod repro_tests {
     /// len(0..) yields it; the default len(1..) rejects it.
     #[test]
     fn dfs_trivial_cycle_gated_by_len() {
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)
         ].unwrap();
         let pc = PathConstraint::unconstrained();
@@ -1204,7 +1208,7 @@ mod repro_tests {
     #[test]
     fn directed_two_cycle_preserved() {
         type DER = crate::graph::edge::Dir<()>;
-        let g = crate::graph![<(), DER>;
+        let g = crate::mgraph![<(), DER>;
             N(0) >> N(1), n(1) >> n(0)
         ].unwrap();
 
@@ -1224,7 +1228,7 @@ mod repro_tests {
     #[test]
     fn navigated_cycle_can_close() {
         use crate::search::path::Dijkstra;
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)
         ].unwrap();
 
@@ -1254,7 +1258,7 @@ mod repro_tests {
     #[test]
     fn navigated_trivial_path_gated_by_len() {
         use crate::search::path::Dijkstra;
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)
         ].unwrap();
         let pc = PathConstraint::unconstrained();
@@ -1283,7 +1287,7 @@ mod repro_tests {
         use crate::search::path::Dijkstra;
         type W = crate::graph::edge::Undir<u32>;
         // 0—1(1)—3(1) => cost 2 ; 0—2(5)—3(1) => cost 6
-        let g = crate::graph![<(), W>;
+        let g = crate::mgraph![<(), W>;
             N(0) & E().val(1u32) ^ N(1),
             n(1) & E().val(1u32) ^ N(3),
             n(0) & E().val(5u32) ^ N(2),
@@ -1307,7 +1311,7 @@ mod repro_tests {
         use crate::search::path::Dijkstra;
         type W = crate::graph::edge::Undir<u32>;
         // 0—1(1)—3(1) => cost 2 ; 0—2(5)—3(1) => cost 6
-        let g = crate::graph![<(), W>;
+        let g = crate::mgraph![<(), W>;
             N(0) & E().val(1u32) ^ N(1),
             n(1) & E().val(1u32) ^ N(3),
             n(0) & E().val(5u32) ^ N(2),
@@ -1332,7 +1336,7 @@ mod repro_tests {
         use crate::search::path::Dijkstra;
         type W = crate::graph::edge::Undir<u32>;
         // cheap route 0—1(1)—3(1) (cost 2) through node 1; direct 0—3(10).
-        let g = crate::graph![<(), W>;
+        let g = crate::mgraph![<(), W>;
             N(0) & E().val(1u32) ^ N(1),
             n(1) & E().val(1u32) ^ N(3),
             n(0) & E().val(10u32) ^ n(3)
@@ -1355,7 +1359,7 @@ mod repro_tests {
     /// `.contains()` prunes every cycle that would pass through node 2.
     #[test]
     fn dfs_guard_pathview_contains() {
-        let g = crate::graph![<(), ER>;
+        let g = crate::mgraph![<(), ER>;
             N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0)
         ].unwrap();
         let pc = PathConstraint::unconstrained();

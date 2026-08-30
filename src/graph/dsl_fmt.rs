@@ -1,11 +1,11 @@
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 
-use super::{Graph, Edge};
+use super::{MGraph, Edge};
 use crate::Id;
 use crate::viz::DotEdge;
 
-impl<NV: Debug, E: Edge<Val: Debug> + DotEdge> Graph<NV, E> {
+impl<NV: Debug, E: Edge<Val: Debug> + DotEdge> MGraph<NV, E> {
     pub fn to_dsl(&self) -> String {
         let mut out = String::new();
         let mut defined = BTreeSet::new();
@@ -33,7 +33,7 @@ impl<NV: Debug, E: Edge<Val: Debug> + DotEdge> Graph<NV, E> {
             }
         }
 
-        out.push_str("graph![\n");
+        out.push_str("mgraph![\n");
         for (i, stmt) in stmts.iter().enumerate() {
             out.push_str("    ");
             out.push_str(stmt);

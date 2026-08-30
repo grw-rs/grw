@@ -72,16 +72,16 @@ impl<NV, E: Edge> Watcher<NV, E> for Silent {
 }
 
 pub struct WatchedGraph<'a, NV, E: Edge, W: Watcher<NV, E>> {
-    pub(crate) graph: &'a mut crate::graph::Graph<NV, E>,
+    pub(crate) graph: &'a mut crate::graph::MGraph<NV, E>,
     pub(crate) watcher: &'a mut W,
 }
 
 impl<'a, NV: Sync, E: Edge, W: Watcher<NV, E>> WatchedGraph<'a, NV, E, W> {
-    pub fn graph(&self) -> &crate::graph::Graph<NV, E> {
+    pub fn graph(&self) -> &crate::graph::MGraph<NV, E> {
         self.graph
     }
 
-    pub fn graph_mut(&mut self) -> &mut crate::graph::Graph<NV, E> {
+    pub fn graph_mut(&mut self) -> &mut crate::graph::MGraph<NV, E> {
         self.graph
     }
 

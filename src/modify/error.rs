@@ -58,9 +58,17 @@ pub enum Apply {
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum Version {
+    #[error("version {requested} does not advance current version {current}")]
+    NotMonotonic { current: u64, requested: u64 },
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum Modify {
     #[error(transparent)]
     Fragment(#[from] Fragment),
     #[error(transparent)]
     Apply(#[from] Apply),
+    #[error(transparent)]
+    Version(#[from] Version),
 }

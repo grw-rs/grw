@@ -3,31 +3,31 @@ use super::*;
 use crate::id;
 use crate::modify;
 
-fn undir0() -> crate::graph::Undir0 {
-    crate::graph::Undir0::default()
+fn undir0() -> crate::graph::MUndir0 {
+    crate::graph::MUndir0::default()
 }
 
-fn dir0() -> crate::graph::Dir0 {
-    crate::graph::Dir0::default()
+fn dir0() -> crate::graph::MDir0 {
+    crate::graph::MDir0::default()
 }
 
-fn anydir0() -> crate::graph::Anydir0 {
-    crate::graph::Anydir0::default()
+fn anydir0() -> crate::graph::MAnydir0 {
+    crate::graph::MAnydir0::default()
 }
 
-fn undir0_one() -> crate::graph::Undir0 {
+fn undir0_one() -> crate::graph::MUndir0 {
     vec![crate::graph::edge::undir::E::U(0, 1)].try_into().unwrap()
 }
 
-fn dir0_one() -> crate::graph::Dir0 {
+fn dir0_one() -> crate::graph::MDir0 {
     vec![crate::graph::edge::dir::E::D(0, 1)].try_into().unwrap()
 }
 
-fn anydir0_one() -> crate::graph::Anydir0 {
+fn anydir0_one() -> crate::graph::MAnydir0 {
     vec![crate::graph::edge::anydir::E::U(0, 1)].try_into().unwrap()
 }
 
-fn undir_n_empty<T: Sync>() -> crate::graph::UndirN<T> {
+fn undir_n_empty<T: Sync>() -> crate::graph::MUndirN<T> {
     (
         vec![] as Vec<(crate::Id, T)>,
         vec![] as Vec<crate::graph::edge::undir::E<crate::Id>>,
@@ -36,7 +36,7 @@ fn undir_n_empty<T: Sync>() -> crate::graph::UndirN<T> {
         .unwrap()
 }
 
-fn dir_n_empty<T: Sync>() -> crate::graph::DirN<T> {
+fn dir_n_empty<T: Sync>() -> crate::graph::MDirN<T> {
     (
         vec![] as Vec<(crate::Id, T)>,
         vec![] as Vec<crate::graph::edge::dir::E<crate::Id>>,
@@ -45,19 +45,19 @@ fn dir_n_empty<T: Sync>() -> crate::graph::DirN<T> {
         .unwrap()
 }
 
-fn undir_e_empty<T: Sync>() -> crate::graph::UndirE<T> {
+fn undir_e_empty<T: Sync>() -> crate::graph::MUndirE<T> {
     (vec![] as Vec<(crate::graph::edge::undir::E<crate::Id>, T)>)
         .try_into()
         .unwrap()
 }
 
-fn dir_e_empty<T: Sync>() -> crate::graph::DirE<T> {
+fn dir_e_empty<T: Sync>() -> crate::graph::MDirE<T> {
     (vec![] as Vec<(crate::graph::edge::dir::E<crate::Id>, T)>)
         .try_into()
         .unwrap()
 }
 
-fn anydir_e_empty<T: Sync>() -> crate::graph::AnydirE<T> {
+fn anydir_e_empty<T: Sync>() -> crate::graph::MAnydirE<T> {
     (vec![] as Vec<(crate::graph::edge::anydir::E<crate::Id>, T)>)
         .try_into()
         .unwrap()
@@ -278,7 +278,7 @@ fn apply_exist_node_add_edge() {
 fn apply_remove_node_cascade() {
     use crate::graph::edge::undir;
 
-    let mut g: crate::graph::Undir0 =
+    let mut g: crate::graph::MUndir0 =
         vec![undir::E::U(0, 1), undir::E::U(1, 2)].try_into().unwrap();
     assert_eq!(g.nodes.len(), 3);
     assert_eq!(g.edges.len(), 2);
@@ -333,7 +333,7 @@ fn apply_anydir_mixed_edges() {
 fn apply_valued_nodes_and_edges() {
     use crate::graph::edge::undir;
 
-    let mut g: crate::graph::Undir<&str, u32> = (
+    let mut g: crate::graph::MUndir<&str, u32> = (
         vec![(0, "zero"), (1, "one")],
         vec![(undir::E::U(0, 1), 100u32)],
     )
@@ -355,7 +355,7 @@ fn apply_valued_nodes_and_edges() {
 fn apply_node_value_swap() {
     use crate::graph::edge::undir;
 
-    let mut g: crate::graph::UndirN<&str> =
+    let mut g: crate::graph::MUndirN<&str> =
         (vec![(0, "old")], vec![] as Vec<undir::E<crate::Id>>)
             .try_into()
             .unwrap();
@@ -372,7 +372,7 @@ fn apply_node_value_swap() {
 fn apply_edge_removal() {
     use crate::graph::edge::dir;
 
-    let mut g: crate::graph::Dir0 =
+    let mut g: crate::graph::MDir0 =
         vec![dir::E::D(0, 1), dir::E::D(1, 2)].try_into().unwrap();
     assert_eq!(g.edges.len(), 2);
 
@@ -412,7 +412,7 @@ fn apply_standalone_new_node() {
 fn apply_remove_preserves_unrelated_edges() {
     use crate::graph::edge::undir;
 
-    let mut g: crate::graph::Undir0 = vec![
+    let mut g: crate::graph::MUndir0 = vec![
         undir::E::U(0, 1),
         undir::E::U(2, 3),
         undir::E::U(1, 2),
@@ -443,7 +443,7 @@ fn apply_exist_to_exist_new_edge() {
 fn apply_edge_value_swap() {
     use crate::graph::edge::undir;
 
-    let mut g: crate::graph::Undir<(), u32> =
+    let mut g: crate::graph::MUndir<(), u32> =
         vec![(undir::E::U(0, 1), 100u32)].try_into().unwrap();
     assert_eq!(g.edges.len(), 1);
 
@@ -501,7 +501,7 @@ fn apply_anydir_incoming_edge() {
 fn apply_dir_valued_nodes() {
     use crate::graph::edge::dir;
 
-    let mut g: crate::graph::DirN<&str> =
+    let mut g: crate::graph::MDirN<&str> =
         (vec![(0, "a")], vec![] as Vec<dir::E<crate::Id>>).try_into().unwrap();
 
     let result = modify!(g, [N(1).val("b") >> N(2).val("c"),]).unwrap();
@@ -518,7 +518,7 @@ fn apply_dir_valued_nodes() {
 fn apply_dir_valued_edges() {
     use crate::graph::edge::dir;
 
-    let mut g: crate::graph::DirE<u32> =
+    let mut g: crate::graph::MDirE<u32> =
         vec![(dir::E::D(0, 1), 10u32)].try_into().unwrap();
 
     let result = modify!(g, [N(1) & E().val(99u32) >> N(2),]).unwrap();
@@ -531,7 +531,7 @@ fn apply_dir_valued_edges() {
 fn apply_dir_both_valued() {
     use crate::graph::edge::dir;
 
-    let mut g: crate::graph::Dir<&str, u32> = (
+    let mut g: crate::graph::MDir<&str, u32> = (
         vec![(0, "a"), (1, "b")],
         vec![(dir::E::D(0, 1), 100u32)],
     )
@@ -552,7 +552,7 @@ fn apply_dir_both_valued() {
 fn apply_anydir_valued_nodes() {
     use crate::graph::edge::anydir;
 
-    let mut g: crate::graph::AnydirN<&str> =
+    let mut g: crate::graph::MAnydirN<&str> =
         (vec![(0, "a")], vec![] as Vec<anydir::E<crate::Id>>).try_into().unwrap();
 
     let result = modify!(g, [
@@ -574,7 +574,7 @@ fn apply_anydir_valued_nodes() {
 fn apply_anydir_valued_edges() {
     use crate::graph::edge::anydir;
 
-    let mut g: crate::graph::AnydirE<u32> =
+    let mut g: crate::graph::MAnydirE<u32> =
         vec![(anydir::E::U(0, 1), 10u32)].try_into().unwrap();
 
     let result = modify!(g, [
@@ -591,7 +591,7 @@ fn apply_anydir_valued_edges() {
 fn apply_anydir_both_valued() {
     use crate::graph::edge::anydir;
 
-    let mut g: crate::graph::Anydir<&str, u32> = (
+    let mut g: crate::graph::MAnydir<&str, u32> = (
         vec![(0, "a"), (1, "b")],
         vec![(anydir::E::U(0, 1), 10u32)],
     )
@@ -771,7 +771,7 @@ fn apply_tree_depth2_anydir() {
 fn apply_tree_depth2_valued() {
     use crate::graph::edge::dir;
 
-    let mut g: crate::graph::Dir<&str, u32> =
+    let mut g: crate::graph::MDir<&str, u32> =
         (vec![(0, "root")], vec![] as Vec<(dir::E<crate::Id>, u32)>)
             .try_into()
             .unwrap();
@@ -842,7 +842,7 @@ fn apply_fan_undir() {
 fn apply_rejects_conflicting_edge_swap_dir() {
     use crate::graph::edge::dir;
 
-    let mut g: crate::graph::Dir<(), u32> =
+    let mut g: crate::graph::MDir<(), u32> =
         vec![(dir::E::D(0, 1), 10u32)].try_into().unwrap();
 
     let result = modify!(g, [
@@ -862,7 +862,7 @@ fn apply_rejects_conflicting_edge_swap_dir() {
 fn apply_rejects_conflicting_edge_swap_undir() {
     use crate::graph::edge::undir;
 
-    let mut g: crate::graph::Undir<(), u32> =
+    let mut g: crate::graph::MUndir<(), u32> =
         vec![(undir::E::U(0, 1), 10u32)].try_into().unwrap();
 
     let result = modify!(g, [
@@ -882,7 +882,7 @@ fn apply_rejects_conflicting_edge_swap_undir() {
 fn apply_rejects_conflicting_edge_swap_anydir() {
     use crate::graph::edge::anydir;
 
-    let mut g: crate::graph::Anydir<(), u32> =
+    let mut g: crate::graph::MAnydir<(), u32> =
         vec![(anydir::E::D(0, 1), 10u32)].try_into().unwrap();
 
     let result = modify!(g, [
@@ -1060,7 +1060,7 @@ fn default_edge_val_anon_anydir_undir() {
 fn degrees_after_construction() {
     use crate::graph::edge::undir;
 
-    let g: crate::graph::Undir0 = vec![
+    let g: crate::graph::MUndir0 = vec![
         undir::E::U(0, 1),
         undir::E::U(1, 2),
         undir::E::U(2, 0),
@@ -1109,7 +1109,7 @@ fn degrees_after_modify_add_isolated_nodes() {
 fn degrees_after_modify_remove_node() {
     use crate::graph::edge::undir;
 
-    let mut g: crate::graph::Undir0 =
+    let mut g: crate::graph::MUndir0 =
         vec![undir::E::U(0, 1), undir::E::U(1, 2)].try_into().unwrap();
     assert_eq!(g.node_count(), 3);
 

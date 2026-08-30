@@ -8,9 +8,10 @@ use grw::graph::edge::{AnyVal, End};
 use grw::modify::dsl::*;
 use grw::search::path::{Config, PathConstraint, Dijkstra};
 use grw::graph::dsl::LocalId;
+use grw::Graph as _;
 
 type ER = grw::edge::Anydir<u8>;
-type G = grw::Graph<(), ER>;
+type G = grw::MGraph<(), ER>;
 
 fn is_dir(slot: anydir::Slot, _: &AnyVal<u8>) -> bool {
     matches!(slot, anydir::Slot::Dir(End::Src))
@@ -33,7 +34,7 @@ fn run(g: &G, search: Result<grw::search::query::Search<(), ER>, grw::search::er
 #[test]
 fn len_0_yields_trivial_when_from_eq_to() {
     // Triangle: 0-1-2-0
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
     let c = PathConstraint::default();
 
     // len(0..): first result is trivial [0] when from==to
@@ -45,7 +46,7 @@ fn len_0_yields_trivial_when_from_eq_to() {
 #[test]
 fn len_1_finds_single_hop_only() {
     // Chain: 0→1→2
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) >> N(2)
     ].unwrap();
@@ -65,7 +66,7 @@ fn len_1_finds_single_hop_only() {
 #[test]
 fn len_2_range_excludes_shorter_and_longer() {
     // Diamond: 0→1→3, 0→2→3, plus 0→2→1→3 (3 hops)
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(0) & E().val(1u8) >> N(2),
         n(1) & E().val(1u8) >> N(3),
@@ -90,7 +91,7 @@ fn len_2_range_excludes_shorter_and_longer() {
 #[test]
 fn bfs_returns_shortest_dfs_returns_deepest_first() {
     // Graph with short and long paths: 0→3 (1 hop), 0→1→2→3 (3 hops)
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) >> N(2),
         n(2) & E().val(1u8) >> N(3),
@@ -112,7 +113,7 @@ fn bfs_returns_shortest_dfs_returns_deepest_first() {
 #[test]
 fn navigator_finds_weighted_path() {
     // 0→1 (weight 5), 0→2 (weight 1). Navigator orders by cost.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(5u8) >> N(1),
         n(0) & E().val(1u8) >> N(2)
     ].unwrap();
@@ -136,7 +137,7 @@ fn navigator_dijkstra_finds_cheapest_via_detour() {
     // When the cheaper 0→2→1 path discovers node 1, visited rejects the re-insert.
     // Fix: don't mark visited on push — mark on pop (lazy deletion), or allow re-insert
     // when a cheaper cost is found.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(10u8) >> N(1),
         n(0) & E().val(1u8) >> N(2),
         n(2) & E().val(1u8) >> n(1)
@@ -161,7 +162,7 @@ fn mono_path_rejects_reusing_bound_node() {
     // Triangle: 0-1-2-0. Bind X(0)=0, X(1)=0 (same node).
     // Mono path from 0 to 0: intermediates can't reuse node 0 (in excluded set).
     // Path [0, 1, 2, 0] has intermediates [1, 2] — neither is 0. Should work.
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
 
     let search = grw::search![<(), ER>;
         get(grw::Homo) { X(0), X(1) },
@@ -186,7 +187,7 @@ fn mono_path_rejects_reusing_bound_node() {
 #[test]
 fn subiso_path_rejects_branched_intermediates() {
     // 0-1-2-3, with branch 1-4
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(1) ^ N(4)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(1) ^ N(4)].unwrap();
 
     let search = grw::search![<(), ER>;
         get(grw::SubIso) { X(0) ^ ..X(1).dfs() }
@@ -207,7 +208,7 @@ fn subiso_path_rejects_branched_intermediates() {
 #[test]
 fn subiso_path_accepts_clean_intermediates() {
     // 0-1-2-3, no branches
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)].unwrap();
 
     let search = grw::search![<(), ER>;
         get(grw::SubIso) { X(0) ^ ..X(1).dfs() }
@@ -231,7 +232,7 @@ fn subiso_path_accepts_clean_intermediates() {
 #[test]
 fn homo_endpoints_mono_path_finds_cycle() {
     // Square: 0-1-2-3-0
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0)].unwrap();
 
     let matches = run(&g, grw::search![<(), ER>;
         get(grw::Homo) { N(0), N(1) },
@@ -247,7 +248,7 @@ fn homo_endpoints_mono_path_finds_cycle() {
 #[test]
 fn subiso_endpoints_and_path_rejects_branches() {
     // 0-1-2-3 with branch at 1. All in one SubIso cluster.
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(1) ^ N(4)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(1) ^ N(4)].unwrap();
 
     let search = grw::search![<(), ER>;
         get(grw::SubIso) { X(0) ^ ..X(1).dfs() }
@@ -268,7 +269,7 @@ fn subiso_endpoints_and_path_rejects_branches() {
 fn cross_cluster_mono_endpoints_subiso_path_rejects_branches() {
     // Same graph: 0-1-2-3 with branch at 1.
     // Endpoints in Mono cluster (can have any degree), path in SubIso (induced check).
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(1) ^ N(4)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(1) ^ N(4)].unwrap();
 
     let search = grw::search![<(), ER>;
         get(grw::Mono) { X(10), X(11) },
@@ -296,7 +297,7 @@ fn ban_cannot_contradict_path_intermediates() {
     // Chain: 0→1→2→3. Path 0→3 has intermediates {1, 2}.
     // Ban tries to match endpoints with ANY neighbor — but path intermediates
     // are protected (excluded from ban candidates).
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) >> N(2),
         n(2) & E().val(1u8) >> N(3)
@@ -325,7 +326,7 @@ fn ban_cannot_contradict_path_intermediates() {
 fn ban_still_fires_on_non_path_edges() {
     // Chain: 0→1→2→3, plus extra edge 0→4.
     // Ban: n(0) >> N(2). Node 0 has edge to 4 (NOT a path intermediate) → ban fires.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) >> N(2),
         n(2) & E().val(1u8) >> N(3),
@@ -350,7 +351,7 @@ fn ban_still_fires_on_non_path_edges() {
 #[test]
 fn ban_cluster_rejects_match_with_path() {
     // Chain: 0→1→2→3
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) >> N(2),
         n(2) & E().val(1u8) >> N(3)
@@ -379,7 +380,7 @@ fn ban_cluster_rejects_match_with_path() {
 #[test]
 fn ban_allows_when_ban_unsatisfiable() {
     // Chain: 0→1→2
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) >> N(2)
     ].unwrap();
@@ -401,7 +402,7 @@ fn ban_allows_when_ban_unsatisfiable() {
 #[test]
 fn typed_edge_pred_filters_path_in_subiso() {
     // Two parallel chains: 0→1→2 (label 1), 0→3→2 (label 2)
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) >> N(2),
         n(0) & E().val(2u8) >> N(3),
@@ -434,7 +435,7 @@ fn typed_edge_pred_filters_path_in_subiso() {
 fn anyedge_path_traverses_reverse_directed() {
     // Data graph: 0 ← 1 (directed edge from 1 to 0)
     // % path from 0 to 1 should traverse the edge backwards via Dir(Tgt) slot.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(1) & E().val(1u8) >> N(0)
     ].unwrap();
 
@@ -457,7 +458,7 @@ fn anyedge_path_traverses_reverse_directed() {
 fn anyedge_path_traverses_mixed_directions() {
     // Mixed graph: 0→1 (directed), 1-2 (undirected), 2→3 (directed)
     // `%` path should traverse all edge types.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(1) & E().val(1u8) ^ N(2),
         n(2) & E().val(1u8) >> N(3)
@@ -481,7 +482,7 @@ fn anyedge_path_traverses_mixed_directions() {
 #[test]
 fn drive_closure_controls_exploration() {
     // Fan: 0→1, 0→2, 0→3. Drive selects only first neighbor.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) & E().val(1u8) >> N(1),
         n(0) & E().val(1u8) >> N(2),
         n(0) & E().val(1u8) >> N(3)

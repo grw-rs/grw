@@ -1,6 +1,6 @@
 use grw::{
     Id, NR, id,
-    graph::{self, Undir0, Dir0, edge},
+    graph::{self, MUndir0, MDir0, edge},
     modify::{self, E, N, N_, X, e, n, x},
 };
 use std::time::{Duration, Instant};
@@ -33,19 +33,19 @@ fn degree_histogram<ER: graph::Edge>(
 type UOp = modify::Node<(), edge::Undir<()>>;
 type DOp = modify::Node<(), edge::Dir<()>>;
 
-fn undir_path(n: usize) -> Undir0 {
+fn undir_path(n: usize) -> MUndir0 {
     let es: Vec<edge::undir::E<Id>> =
         (0..n as Id - 1).map(|i| edge::undir::E::U(i, i + 1)).collect();
     es.try_into().unwrap()
 }
 
-fn undir_star(k: usize) -> Undir0 {
+fn undir_star(k: usize) -> MUndir0 {
     let es: Vec<edge::undir::E<Id>> =
         (1..=k as Id).map(|i| edge::undir::E::U(0, i)).collect();
     es.try_into().unwrap()
 }
 
-fn dir_path(n: usize) -> Dir0 {
+fn dir_path(n: usize) -> MDir0 {
     let es: Vec<edge::dir::E<Id>> =
         (0..n as Id - 1).map(|i| edge::dir::E::D(i, i + 1)).collect();
     es.try_into().unwrap()
@@ -98,7 +98,7 @@ impl Run {
     }
 }
 
-fn run_undir(g: &mut Undir0, ops: Vec<UOp>, label: impl Into<String>) -> Run {
+fn run_undir(g: &mut MUndir0, ops: Vec<UOp>, label: impl Into<String>) -> Run {
     let nodes = g.node_count();
     let edges = g.edge_count();
     let n_ops = ops.len();
@@ -108,7 +108,7 @@ fn run_undir(g: &mut Undir0, ops: Vec<UOp>, label: impl Into<String>) -> Run {
     Run { label: label.into(), nodes, edges, ops: n_ops, elapsed }
 }
 
-fn run_dir(g: &mut Dir0, ops: Vec<DOp>, label: impl Into<String>) -> Run {
+fn run_dir(g: &mut MDir0, ops: Vec<DOp>, label: impl Into<String>) -> Run {
     let nodes = g.node_count();
     let edges = g.edge_count();
     let n_ops = ops.len();
@@ -118,9 +118,9 @@ fn run_dir(g: &mut Dir0, ops: Vec<DOp>, label: impl Into<String>) -> Run {
     Run { label: label.into(), nodes, edges, ops: n_ops, elapsed }
 }
 
-fn roundtrip_undir(g: &Undir0) {
+fn roundtrip_undir(g: &MUndir0) {
     let (ns, es) = g.to_vecs();
-    let rebuilt: Undir0 = (ns, es).try_into().unwrap();
+    let rebuilt: MUndir0 = (ns, es).try_into().unwrap();
     assert_eq!(g.node_count(), rebuilt.node_count(), "roundtrip node count mismatch");
     assert_eq!(g.edge_count(), rebuilt.edge_count(), "roundtrip edge count mismatch");
     let actual = degree_histogram::<edge::Undir<()>>(g.to_vecs());
@@ -128,9 +128,9 @@ fn roundtrip_undir(g: &Undir0) {
     assert_eq!(actual, expected, "roundtrip degree_histogram mismatch");
 }
 
-fn roundtrip_dir(g: &Dir0) {
+fn roundtrip_dir(g: &MDir0) {
     let (ns, es) = g.to_vecs();
-    let rebuilt: Dir0 = (ns, es).try_into().unwrap();
+    let rebuilt: MDir0 = (ns, es).try_into().unwrap();
     assert_eq!(g.node_count(), rebuilt.node_count(), "roundtrip node count mismatch");
     assert_eq!(g.edge_count(), rebuilt.edge_count(), "roundtrip edge count mismatch");
     let actual = degree_histogram::<edge::Dir<()>>(g.to_vecs());
@@ -148,7 +148,7 @@ fn harness() {
     println!("{}", "-".repeat(110));
 
     for &n in &[100usize, 1_000, 10_000] {
-        let mut g = Undir0::default();
+        let mut g = MUndir0::default();
         let r = run_undir(&mut g, undir_add_anon(n), format!("undir/empty → add {n} anon nodes"));
         r.print();
         roundtrip_undir(&g);
@@ -157,7 +157,7 @@ fn harness() {
     println!();
 
     for &n in &[100usize, 1_000, 10_000] {
-        let mut g = Undir0::default();
+        let mut g = MUndir0::default();
         let r = run_undir(&mut g, undir_add_pairs(n), format!("undir/empty → add {n} new pairs"));
         r.print();
         roundtrip_undir(&g);
@@ -166,7 +166,7 @@ fn harness() {
     println!();
 
     for &n in &[100usize, 1_000, 10_000] {
-        let mut g: Undir0 = vec![edge::undir::E::U(0, 1)].try_into().unwrap();
+        let mut g: MUndir0 = vec![edge::undir::E::U(0, 1)].try_into().unwrap();
         let r = run_undir(&mut g, undir_hub_n_spurs(0, n), format!("undir/hub → 1 op × {n} spur edges"));
         r.print();
         roundtrip_undir(&g);
@@ -201,7 +201,7 @@ fn harness() {
     println!();
 
     for &n in &[100usize, 1_000, 10_000] {
-        let mut g = Dir0::default();
+        let mut g = MDir0::default();
         let r = run_dir(&mut g, dir_add_anon(n), format!("dir/empty → add {n} anon nodes"));
         r.print();
         roundtrip_dir(&g);
@@ -226,7 +226,7 @@ fn harness() {
 
 #[test]
 fn roundtrip_core_incremental_k4() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -244,7 +244,7 @@ fn roundtrip_core_incremental_k4() {
 
 #[test]
 fn roundtrip_bridge_between_stars() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -262,7 +262,7 @@ fn roundtrip_bridge_between_stars() {
 
 #[test]
 fn roundtrip_terminal_from_star() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -293,7 +293,7 @@ fn roundtrip_isolated_cycle() {
 
 #[test]
 fn roundtrip_core_plus_core_cycle() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -311,7 +311,7 @@ fn roundtrip_core_plus_core_cycle() {
 
 #[test]
 fn roundtrip_multi_step_growth() {
-    let mut g = Undir0::default();
+    let mut g = MUndir0::default();
 
     g.modify(vec![N_().into(), N_().into(), N_().into()]).unwrap();
     roundtrip_undir(&g);
@@ -367,7 +367,7 @@ fn roundtrip_edge_removal_path() {
 
 #[test]
 fn roundtrip_node_removal_core() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -402,7 +402,7 @@ fn roundtrip_directed_fan() {
 fn roundtrip_big_mix() {
     use edge::undir::E::U;
 
-    let g: Undir0 = (
+    let g: MUndir0 = (
         36 as Id,
         vec![
             U(23, 24), U(23, 25), U(24, 25),

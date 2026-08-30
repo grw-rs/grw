@@ -10,7 +10,7 @@ use grw::search::path::{Config, Dijkstra, PathConstraint};
 use grw::graph::dsl::LocalId;
 
 type ER = grw::edge::Dir<u32>;
-type Fleet = grw::Graph<&'static str, ER>;
+type Fleet = grw::MGraph<&'static str, ER>;
 
 fn outgoing(slot: dir::Slot, _latency: &u32) -> bool {
     matches!(slot, dir::Slot(End::Src))
@@ -19,7 +19,7 @@ fn outgoing(slot: dir::Slot, _latency: &u32) -> bool {
 /// Act 1 — build the fleet: nodes are services, directed edges are calls,
 /// edge values are latencies in ms.
 fn build_fleet() -> Fleet {
-    grw::graph![<&'static str, ER>;
+    grw::mgraph![<&'static str, ER>;
         N(0).val("gateway") & E().val(2) >> N(1).val("auth"),
         n(0) & E().val(3) >> N(2).val("orders"),
         n(1) & E().val(9) >> N(3).val("db"),

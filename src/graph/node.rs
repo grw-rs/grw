@@ -93,16 +93,30 @@ impl Adjacents {
         self.0.len()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = id::N> + '_ {
-        let mut last = None;
-        self.0.iter().filter_map(move |&(n, _)| {
-            if last == Some(n) {
-                None
-            } else {
-                last = Some(n);
-                Some(n)
+    pub fn iter(&self) -> AdjIds<'_> {
+        AdjIds { entries: self.0.iter(), last: None }
+    }
+}
+
+/// Distinct neighbour ids of one node. Named (not `impl Iterator`) because it
+/// is the associated adjacency type of `Graph` for `MGraph`.
+pub struct AdjIds<'a> {
+    entries: std::slice::Iter<'a, (id::N, id::E)>,
+    last: Option<id::N>,
+}
+
+impl<'a> Iterator for AdjIds<'a> {
+    type Item = id::N;
+
+    fn next(&mut self) -> Option<id::N> {
+        for &(n, _) in self.entries.by_ref() {
+            if self.last == Some(n) {
+                continue;
             }
-        })
+            self.last = Some(n);
+            return Some(n);
+        }
+        None
     }
 }
 
@@ -153,7 +167,7 @@ impl<V> super::Nodes<V> {
         self.store.get(*n as usize)?.as_ref().map(|node| node.adj.len())
     }
 
-    pub fn neighbor_ids(&self, n: id::N) -> Option<impl Iterator<Item = id::N> + '_> {
+    pub fn neighbor_ids(&self, n: id::N) -> Option<AdjIds<'_>> {
         self.store.get(*n as usize)?.as_ref().map(|node| node.adj.iter())
     }
 

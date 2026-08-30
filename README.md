@@ -4,13 +4,13 @@ Graph construction, mutation, and morphism matching in Rust.
 
 GRW is an embedded graph rewriting system that runs inside a Rust process. The user API is modelled as small domain-specific languages built with `macro_rules!` — no procedural macros — by overloading Rust operators to express graph edge semantics. All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying `from_fragment()` / `modify()` / `compile()` functions directly.
 
-- [**`graph!`**](#graph--construction) — graph literal (like `vec!`)
+- [**`mgraph!`**](#mgraph--construction) — graph literal (like `vec!`)
 - [**`modify!`**](#modify--mutation) — transactional graph mutation (add/remove/change nodes and edges atomically)
 - [**`search!`**](#search--pattern-matching) — graph pattern matching iterator with morphism control
 
 ## Graph model
 
-A graph `Graph<NV, ER>` is parameterized by:
+A graph `MGraph<NV, ER>` is parameterized by:
 - `NV` — node value type (use `()` for no attributes)
 - `ER` — edge relation type, one of:
 
@@ -23,19 +23,19 @@ A graph `Graph<NV, ER>` is parameterized by:
 Type aliases for common configurations:
 
 ```rust
-type Undir0      = Graph<(), edge::Undir<()>>;      // no attributes
-type UndirN<NV>  = Graph<NV, edge::Undir<()>>;      // node values only
-type UndirE<EV>  = Graph<(), edge::Undir<EV>>;      // edge values only
-type Undir<N, E> = Graph<NV, edge::Undir<EV>>;      // both
+type MUndir0      = MGraph<(), edge::Undir<()>>;      // no attributes
+type MUndirN<NV>  = MGraph<NV, edge::Undir<()>>;      // node values only
+type MUndirE<EV>  = MGraph<(), edge::Undir<EV>>;      // edge values only
+type MUndir<N, E> = MGraph<NV, edge::Undir<EV>>;      // both
 
-type Dir0         = Graph<(), edge::Dir<()>>;
-type Anydir0      = Graph<(), edge::Anydir<()>>;
-// ... same pattern for Dir, Anydir
+type MDir0         = MGraph<(), edge::Dir<()>>;
+type MAnydir0      = MGraph<(), edge::Anydir<()>>;
+// ... same pattern for MDir, MAnydir
 ```
 
 ---
 
-<h2><code>graph!</code> — construction</h2>
+<h2><code>mgraph!</code> — construction</h2>
 
 <details open><summary><b>DSL primitives</b></summary>
 
@@ -60,10 +60,10 @@ type Anydir0      = Graph<(), edge::Anydir<()>>;
 <tr><td width="65%" valign="top">
 
 ```rust
-use grw::graph::{self, Graph, edge};
+use grw::graph::{self, MGraph, edge};
 
 // path: 0 — 1 — 2  (grouping builds a chain)
-let g: Graph<(), edge::Undir<()>> = graph![
+let g: MGraph<(), edge::Undir<()>> = mgraph![
     N(0) ^ (N(1) ^ N(2))
 ].unwrap();
 ```
@@ -73,7 +73,7 @@ let g: Graph<(), edge::Undir<()>> = graph![
 
 ```rust
 // triangle: chain + back-reference closes the cycle
-let g: Graph<(), edge::Undir<()>> = graph![
+let g: MGraph<(), edge::Undir<()>> = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 ```
@@ -83,7 +83,7 @@ let g: Graph<(), edge::Undir<()>> = graph![
 
 ```rust
 // star: flat chaining fans out from one node
-let g: Graph<(), edge::Undir<()>> = graph![
+let g: MGraph<(), edge::Undir<()>> = mgraph![
     N(0) ^ N(1)
          ^ N(2)
          ^ N(3)
@@ -96,22 +96,22 @@ let g: Graph<(), edge::Undir<()>> = graph![
 
 ```rust
 // with node values
-let g: Graph<&str, edge::Undir<()>> = graph![
+let g: MGraph<&str, edge::Undir<()>> = mgraph![
     N(0).val("alice") ^ (N(1).val("bob") ^ N(2).val("carol"))
 ].unwrap();
 
 // with edge values — use & E().val(...) before the direction operator
-let g: Graph<(), edge::Undir<f64>> = graph![
+let g: MGraph<(), edge::Undir<f64>> = mgraph![
     N(0) & E().val(1.5) ^ (N(1) & E().val(2.0) ^ N(2))
 ].unwrap();
 
 // both node and edge values
-let g: Graph<&str, edge::Undir<u32>> = graph![
+let g: MGraph<&str, edge::Undir<u32>> = mgraph![
     N(0).val("a") & E().val(10) ^ N(1).val("b")
 ].unwrap();
 
 // anonymous nodes — ids assigned automatically
-let g: Graph<(), edge::Undir<()>> = graph![N_() ^ N_() ^ N_()].unwrap();
+let g: MGraph<(), edge::Undir<()>> = mgraph![N_() ^ N_() ^ N_()].unwrap();
 ```
 
 </details>
@@ -123,7 +123,7 @@ let g: Graph<(), edge::Undir<()>> = graph![N_() ^ N_() ^ N_()].unwrap();
 
 ```rust
 // path: 0 → 1 → 2  (grouping builds a chain)
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) >> (N(1) >> N(2))
 ].unwrap();
 ```
@@ -133,7 +133,7 @@ let g: Graph<(), edge::Dir<()>> = graph![
 
 ```rust
 // fan-out: flat chaining from one node
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) >> N(1)
          >> N(2)
          >> N(3)
@@ -145,7 +145,7 @@ let g: Graph<(), edge::Dir<()>> = graph![
 
 ```rust
 // bidirectional: n() references existing nodes
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) >> N(1),
     n(1) >> n(0),
 ].unwrap();
@@ -156,12 +156,12 @@ let g: Graph<(), edge::Dir<()>> = graph![
 
 ```rust
 // incoming edges with <<
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) << N(1),   // edge from 1 to 0
 ].unwrap();
 
 // directed with edge values
-let g: Graph<(), edge::Dir<i32>> = graph![
+let g: MGraph<(), edge::Dir<i32>> = mgraph![
     N(0) & E().val(10) >> (N(1) & E().val(20) >> N(2))
 ].unwrap();
 ```
@@ -175,7 +175,7 @@ let g: Graph<(), edge::Dir<i32>> = graph![
 
 ```rust
 // mix all edge types in one graph
-let g: Graph<(), edge::Anydir<()>> = graph![
+let g: MGraph<(), edge::Anydir<()>> = mgraph![
     N(0) ^ (N(1) >> N(2)),  // 0 — 1 → 2
     N(3) << n(2),            // 2 → 3
 ].unwrap();
@@ -186,7 +186,7 @@ let g: Graph<(), edge::Anydir<()>> = graph![
 
 ```rust
 // all three edge types between one pair
-let g: Graph<(), edge::Anydir<()>> = graph![
+let g: MGraph<(), edge::Anydir<()>> = mgraph![
     N(0) ^ N(1),         // undirected
     n(0) >> n(1),        // directed 0 → 1
     n(1) >> n(0),        // directed 1 → 0
@@ -203,7 +203,7 @@ let g: Graph<(), edge::Anydir<()>> = graph![
 When the type can't be inferred, use the turbofish form:
 
 ```rust
-let g = graph![<(), grw::graph::edge::Undir<()>>; N(0) ^ N(1)].unwrap();
+let g = mgraph![<(), grw::graph::edge::Undir<()>>; N(0) ^ N(1)].unwrap();
 ```
 
 </details>
@@ -237,9 +237,9 @@ let g = graph![<(), grw::graph::edge::Undir<()>>; N(0) ^ N(1)].unwrap();
 <tr><td width="65%" valign="top">
 
 ```rust
-use grw::graph::{self, Graph, edge};
+use grw::graph::{self, MGraph, edge};
 
-let mut g: Graph<(), edge::Undir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<()>> = MGraph::default();
 
 // add two connected nodes
 modify!(g, [N(1) ^ N(2)]).unwrap();
@@ -261,7 +261,7 @@ assert_eq!(g.edge_count(), 2);
 <tr><td width="65%" valign="top">
 
 ```rust
-let mut g: Graph<(), edge::Dir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Dir<()>> = MGraph::default();
 
 // directed path
 modify!(g, [N(1) >> (N(2) >> N(3))]).unwrap();
@@ -273,7 +273,7 @@ assert_eq!(g.edge_count(), 2);
 <tr><td width="65%" valign="top">
 
 ```rust
-let mut g: Graph<(), edge::Undir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<()>> = MGraph::default();
 
 // triangle via back-reference
 modify!(g, [N(1) ^ (N(2) ^ (N(3) ^ n(1)))]).unwrap();
@@ -285,7 +285,7 @@ assert_eq!(g.edge_count(), 3);
 <tr><td width="65%" valign="top">
 
 ```rust
-let mut g: Graph<&str, edge::Undir<u32>> = Graph::default();
+let mut g: MGraph<&str, edge::Undir<u32>> = MGraph::default();
 
 // node and edge values
 modify!(g, [
@@ -315,7 +315,7 @@ assert_eq!(g.node_count(), 3);
 <tr><td width="65%" valign="top">
 
 ```rust
-let mut g: Graph<(), edge::Undir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<()>> = MGraph::default();
 modify!(g, [N(1) ^ N(2) ^ N(3)]).unwrap();
 
 // remove node 1 (and its edges to 0, 2)
@@ -327,7 +327,7 @@ assert_eq!(g.node_count(), 2);
 <tr><td width="65%" valign="top">
 
 ```rust
-let mut g: Graph<(), edge::Dir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Dir<()>> = MGraph::default();
 modify!(g, [N(1) >> N(2)]).unwrap();
 
 // remove edge, keep both nodes
@@ -347,7 +347,7 @@ assert_eq!(g.edge_count(), 0);
 <tr><td width="65%" valign="top">
 
 ```rust
-let mut g: Graph<&str, edge::Undir<()>> = Graph::default();
+let mut g: MGraph<&str, edge::Undir<()>> = MGraph::default();
 modify!(g, [N(1).val("old")]).unwrap();
 assert_eq!(g.get(0), Some(&"old"));
 
@@ -360,7 +360,7 @@ assert_eq!(g.get(0), Some(&"new"));
 <tr><td width="65%" valign="top">
 
 ```rust
-let mut g: Graph<(), edge::Undir<u32>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<u32>> = MGraph::default();
 modify!(g, [N(1) & E().val(100u32) ^ N(2)]).unwrap();
 
 // swap edge value
@@ -412,7 +412,7 @@ The returned `Modification` contains:
 | `ban(morphism) { ... }` | Forbidden pattern cluster — matches are rejected |
 | `N(id)` | Pattern node |
 | `n(id)` | Reference to pattern node |
-| `^` `>>` `<<` | Edge operators (same as `graph!`) |
+| `^` `>>` `<<` | Edge operators (same as `mgraph!`) |
 | `!N(id)` | Negated node — the edge must NOT exist |
 | `N(id).val(v)` | Node value — exact match |
 | `N(id).test(\|v\| ...)` | Node value predicate |
@@ -426,11 +426,11 @@ The returned `Modification` contains:
 When `search!` receives a graph reference, it creates a `Session` that you iterate directly with a `for` loop:
 
 ```rust
-use grw::*;           // Graph, graph!, search!, Morphism, etc.
+use grw::*;           // Graph, MGraph, mgraph!, search!, Morphism, etc.
 use grw::graph::edge;
 
 // target graph: triangle 0—1—2—0
-let g: graph::Undir0 = graph![
+let g: graph::MUndir0 = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 

@@ -200,7 +200,7 @@ impl<'a, NV, ER: graph::Edge> Flattener<'a, NV, ER> {
 
 pub fn from_fragment<NV, ER: graph::Edge>(
     ops: Vec<Op<NV, ER>>,
-) -> Result<graph::Graph<NV, ER>, super::error::Build<ER::Slot>> {
+) -> Result<graph::MGraph<NV, ER>, super::error::Build<ER::Slot>> {
     let mut explicit = BTreeSet::new();
     let mut auto_count = 0usize;
 
@@ -280,7 +280,7 @@ pub fn from_fragment<NV, ER: graph::Edge>(
 
     let edges = Edges { store: edge_store, free_ids: edge_free_ids, count: edge_count };
 
-    let mut g = graph::Graph {
+    let mut g = graph::MGraph {
         nodes,
         edges,
         degrees: Vec::new(),
@@ -321,7 +321,7 @@ pub fn E<NV, ER: graph::Edge>() -> edge::Edge<(), NV, ER> {
 }
 
 #[macro_export]
-macro_rules! graph {
+macro_rules! mgraph {
     [<$nv:ty, $er:ty>; $($expr:expr),* $(,)?] => {{
         #[allow(unused_imports)]
         use $crate::graph::dsl::*;
@@ -331,5 +331,21 @@ macro_rules! graph {
         #[allow(unused_imports)]
         use $crate::graph::dsl::*;
         $crate::graph::dsl::from_fragment(vec![$($expr.into()),*])
+    }};
+}
+
+#[macro_export]
+macro_rules! vgraph {
+    [<$nv:ty, $er:ty>; $($expr:expr),* $(,)?] => {{
+        #[allow(unused_imports)]
+        use $crate::graph::dsl::*;
+        $crate::graph::dsl::from_fragment::<$nv, $er>(vec![$($expr.into()),*])
+            .map(|g| $crate::graph::VGraph::from_mgraph(&g))
+    }};
+    [$($expr:expr),* $(,)?] => {{
+        #[allow(unused_imports)]
+        use $crate::graph::dsl::*;
+        $crate::graph::dsl::from_fragment(vec![$($expr.into()),*])
+            .map(|g| $crate::graph::VGraph::from_mgraph(&g))
     }};
 }

@@ -138,7 +138,8 @@ pub use layout::Val;
 #[cfg(test)]
 pub(crate) mod test;
 
-pub use graph::Graph;
+pub use graph::MGraph;
+pub use graph::{Graph, VGraph};
 pub use search::Morphism::{self, Iso, SubIso, EpiMono, Mono, Epi, Homo};
 pub use search::{compile, Search, Resolved, Unresolved, BindError, Seq, RevCsr};
 pub use watch::{Watcher, Control, BanVerdict, Silent};

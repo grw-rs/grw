@@ -6,13 +6,14 @@ use std::cmp::Reverse;
 use grw::edge::anydir;
 use grw::graph::edge::{AnyVal, End};
 use grw::modify::dsl::*;
+use grw::Graph as _;
 use petgraph::algo::{all_simple_paths, astar};
 use petgraph::graph::{DiGraph, NodeIndex, UnGraph};
 use petgraph::visit::EdgeRef;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
-type GrwGraph = grw::Graph<(), grw::edge::Anydir<u8>>;
+type GrwGraph = grw::MGraph<(), grw::edge::Anydir<u8>>;
 
 // ── Graph construction ──────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ fn build_random_graphs(
     edge_count: usize,
 ) -> (GrwGraph, DiGraph<(), u8>, UnGraph<(), u8>) {
     let mut rng = SmallRng::seed_from_u64(seed);
-    let mut grw_g: GrwGraph = grw::Graph::default();
+    let mut grw_g: GrwGraph = grw::MGraph::default();
     for _ in 0..node_count {
         grw_g.modify(vec![N_().val(()).into()]).expect("add node");
     }
@@ -72,7 +73,7 @@ fn build_weighted_digraph(
     edge_count: usize,
 ) -> (GrwGraph, DiGraph<(), u8>) {
     let mut rng = SmallRng::seed_from_u64(seed);
-    let mut grw_g: GrwGraph = grw::Graph::default();
+    let mut grw_g: GrwGraph = grw::MGraph::default();
     for _ in 0..node_count {
         grw_g.modify(vec![N_().val(()).into()]).expect("add node");
     }
@@ -583,7 +584,7 @@ fn executor_guard_filters() {
 
 /// Build a chain graph: 0 → 1 → 2 → ... → (n-1), all directed.
 fn build_chain(n: usize) -> GrwGraph {
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..n {
         g.modify(vec![N_().val(()).into()]).expect("add node");
     }
@@ -597,7 +598,7 @@ fn build_chain(n: usize) -> GrwGraph {
 
 /// Build a diamond: 0 → 1, 0 → 2, 1 → 3, 2 → 3.
 fn build_diamond() -> GrwGraph {
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..4 {
         g.modify(vec![N_().val(()).into()]).expect("add node");
     }
@@ -861,7 +862,7 @@ fn dsl_path_guard() {
 #[test]
 fn dsl_path_with_edge_predicate() {
     // Chain on label 1: 0→1→2→3.  Shortcut on label 2: 0→3.
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..4 { g.modify(vec![N_().val(()).into()]).unwrap(); }
     for &(a, b) in &[(0u32, 1), (1, 2), (2, 3)] {
         g.modify(vec![(X(a) & E().val(1u8) >> X(b)).into()]).unwrap();
@@ -902,7 +903,7 @@ fn bound_path_mono_allows_branched_intermediates() {
     //      5       6
     //
     // Mono path 0→4: intermediates have branches — Mono allows this.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ N(4),
         n(1) ^ N(5), n(3) ^ N(6)
     ].unwrap();
@@ -930,7 +931,7 @@ fn bound_path_subiso_rejects_branched_intermediates() {
     //      5       6
     //
     // SubIso path 0→4: intermediates 1,3 have outside edges → induced property violated.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ N(4),
         n(1) ^ N(5), n(3) ^ N(6)
     ].unwrap();
@@ -955,7 +956,7 @@ fn bound_path_subiso_accepts_clean_chain() {
     //  0 - 1 - 2 - 3 - 4
     //
     // No branches — all intermediates have degree ≤ 2 — SubIso path should work.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ N(4)
     ].unwrap();
 
@@ -981,7 +982,7 @@ fn bound_path_subiso_accepts_clean_chain() {
 #[test]
 fn homo_terminals_find_cycle() {
     // Square cycle: 0-1-2-3-0
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0)
     ].unwrap();
 
@@ -1007,12 +1008,12 @@ fn homo_terminals_find_cycle() {
 #[test]
 fn homo_subiso_finds_clean_cycle_rejects_branched() {
     // Clean cycle: 0-1-2-3-0
-    let g_clean = grw::graph![<(), ER>;
+    let g_clean = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0)
     ].unwrap();
 
     // Branched cycle: 0-1-2-3-0, with 2-4 branch
-    let g_branched = grw::graph![<(), ER>;
+    let g_branched = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3), n(3) ^ n(0),
         n(2) ^ N(4)
     ].unwrap();
@@ -1048,7 +1049,7 @@ fn homo_subiso_finds_clean_cycle_rejects_branched() {
 #[test]
 fn weighted_dijkstra_trivial() {
     // Simplest possible test: 2 nodes, 1 directed edge
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     g.modify(vec![N_().val(()).into()]).unwrap();
     g.modify(vec![N_().val(()).into()]).unwrap();
     g.modify(vec![(X(0u32) & E().val(5u8) >> X(1u32)).into()]).unwrap();
@@ -1154,7 +1155,7 @@ fn weighted_astar_matches_dijkstra() {
 
 /// Build graph: 0→1→2→3→4 + 0→5→3 (two paths from 0 to 3, sharing node 3)
 fn build_fork() -> GrwGraph {
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..6 { g.modify(vec![N_().val(()).into()]).unwrap(); }
     for &(a, b) in &[(0u32,1),(1,2),(2,3),(3,4),(0,5),(5,3)] {
         let _ = g.modify(vec![(X(a) & E().val(1u8) >> X(b)).into()]);
@@ -1220,7 +1221,7 @@ fn constraint_mono_rejects_when_no_alternative() {
 #[test]
 fn constraint_subiso_rejects_outside_edges() {
     // Graph: 0→1→2, 1→3 (node 1 has outside edge to 3)
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..4 { g.modify(vec![N_().val(()).into()]).unwrap(); }
     for &(a, b) in &[(0u32,1),(1,2),(1,3)] {
         let _ = g.modify(vec![(X(a) & E().val(1u8) >> X(b)).into()]);
@@ -1238,7 +1239,7 @@ fn constraint_subiso_rejects_outside_edges() {
 #[test]
 fn constraint_subiso_accepts_clean_path() {
     // Graph: 0→1→2 (no outside edges)
-    let mut g: GrwGraph = grw::Graph::default();
+    let mut g: GrwGraph = grw::MGraph::default();
     for _ in 0..3 { g.modify(vec![N_().val(()).into()]).unwrap(); }
     for &(a, b) in &[(0u32,1),(1,2)] {
         let _ = g.modify(vec![(X(a) & E().val(1u8) >> X(b)).into()]);

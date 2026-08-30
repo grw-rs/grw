@@ -76,12 +76,19 @@ pub struct RevCsrVal;
 
 pub trait Tier<NV, ER: graph::Edge> {
     type Data;
-    fn build(graph: &graph::Graph<NV, ER>) -> Self::Data;
+    fn build<G: graph::Graph<NV, ER>>(graph: &G) -> Self::Data;
 }
 
-pub struct Indexed<'g, NV, ER: graph::Edge, D> {
-    pub(crate) graph: &'g graph::Graph<NV, ER>,
+pub struct Indexed<'g, NV, ER: graph::Edge, G, D> {
+    pub(crate) graph: &'g G,
     pub(crate) data: D,
+    pub(crate) _marker: std::marker::PhantomData<fn() -> (NV, ER)>,
+}
+
+impl<'g, NV, ER: graph::Edge, G, D> Indexed<'g, NV, ER, G, D> {
+    pub(crate) fn new(graph: &'g G, data: D) -> Self {
+        Indexed { graph, data, _marker: std::marker::PhantomData }
+    }
 }
 
 
@@ -90,7 +97,7 @@ where
     ER::Val: Clone,
 {
     type Data = CsrAdj<NV, ER>;
-    fn build(graph: &graph::Graph<NV, ER>) -> Self::Data {
+    fn build<G: graph::Graph<NV, ER>>(graph: &G) -> Self::Data {
         CsrAdj::build(graph)
     }
 }
@@ -102,13 +109,11 @@ pub struct RevData {
 
 impl<NV, ER: graph::Edge> Tier<NV, ER> for Rev {
     type Data = RevData;
-    fn build(graph: &graph::Graph<NV, ER>) -> Self::Data {
-        let mut all_node_ids: Vec<id::N> = graph.nodes.nodes_iter()
-            .map(|(n, _)| n)
-            .collect();
+    fn build<G: graph::Graph<NV, ER>>(graph: &G) -> Self::Data {
+        let mut all_node_ids: Vec<id::N> = graph.iter_node_ids().collect();
         all_node_ids.sort_unstable();
         RevData {
-            reverse_len: graph.nodes.store.len(),
+            reverse_len: graph.id_space_len(),
             all_node_ids,
         }
     }
@@ -120,29 +125,21 @@ pub struct RawData {
 
 impl<NV, ER: graph::Edge> Tier<NV, ER> for Raw {
     type Data = RawData;
-    fn build(graph: &graph::Graph<NV, ER>) -> Self::Data {
-        let mut all_node_ids: Vec<id::N> = graph.nodes.nodes_iter()
-            .map(|(n, _)| n)
-            .collect();
+    fn build<G: graph::Graph<NV, ER>>(graph: &G) -> Self::Data {
+        let mut all_node_ids: Vec<id::N> = graph.iter_node_ids().collect();
         all_node_ids.sort_unstable();
         RawData { all_node_ids }
     }
 }
 
-impl<NV, ER: graph::Edge> graph::Graph<NV, ER> {
-    pub fn index<T: Tier<NV, ER>>(&self, _tier: T) -> Indexed<'_, NV, ER, T::Data> {
-        Indexed { graph: self, data: T::build(self) }
-    }
-}
-
-impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RevData> {
+impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_, NV, ER, G, RevData> {
     type Neighbors<'a> = std::vec::IntoIter<u32> where Self: 'a;
     type Reverse = Vec<u32>;
 
     #[inline(always)]
     fn degree(&self, n: u32) -> u32 {
-        match self.graph.nodes.get_node(id::N(n as Id)) {
-            Some(node) => node.adj.len() as u32,
+        match self.graph.degree(id::N(n as Id)) {
+            Some(d) => d as u32,
             None => 0,
         }
     }
@@ -165,15 +162,15 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RevData> {
     }
 
     fn neighbors(&self, n: u32) -> Self::Neighbors<'_> {
-        match self.graph.nodes.get_node(id::N(n as Id)) {
-            Some(node) => node.adj.iter().map(|n| *n as u32).collect::<Vec<_>>().into_iter(),
+        match self.graph.neighbor_ids(id::N(n as Id)) {
+            Some(ids) => ids.map(|n| *n as u32).collect::<Vec<_>>().into_iter(),
             None => Vec::new().into_iter(),
         }
     }
 
     #[inline(always)]
     fn node_val(&self, n: u32) -> &NV {
-        self.graph.nodes.get(id::N(n as Id)).unwrap()
+        self.graph.node_val(id::N(n as Id)).unwrap()
     }
 
     fn check_edge(
@@ -224,7 +221,7 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RevData> {
 
     #[inline(always)]
     fn node_vals_len(&self) -> usize {
-        self.graph.nodes.store.len()
+        self.graph.id_space_len()
     }
 
     #[inline(always)]
@@ -245,7 +242,7 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RevData> {
             .map(|pred_opt| {
                 pred_opt.as_ref().map(|pred| {
                     self.data.all_node_ids.iter().copied()
-                        .filter(|&n| pred(self.graph.nodes.get(n).unwrap()))
+                        .filter(|&n| pred(self.graph.node_val(n).unwrap()))
                         .collect()
                 })
             })
@@ -253,14 +250,14 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RevData> {
     }
 }
 
-impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RawData> {
+impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_, NV, ER, G, RawData> {
     type Neighbors<'a> = std::vec::IntoIter<u32> where Self: 'a;
     type Reverse = rustc_hash::FxHashMap<u32, u32>;
 
     #[inline(always)]
     fn degree(&self, n: u32) -> u32 {
-        match self.graph.nodes.get_node(id::N(n as Id)) {
-            Some(node) => node.adj.len() as u32,
+        match self.graph.degree(id::N(n as Id)) {
+            Some(d) => d as u32,
             None => 0,
         }
     }
@@ -283,15 +280,15 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RawData> {
     }
 
     fn neighbors(&self, n: u32) -> Self::Neighbors<'_> {
-        match self.graph.nodes.get_node(id::N(n as Id)) {
-            Some(node) => node.adj.iter().map(|n| *n as u32).collect::<Vec<_>>().into_iter(),
+        match self.graph.neighbor_ids(id::N(n as Id)) {
+            Some(ids) => ids.map(|n| *n as u32).collect::<Vec<_>>().into_iter(),
             None => Vec::new().into_iter(),
         }
     }
 
     #[inline(always)]
     fn node_val(&self, n: u32) -> &NV {
-        self.graph.nodes.get(id::N(n as Id)).unwrap()
+        self.graph.node_val(id::N(n as Id)).unwrap()
     }
 
     fn check_edge(
@@ -342,12 +339,12 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RawData> {
 
     #[inline(always)]
     fn node_vals_len(&self) -> usize {
-        self.graph.nodes.store.len()
+        self.graph.id_space_len()
     }
 
     #[inline(always)]
     fn reverse_len(&self) -> usize {
-        self.graph.nodes.store.len()
+        self.graph.id_space_len()
     }
 
     fn create_reverse(&self) -> Self::Reverse {
@@ -363,7 +360,7 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RawData> {
             .map(|pred_opt| {
                 pred_opt.as_ref().map(|pred| {
                     self.data.all_node_ids.iter().copied()
-                        .filter(|&n| pred(self.graph.nodes.get(n).unwrap()))
+                        .filter(|&n| pred(self.graph.node_val(n).unwrap()))
                         .collect()
                 })
             })
@@ -371,7 +368,7 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RawData> {
     }
 }
 
-impl<NV, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, CsrAdj<NV, ER>> {
+impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_, NV, ER, G, CsrAdj<NV, ER>> {
     type Neighbors<'a> = std::iter::Copied<std::slice::Iter<'a, u32>> where Self: 'a;
     type Reverse = Vec<u32>;
 
@@ -474,7 +471,7 @@ where
     ER::Val: Clone,
 {
     type Data = RevCsrValData<NV, ER>;
-    fn build(graph: &graph::Graph<NV, ER>) -> Self::Data {
+    fn build<G: graph::Graph<NV, ER>>(graph: &G) -> Self::Data {
         let csr = CsrAdj::build(graph);
         let mut value_groups: rustc_hash::FxHashMap<NV, Vec<id::N>> =
             rustc_hash::FxHashMap::with_capacity_and_hasher(0, rustc_hash::FxBuildHasher);
@@ -486,7 +483,7 @@ where
     }
 }
 
-impl<NV: Clone + Eq + std::hash::Hash, ER: graph::Edge> Index<NV, ER> for Indexed<'_, NV, ER, RevCsrValData<NV, ER>>
+impl<NV: Clone + Eq + std::hash::Hash, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_, NV, ER, G, RevCsrValData<NV, ER>>
 where
     ER::Val: Clone,
 {
@@ -844,31 +841,31 @@ impl Match {
         specific.chain(any)
     }
 
-    pub fn translate<'a, NV, ER: graph::Edge>(
+    pub fn translate<'a, NV, ER: graph::Edge, G: graph::Graph<NV, ER>>(
         &'a self,
         query: &'a super::query::Query<NV, ER>,
-        graph: &'a graph::Graph<NV, ER>,
-    ) -> TranslatedMatch<'a, NV, ER> {
+        graph: &'a G,
+    ) -> TranslatedMatch<'a, NV, ER, G> {
         TranslatedMatch { m: self, query, graph }
     }
 }
 
-pub struct TranslatedMatch<'a, NV, ER: graph::Edge> {
+pub struct TranslatedMatch<'a, NV, ER: graph::Edge, G> {
     m: &'a Match,
     query: &'a super::query::Query<NV, ER>,
-    graph: &'a graph::Graph<NV, ER>,
+    graph: &'a G,
 }
 
-impl<'a, NV, ER: graph::Edge> TranslatedMatch<'a, NV, ER> {
+impl<'a, NV, ER: graph::Edge, G: graph::Graph<NV, ER>> TranslatedMatch<'a, NV, ER, G> {
     pub fn node(&self, pattern_lid: impl Into<LocalId>) -> Option<(id::N, &'a NV)> {
         let nid = self.m.get(pattern_lid)?;
-        let nv = self.graph.get(nid)?;
+        let nv = self.graph.node_val(nid)?;
         Some((nid, nv))
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = (LocalId, id::N, &'a NV)> + '_ {
         self.m.iter().filter_map(move |&(lid, nid)| {
-            let nv = self.graph.get(nid)?;
+            let nv = self.graph.node_val(nid)?;
             Some((lid, nid, nv))
         })
     }
@@ -908,7 +905,7 @@ impl<'a, NV, ER: graph::Edge> TranslatedMatch<'a, NV, ER> {
     }
 }
 
-impl<'a, NV, ER: graph::Edge + graph::HasRel> TranslatedMatch<'a, NV, ER> {
+impl<'a, NV, ER: graph::Edge + graph::HasRel, G: graph::Graph<NV, ER>> TranslatedMatch<'a, NV, ER, G> {
     pub fn edges(&self) -> Vec<MatchedEdge<ER::Slot>> {
         let mut result = Vec::new();
         let mut claimed: std::collections::HashMap<(u32, u32), smallvec::SmallVec<[ER::Slot; 3]>> =
@@ -963,7 +960,7 @@ impl<'a, NV, ER: graph::Edge + graph::HasRel> TranslatedMatch<'a, NV, ER> {
             };
             let other_lid = self.query.nodes[other_idx].local_id;
             let other_nid = self.m.get(other_lid)?;
-            let other_nv = self.graph.get(other_nid)?;
+            let other_nv = self.graph.node_val(other_nid)?;
             Some((other_lid, other_nid, other_nv, pe.slot))
         })
     }
@@ -1029,11 +1026,11 @@ impl<NV: Clone, ER: graph::Edge> CsrAdj<NV, ER>
 where
     ER::Val: Clone,
 {
-    fn build(target: &graph::Graph<NV, ER>) -> Self {
-        let max_id = target.nodes.store.len();
+    fn build<G: graph::Graph<NV, ER>>(target: &G) -> Self {
+        let max_id = target.id_space_len();
         let mut offsets = vec![0u32; max_id + 2];
-        for (node_id, node) in target.nodes.nodes_iter() {
-            offsets[*node_id as usize + 1] = node.adj.len() as u32;
+        for (node_id, _, adj) in target.iter_nodes() {
+            offsets[*node_id as usize + 1] = adj.count() as u32;
         }
         for i in 1..offsets.len() {
             offsets[i] += offsets[i - 1];
@@ -1045,13 +1042,14 @@ where
         let mut node_vals: Vec<std::mem::MaybeUninit<NV>> =
             (0..max_id + 1).map(|_| std::mem::MaybeUninit::uninit()).collect();
 
-        for (node_id, node) in target.nodes.nodes_iter() {
+        for (node_id, node_val, adj_ids) in target.iter_nodes() {
             let nid = *node_id as usize;
             let start = offsets[nid] as usize;
-            node_vals[nid] = std::mem::MaybeUninit::new(node.val.clone());
+            node_vals[nid] = std::mem::MaybeUninit::new(node_val.clone());
 
-            let mut pairs: Vec<(u32, ER::CsrStore)> = Vec::with_capacity(node.adj.len() as usize);
-            for adj in node.adj.iter() {
+            let degree = offsets[nid + 1] - offsets[nid];
+            let mut pairs: Vec<(u32, ER::CsrStore)> = Vec::with_capacity(degree as usize);
+            for adj in adj_ids {
                 let edges_iter = target.edges_between(node_id, adj)
                     .map(|(slot, val)| (slot, val.clone()));
                 let store = ER::build_csr_store(edges_iter);
@@ -1072,9 +1070,7 @@ where
             std::mem::transmute::<Vec<std::mem::MaybeUninit<ER::CsrStore>>, Vec<ER::CsrStore>>(edge_stores)
         };
 
-        let mut all_node_ids: Vec<id::N> = target.nodes.nodes_iter()
-            .map(|(n, _)| n)
-            .collect();
+        let mut all_node_ids: Vec<id::N> = target.iter_node_ids().collect();
         all_node_ids.sort_unstable();
 
         CsrAdj { offsets, neighbors, node_vals, edge_stores, all_node_ids }
@@ -1122,7 +1118,7 @@ impl<NV, ER: graph::Edge> CsrAdj<NV, ER> {
     }
 }
 
-pub type Graph<'g, NV, ER> = Indexed<'g, NV, ER, CsrAdj<NV, ER>>;
+pub type Graph<'g, NV, ER, G> = Indexed<'g, NV, ER, G, CsrAdj<NV, ER>>;
 
 impl<NV, ER: graph::Edge> Index<NV, ER> for CsrAdj<NV, ER> {
     type Neighbors<'a> = std::iter::Copied<std::slice::Iter<'a, u32>> where Self: 'a;
@@ -1217,37 +1213,37 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for CsrAdj<NV, ER> {
     fn csr_adj(&self) -> &CsrAdj<NV, ER> { self }
 }
 
-pub(crate) struct Ctx<'a, NV, ER: graph::Edge, I> {
+pub(crate) struct Ctx<'a, NV, ER: graph::Edge, G, I> {
     pub(crate) query: &'a Query<NV, ER>,
-    pub(crate) target: &'a graph::Graph<NV, ER>,
+    pub(crate) target: &'a G,
     pub(crate) index: &'a I,
 }
 
-pub struct Session<'g, NV, ER: graph::Edge> {
+pub struct Session<'g, NV, ER: graph::Edge, G> {
     query: Query<NV, ER>,
-    indexed: Graph<'g, NV, ER>,
+    indexed: Graph<'g, NV, ER, G>,
     bindings: Vec<Option<id::N>>,
 }
 
-impl<'g, NV: Clone + 'g, ER: graph::Edge + 'g> Session<'g, NV, ER>
+impl<'g, NV: Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>> Session<'g, NV, ER, G>
 where
     ER::Val: Clone,
 {
     pub fn from_search(
         search: super::query::Search<NV, ER>,
-        graph: &'g graph::Graph<NV, ER>,
+        graph: &'g G,
     ) -> Result<Self, super::error::Search> {
         match search {
             super::query::Search::Resolved(r) => {
                 for binding in &r.bindings {
                     if let Some(pinned) = binding {
-                        if !graph.has(*pinned) {
+                        if !graph.has_node(*pinned) {
                             return Err(super::error::Search::TargetMissing(**pinned));
                         }
                     }
                 }
                 let bindings = r.bindings;
-                let indexed = graph.index(RevCsr);
+                let indexed = Indexed::new(graph, <RevCsr as Tier<NV, ER>>::build(graph));
                 Ok(Session { query: r.query, indexed, bindings })
             }
             super::query::Search::Unresolved(_) => Err(super::error::Search::BoundPatternInSession),
@@ -1255,15 +1251,15 @@ where
     }
 }
 
-impl<'g, NV: Clone + 'g, ER: graph::Edge + 'g> Session<'g, NV, ER>
+impl<'g, NV: Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>> Session<'g, NV, ER, G>
 where
     ER::Val: Clone,
 {
-    pub fn iter(&self) -> seq::Iter<'_, NV, ER> {
+    pub fn iter(&self) -> seq::Iter<'_, NV, ER, G> {
         Seq::search_bound(&self.query, &self.indexed, self.bindings.clone())
     }
 
-    pub fn par_iter(&self) -> par::ParIter<'_, NV, ER> {
+    pub fn par_iter(&self) -> par::ParIter<'_, NV, ER, G> {
         par::ParIter::new(&self.query, &self.indexed)
     }
 
@@ -1271,7 +1267,7 @@ where
         &self.query
     }
 
-    pub fn indexed(&self) -> &Graph<'g, NV, ER> {
+    pub fn indexed(&self) -> &Graph<'g, NV, ER, G> {
         &self.indexed
     }
 
@@ -1279,35 +1275,35 @@ where
         m.edges(&self.query, self.indexed.csr_adj())
     }
 
-    pub fn translate<'a>(&'a self, m: &'a Match) -> TranslatedMatch<'a, NV, ER> {
+    pub fn translate<'a>(&'a self, m: &'a Match) -> TranslatedMatch<'a, NV, ER, G> {
         m.translate(&self.query, self.indexed.graph)
     }
 
-    pub fn graph(&self) -> &graph::Graph<NV, ER> {
+    pub fn graph(&self) -> &G {
         self.indexed.graph
     }
 }
 
-impl<'a, 'g: 'a, NV: Clone + 'a, ER: graph::Edge + 'a> IntoIterator for &'a Session<'g, NV, ER>
+impl<'a, 'g: 'a, NV: Clone + 'a, ER: graph::Edge + 'a, G: graph::Graph<NV, ER>> IntoIterator for &'a Session<'g, NV, ER, G>
 where
     ER::Val: Clone,
 {
     type Item = Match;
-    type IntoIter = seq::Iter<'a, NV, ER>;
+    type IntoIter = seq::Iter<'a, NV, ER, G>;
 
-    fn into_iter(self) -> seq::Iter<'a, NV, ER> {
+    fn into_iter(self) -> seq::Iter<'a, NV, ER, G> {
         Seq::search_bound(&self.query, &self.indexed, self.bindings.clone())
     }
 }
 
-impl<'g, NV: Clone + 'g, ER: graph::Edge + 'g> IntoIterator for Session<'g, NV, ER>
+impl<'g, NV: Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>> IntoIterator for Session<'g, NV, ER, G>
 where
     ER::Val: Clone,
 {
     type Item = Match;
-    type IntoIter = seq::IntoIter<'g, NV, ER>;
+    type IntoIter = seq::IntoIter<'g, NV, ER, G>;
 
-    fn into_iter(self) -> seq::IntoIter<'g, NV, ER> {
+    fn into_iter(self) -> seq::IntoIter<'g, NV, ER, G> {
         seq::IntoIter::from_session(self)
     }
 }
@@ -1319,9 +1315,9 @@ pub(crate) struct Shared {
 }
 
 impl Shared {
-    pub(crate) fn precompute<NV, ER: graph::Edge, I: Index<NV, ER>>(
+    pub(crate) fn precompute<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
         query: &Query<NV, ER>,
-        target: &graph::Graph<NV, ER>,
+        target: &G,
         index: &I,
     ) -> Self {
         let search_order = index.compute_search_order(query);
@@ -1336,9 +1332,9 @@ impl Shared {
         // Only injective nodes need pairwise-distinct targets; non-injective
         // nodes may collapse, so they never contribute to the pigeonhole.
         let exhausted = if all_iso {
-            target.nodes.len() != positive_count
+            target.node_count() != positive_count
         } else {
-            target.nodes.len() < injective_count
+            target.node_count() < injective_count
         };
 
         let val_filtered = index.compute_val_filtered(query);
@@ -1436,9 +1432,9 @@ fn compute_search_order<NV, ER: graph::Edge>(
 }
 
 impl<R: ReverseLookup> State<R> {
-    pub(crate) fn new<NV, ER: graph::Edge, I: Index<NV, ER, Reverse = R>>(
+    pub(crate) fn new<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER, Reverse = R>>(
         query: &Query<NV, ER>,
-        target: &graph::Graph<NV, ER>,
+        target: &G,
         index: &I,
         bindings: Vec<Option<id::N>>,
     ) -> Self {
@@ -1458,10 +1454,10 @@ impl<R: ReverseLookup> State<R> {
         let exhausted = if positive_count == 0 {
             false
         } else if all_iso {
-            target.nodes.len() != positive_count
+            target.node_count() != positive_count
         } else {
-            target.nodes.len() < injective_count
-        } || (query.has_surjective && positive_count < target.nodes.len());
+            target.node_count() < injective_count
+        } || (query.has_surjective && positive_count < target.node_count());
 
 
         let val_filtered: Arc<Vec<Option<Vec<id::N>>>> = Arc::new(index.compute_val_filtered(query));
@@ -1479,9 +1475,9 @@ impl<R: ReverseLookup> State<R> {
         }
     }
 
-    pub(crate) fn new_from_shared<NV, ER: graph::Edge, I: Index<NV, ER, Reverse = R>>(
+    pub(crate) fn new_from_shared<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER, Reverse = R>>(
         query: &Query<NV, ER>,
-        _target: &graph::Graph<NV, ER>,
+        _target: &G,
         index: &I,
         shared: &Shared,
         bindings: Vec<Option<id::N>>,
@@ -1535,9 +1531,9 @@ impl<R: ReverseLookup> State<R> {
         self.exhausted = exhausted;
     }
 
-    pub(crate) fn any_slot_pred_matches<NV, ER: graph::Edge, I: Index<NV, ER>>(
+    pub(crate) fn any_slot_pred_matches<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
         &self,
-        ctx: &Ctx<'_, NV, ER, I>,
+        ctx: &Ctx<'_, NV, ER, G, I>,
         n1: id::N,
         n2: id::N,
         pred: &(dyn Fn(&ER::Val) -> bool + Send + Sync),
@@ -1545,21 +1541,43 @@ impl<R: ReverseLookup> State<R> {
         ctx.index.check_edge(*n1, *n2, ER::SLOT_MIN, true, false, Some(pred))
     }
 
+    /// Induced-ness against the injective population: `reverse` holds exactly
+    /// the injective bindings, so a target edge from `candidate_id` to one of
+    /// them is legal only if the pattern mirrors it — provided at least one
+    /// end of the pair is induced. Which end does not matter, so the same
+    /// verdict is reached whichever of the two bound last.
     #[inline(always)]
-    pub(crate) fn is_feasible_reverse_only<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, pattern_idx: usize, candidate_id: Id) -> bool {
-        for raw_neighbor in ctx.index.neighbors(candidate_id) {
-            let mpi = self.reverse.get(raw_neighbor);
-            if mpi != UNMAPPED {
-                if (ctx.query.pattern_adj_bits[pattern_idx] >> mpi) & 1 == 0 {
+    pub(crate) fn is_feasible_reverse_only<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, pattern_idx: usize, candidate_id: Id) -> bool {
+        if !ctx.query.has_mixed_induced || ctx.query.node_morphism[pattern_idx].is_induced() {
+            for raw_neighbor in ctx.index.neighbors(candidate_id) {
+                let mpi = self.reverse.get(raw_neighbor);
+                if mpi != UNMAPPED {
+                    if (ctx.query.pattern_adj_bits[pattern_idx] >> mpi) & 1 == 0 {
+                        return false;
+                    }
+                }
+            }
+            true
+        } else {
+            // Injective but not induced: only the induced bindings constrain it,
+            // and induced nodes are injective, so `mapping[i] != UNMAPPED` is
+            // exactly `reverse[mapping[i]] == i`. Reached only under
+            // `has_mixed_induced`, which bounds every index below 64.
+            let mut bits = ctx.query.induced_bits & !ctx.query.pattern_adj_bits[pattern_idx];
+            while bits != 0 {
+                let i = bits.trailing_zeros() as usize;
+                bits &= bits - 1;
+                let mapped = self.mapping[i];
+                if mapped != UNMAPPED && ctx.index.is_adjacent(candidate_id, mapped) {
                     return false;
                 }
             }
+            true
         }
-        true
     }
 
     #[inline(always)]
-    pub(crate) fn is_feasible_fast<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, pattern_idx: usize, candidate_id: Id) -> bool {
+    pub(crate) fn is_feasible_fast<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, pattern_idx: usize, candidate_id: Id) -> bool {
         let mut adj_bits = ctx.query.pattern_adj_bits[pattern_idx];
         while adj_bits != 0 {
             let neighbor = adj_bits.trailing_zeros() as usize;
@@ -1571,21 +1589,13 @@ impl<R: ReverseLookup> State<R> {
                 }
             }
         }
-        let morphism = ctx.query.node_morphism[pattern_idx];
-        if morphism == Morphism::Iso || morphism == Morphism::SubIso {
-            for raw_neighbor in ctx.index.neighbors(candidate_id) {
-                let mpi = self.reverse.get(raw_neighbor);
-                if mpi != UNMAPPED {
-                    if (ctx.query.pattern_adj_bits[pattern_idx] >> mpi) & 1 == 0 {
-                        return false;
-                    }
-                }
-            }
+        if ctx.query.needs_reverse_scan(pattern_idx) {
+            return self.is_feasible_reverse_only(ctx, pattern_idx, candidate_id);
         }
         true
     }
 
-    pub(crate) fn is_feasible<NV, ER: graph::Edge, I: Index<NV, ER>, W: crate::watch::Watcher<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, pattern_idx: usize, candidate: id::N, watcher: &mut W) -> bool {
+    pub(crate) fn is_feasible<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>, W: crate::watch::Watcher<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, pattern_idx: usize, candidate: id::N, watcher: &mut W) -> bool {
         let candidate_id: Id = *candidate;
         if !W::ACTIVE && ER::SLOT_COUNT == 1 && !ctx.query.node_has_predicates[pattern_idx] && !ctx.query.node_has_neg_adj[pattern_idx] && pattern_idx < 64 && !ctx.query.has_paths {
             return self.is_feasible_fast(ctx, pattern_idx, candidate_id);
@@ -1645,68 +1655,68 @@ impl<R: ReverseLookup> State<R> {
             }
         }
 
-        if !node_negated {
-            let morphism = ctx.query.node_morphism[pattern_idx];
-            match morphism {
-                Morphism::Iso | Morphism::SubIso => {
-                    for raw_neighbor in ctx.index.neighbors(candidate_id) {
-                        let mpi = self.reverse.get(raw_neighbor);
-                        if mpi != UNMAPPED {
-                            let mapped_pattern_idx = mpi as usize;
-                            if pattern_idx < 64 && mapped_pattern_idx < 64 {
-                                let has_pattern_edge = (ctx.query.pattern_adj_bits[pattern_idx] >> mpi) & 1 != 0;
-                                if !has_pattern_edge {
-                                    return false;
-                                }
-                                if ER::SLOT_COUNT == 1 {
-                                    continue;
-                                }
-                            }
-                            let occupied = ctx.index.occupied_edge_slots(candidate_id, raw_neighbor);
-                            if occupied.is_empty() {
-                                return false;
-                            }
-                            let all_covered = occupied.iter().all(|&stored_slot| {
-                                let candidate_slot = if candidate_id <= raw_neighbor {
-                                    stored_slot
-                                } else {
-                                    ER::reverse_slot(stored_slot)
-                                };
-                                ctx.query.adj[pattern_idx]
-                                    .iter()
-                                    .any(|&(ni, s, negated, ei)| {
-                                        ni == mapped_pattern_idx
-                                            && !negated
-                                            && !ctx.query.edges[ei].ban_only
-                                            && (ctx.query.edges[ei].any_slot || s == candidate_slot)
-                                    })
-                            });
-                            if !all_covered {
-                                return false;
-                            }
-                            let target_edge_count = occupied.len();
-                            let pattern_edge_count = ctx.query.adj[pattern_idx]
-                                .iter()
-                                .filter(|&&(ni, _, neg, ei)| {
-                                    ni == mapped_pattern_idx
-                                        && !neg
-                                        && !ctx.query.edges[ei].ban_only
-                                })
-                                .count();
-                            if target_edge_count != pattern_edge_count {
-                                return false;
-                            }
+        if !node_negated && ctx.query.needs_reverse_scan(pattern_idx) {
+            // The pair is constrained when either end is induced; `reverse`
+            // already restricts the far end to the injective population.
+            let pattern_induced = ctx.query.node_morphism[pattern_idx].is_induced();
+            for raw_neighbor in ctx.index.neighbors(candidate_id) {
+                let mpi = self.reverse.get(raw_neighbor);
+                if mpi != UNMAPPED {
+                    if !pattern_induced && (ctx.query.induced_bits >> mpi) & 1 == 0 {
+                        continue;
+                    }
+                    let mapped_pattern_idx = mpi as usize;
+                    if pattern_idx < 64 && mapped_pattern_idx < 64 {
+                        let has_pattern_edge = (ctx.query.pattern_adj_bits[pattern_idx] >> mpi) & 1 != 0;
+                        if !has_pattern_edge {
+                            return false;
+                        }
+                        if ER::SLOT_COUNT == 1 {
+                            continue;
                         }
                     }
+                    let occupied = ctx.index.occupied_edge_slots(candidate_id, raw_neighbor);
+                    if occupied.is_empty() {
+                        return false;
+                    }
+                    let all_covered = occupied.iter().all(|&stored_slot| {
+                        let candidate_slot = if candidate_id <= raw_neighbor {
+                            stored_slot
+                        } else {
+                            ER::reverse_slot(stored_slot)
+                        };
+                        ctx.query.adj[pattern_idx]
+                            .iter()
+                            .any(|&(ni, s, negated, ei)| {
+                                ni == mapped_pattern_idx
+                                    && !negated
+                                    && !ctx.query.edges[ei].ban_only
+                                    && (ctx.query.edges[ei].any_slot || s == candidate_slot)
+                            })
+                    });
+                    if !all_covered {
+                        return false;
+                    }
+                    let target_edge_count = occupied.len();
+                    let pattern_edge_count = ctx.query.adj[pattern_idx]
+                        .iter()
+                        .filter(|&&(ni, _, neg, ei)| {
+                            ni == mapped_pattern_idx
+                                && !neg
+                                && !ctx.query.edges[ei].ban_only
+                        })
+                        .count();
+                    if target_edge_count != pattern_edge_count {
+                        return false;
+                    }
                 }
-                Morphism::EpiMono | Morphism::Mono | Morphism::Epi | Morphism::Homo => {}
             }
         }
 
         true
     }
 
-    pub(crate) fn lookahead_ok<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, from_depth: usize) -> bool {
+    pub(crate) fn lookahead_ok<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, from_depth: usize) -> bool {
         let search_order = &self.search_order;
         for d in (from_depth + 1)..search_order.len() {
             let pi = search_order[d];
@@ -1736,7 +1746,7 @@ impl<R: ReverseLookup> State<R> {
         true
     }
 
-    fn has_any_candidate<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, pattern_idx: usize) -> bool {
+    fn has_any_candidate<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, pattern_idx: usize) -> bool {
         let anchor_raw = match self.best_mapped_neighbor(ctx, pattern_idx) {
             Some(a) => *a,
             None => return true,
@@ -1790,7 +1800,7 @@ impl<R: ReverseLookup> State<R> {
         false
     }
 
-    pub(crate) fn best_mapped_neighbor<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, pattern_idx: usize) -> Option<id::N> {
+    pub(crate) fn best_mapped_neighbor<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, pattern_idx: usize) -> Option<id::N> {
         let mut best: Option<(id::N, u32)> = None;
         if pattern_idx < 64 && !ctx.query.node_has_predicates[pattern_idx] && !ctx.query.has_paths {
             let mut adj_bits = ctx.query.pattern_adj_bits[pattern_idx];
@@ -1832,8 +1842,8 @@ impl<R: ReverseLookup> State<R> {
         best.map(|(n, _)| n)
     }
 
-    pub(crate) fn check_surjective<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>) -> bool {
-        let target_count = ctx.target.nodes.len();
+    pub(crate) fn check_surjective<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>) -> bool {
+        let target_count = ctx.target.node_count();
         let mut covered = vec![false; ctx.index.reverse_len()];
         for &idx in &self.search_order {
             let mapped = self.mapping[idx];
@@ -1844,7 +1854,7 @@ impl<R: ReverseLookup> State<R> {
         covered.iter().filter(|&&c| c).count() == target_count
     }
 
-    pub(crate) fn get_covered_slots<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, pattern_src: usize, pattern_tgt: usize, src_target: id::N, tgt_target: id::N) -> smallvec::SmallVec<[ER::Slot; 3]> {
+    pub(crate) fn get_covered_slots<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, pattern_src: usize, pattern_tgt: usize, src_target: id::N, tgt_target: id::N) -> smallvec::SmallVec<[ER::Slot; 3]> {
         let source_is_lo = *src_target <= *tgt_target;
         ctx.query.adj[pattern_src].iter()
             .filter(|&&(ni, _, neg, ei)| {
@@ -1856,18 +1866,18 @@ impl<R: ReverseLookup> State<R> {
             .collect()
     }
 
-    pub(crate) fn has_uncovered_edge<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, src: id::N, tgt: id::N, covered: &[ER::Slot]) -> bool {
+    pub(crate) fn has_uncovered_edge<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, src: id::N, tgt: id::N, covered: &[ER::Slot]) -> bool {
         ctx.target.edges_between(src, tgt)
             .any(|(slot, _)| !covered.contains(&slot))
     }
 
-    pub(crate) fn uncovered_pred_matches<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, src: id::N, tgt: id::N, covered: &[ER::Slot], pred: &dyn Fn(&ER::Val) -> bool) -> bool {
+    pub(crate) fn uncovered_pred_matches<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, src: id::N, tgt: id::N, covered: &[ER::Slot], pred: &dyn Fn(&ER::Val) -> bool) -> bool {
         ctx.target.edges_between(src, tgt)
             .filter(|(slot, _)| !covered.contains(slot))
             .any(|(_, val)| pred(val))
     }
 
-    pub(crate) fn ban_shared_edges_satisfied<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, ban: &BanCluster) -> bool {
+    pub(crate) fn ban_shared_edges_satisfied<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, ban: &BanCluster) -> bool {
         for &edge_idx in &ban.edge_indices {
             let edge = &ctx.query.edges[edge_idx];
 
@@ -1975,9 +1985,9 @@ impl<R: ReverseLookup> State<R> {
         true
     }
 
-    pub(crate) fn ban_node_feasible<NV, ER: graph::Edge, I: Index<NV, ER>>(
+    pub(crate) fn ban_node_feasible<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
         &self,
-        ctx: &Ctx<'_, NV, ER, I>,
+        ctx: &Ctx<'_, NV, ER, G, I>,
         ban: &BanCluster,
         ban_mapping: &[Option<id::N>],
         depth: usize,
@@ -2081,7 +2091,7 @@ impl<R: ReverseLookup> State<R> {
         true
     }
 
-    pub(crate) fn build_match<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>) -> Match {
+    pub(crate) fn build_match<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>) -> Match {
         let mut pairs = Vec::with_capacity(self.search_order.len());
         for &idx in &self.search_order {
             let node = &ctx.query.nodes[idx];

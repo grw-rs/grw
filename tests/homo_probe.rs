@@ -1,4 +1,5 @@
 use grw::search::{Search, Seq, RevCsr};
+use grw::Graph as _;
 use grw::graph::dsl::LocalId;
 
 type ER = grw::edge::Undir<()>;
@@ -10,7 +11,7 @@ type ER = grw::edge::Undir<()>;
 fn probe_mixed_homo_mono_symmetry() {
     // target: star — c(0) joined to a(1), b(2); plus d(3) on c so the
     // mono leaf has somewhere to go: edges c-a, c-b, c-d
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1),
         n(0) ^ N(2),
         n(0) ^ N(3)
@@ -48,7 +49,7 @@ fn probe_mixed_homo_mono_symmetry() {
 #[test]
 fn probe_mono_two_paths_shared_interior() {
     // target: a(0)-x(1), x-b(2), x-c(3): both a..b and b..c must route via x
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(1) ^ N(3)
@@ -83,10 +84,10 @@ fn probe_mono_two_paths_shared_interior() {
 // Graph model self-loop policy + engine behavior.
 #[test]
 fn probe_homo_adjacent_merge_selfloop() {
-    let selfloop = grw::graph![<(), ER>; N(0) ^ n(0)];
+    let selfloop = grw::mgraph![<(), ER>; N(0) ^ n(0)];
     println!("PROBE3 self-loop build: {:?}", selfloop.as_ref().map(|g| (g.node_count(), g.edge_count())).map_err(|e| format!("{e}")));
 
-    let g = grw::graph![<(), ER>; N(0) ^ N(1)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
     let t = g.index(RevCsr);
     let p = grw::search![<(), ER>;
         get(Morphism::Homo) { N(0) ^ N(1) }
@@ -105,7 +106,7 @@ fn probe_homo_adjacent_merge_selfloop() {
 // under swapping homo nodes 0<->1.
 #[test]
 fn probe_mixed_homo_mono_order_flipped() {
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1),
         n(0) ^ N(2)
     ].unwrap();
@@ -136,7 +137,7 @@ fn probe_mixed_homo_mono_order_flipped() {
 // If interior disjointness is morphism-driven, Homo must find matches.
 #[test]
 fn probe_homo_two_paths_shared_interior() {
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(1) ^ N(3)
@@ -157,7 +158,7 @@ fn probe_homo_two_paths_shared_interior() {
 // now be possible (edge preservation satisfied by the loop).
 #[test]
 fn probe_homo_adjacent_merge_with_selfloop() {
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ n(0),
         n(0) ^ N(1)
     ].unwrap();
@@ -178,7 +179,7 @@ fn probe_homo_adjacent_merge_with_selfloop() {
 fn probe_epi_path_interior_coverage() {
     // target: a(0)-x(1)-b(2): explicit endpoints cover a,b; interior x
     // only via the path.
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1),
         n(1) ^ N(2)
     ].unwrap();
@@ -196,7 +197,7 @@ fn probe_epi_path_interior_coverage() {
 // legal match, but any_injective makes precompute require target >= 3.
 #[test]
 fn probe_pigeonhole_counts_homo_nodes() {
-    let g = grw::graph![<(), ER>; N(0) ^ N(1)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
     let t = g.index(RevCsr);
     let p = grw::search![<(), ER>;
         get(Morphism::Mono) { N(0) },
@@ -211,7 +212,7 @@ fn probe_pigeonhole_counts_homo_nodes() {
 // PROBE 1c: order-flipped mixed query, target padded past the pigeonhole.
 #[test]
 fn probe_mixed_order_flipped_padded() {
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1),
         n(0) ^ N(2),
         N(3), N(4), N(5)

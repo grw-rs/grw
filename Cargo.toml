@@ -9,6 +9,10 @@ keywords = ["graph", "isomorphism", "morphism", "pattern-matching"]
 categories = ["algorithms", "data-structures"]
 include = ["src/**/*", "LICENSE-*", "README.md"]
 
+[[example]]
+name = "graph_perf"
+path = "examples/graph_perf.rs"
+
 [features]
 default = ["id32"]
 id32 = []

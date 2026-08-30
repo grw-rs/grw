@@ -20,7 +20,29 @@ pub struct Header {
     pub ev_type: String,
 }
 
-impl<NV, E: Edge> super::Graph<NV, E> {
+/// Writes any `Graph` read surface in the on-disk format.
+///
+/// The format serialises `MGraph`'s internal stores, which a trait-generic
+/// writer cannot observe, so the graph is first materialised through
+/// `MGraph::from_graph`. Node ids survive that step; edge ids do not, and edge
+/// tombstones are compacted away — output is therefore byte-identical to
+/// `MGraph::save` only for sources whose edge store already has no gaps.
+/// `MGraph::save` keeps the direct path so previously written files stay
+/// byte-reproducible.
+pub fn save_graph<NV, E, G>(g: &G, path: &Path) -> io::Result<()>
+where
+    NV: Clone + ::serde::Serialize + layout::Val,
+    E: Edge,
+    E::Slot: ::serde::Serialize,
+    E::Val: Clone + ::serde::Serialize + layout::Val,
+    G: super::Graph<NV, E>,
+{
+    super::MGraph::<NV, E>::from_graph(g).save(path)
+}
+
+impl<NV, E: Edge> super::MGraph<NV, E> {
+    /// Serialises this graph's own stores verbatim, tombstones and free lists
+    /// included. `save_graph` is the trait-generic counterpart.
     pub fn save(&self, path: &Path) -> io::Result<()>
     where
         NV: ::serde::Serialize + layout::Val,
@@ -149,7 +171,7 @@ pub fn read_header(path: &Path) -> io::Result<Header> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{self, Graph};
+    use crate::graph::{self, MGraph};
     use crate::edge;
 
     fn tmp_path(name: &str) -> std::path::PathBuf {
@@ -161,12 +183,12 @@ mod tests {
     #[test]
     fn round_trip_undir0() {
         use edge::undir::E::U;
-        let g: graph::Undir0 = vec![U(0, 1), U(1, 2), U(2, 3), U(3, 0)]
+        let g: graph::MUndir0 = vec![U(0, 1), U(1, 2), U(2, 3), U(3, 0)]
             .try_into()
             .unwrap();
         let path = tmp_path("rt_undir0.grw");
         g.save(&path).unwrap();
-        let g2: graph::Undir0 = Graph::load(&path).unwrap();
+        let g2: graph::MUndir0 = MGraph::load(&path).unwrap();
         assert_eq!(g.node_count(), g2.node_count());
         assert_eq!(g.edge_count(), g2.edge_count());
     }
@@ -174,10 +196,10 @@ mod tests {
     #[test]
     fn round_trip_dir0() {
         use edge::dir::E::D;
-        let g: graph::Dir0 = vec![D(0, 1), D(1, 2), D(2, 0)].try_into().unwrap();
+        let g: graph::MDir0 = vec![D(0, 1), D(1, 2), D(2, 0)].try_into().unwrap();
         let path = tmp_path("rt_dir0.grw");
         g.save(&path).unwrap();
-        let g2: graph::Dir0 = Graph::load(&path).unwrap();
+        let g2: graph::MDir0 = MGraph::load(&path).unwrap();
         assert_eq!(g.node_count(), g2.node_count());
         assert_eq!(g.edge_count(), g2.edge_count());
     }
@@ -185,10 +207,10 @@ mod tests {
     #[test]
     fn round_trip_anydir0() {
         use edge::anydir::E::{D, U};
-        let g: graph::Anydir0 = vec![U(0, 1), D(1, 2), U(2, 3)].try_into().unwrap();
+        let g: graph::MAnydir0 = vec![U(0, 1), D(1, 2), U(2, 3)].try_into().unwrap();
         let path = tmp_path("rt_anydir0.grw");
         g.save(&path).unwrap();
-        let g2: graph::Anydir0 = Graph::load(&path).unwrap();
+        let g2: graph::MAnydir0 = MGraph::load(&path).unwrap();
         assert_eq!(g.node_count(), g2.node_count());
         assert_eq!(g.edge_count(), g2.edge_count());
     }
@@ -196,7 +218,7 @@ mod tests {
     #[test]
     fn round_trip_valued() {
         use edge::undir::E::U;
-        let g: graph::Undir<u32, u32> = (
+        let g: graph::MUndir<u32, u32> = (
             vec![(0, 10u32), (1, 20), (2, 30)],
             vec![(U(0, 1), 100u32), (U(1, 2), 200)],
         )
@@ -204,7 +226,7 @@ mod tests {
             .unwrap();
         let path = tmp_path("rt_valued.grw");
         g.save(&path).unwrap();
-        let g2: graph::Undir<u32, u32> = Graph::load(&path).unwrap();
+        let g2: graph::MUndir<u32, u32> = MGraph::load(&path).unwrap();
         assert_eq!(g.node_count(), g2.node_count());
         assert_eq!(g.edge_count(), g2.edge_count());
         assert_eq!(g.get(0u32), g2.get(0u32));
@@ -216,7 +238,7 @@ mod tests {
     fn header_validation_bad_magic() {
         let path = tmp_path("rt_bad_magic.grw");
         std::fs::write(&path, b"BADMxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx").unwrap();
-        let Err(err) = Graph::<(), edge::Undir<()>>::load(&path) else {
+        let Err(err) = MGraph::<(), edge::Undir<()>>::load(&path) else {
             panic!("expected error");
         };
         let msg = err.to_string();
@@ -230,7 +252,7 @@ mod tests {
         data[..4].copy_from_slice(b"GRW\0");
         data[4..6].copy_from_slice(&99u16.to_le_bytes());
         std::fs::write(&path, &data).unwrap();
-        let Err(err) = Graph::<(), edge::Undir<()>>::load(&path) else {
+        let Err(err) = MGraph::<(), edge::Undir<()>>::load(&path) else {
             panic!("expected error");
         };
         let msg = err.to_string();
@@ -240,10 +262,10 @@ mod tests {
     #[test]
     fn edge_kind_mismatch() {
         use edge::undir::E::U;
-        let g: graph::Undir0 = vec![U(0, 1)].try_into().unwrap();
+        let g: graph::MUndir0 = vec![U(0, 1)].try_into().unwrap();
         let path = tmp_path("rt_edge_kind_mismatch.grw");
         g.save(&path).unwrap();
-        let Err(err) = Graph::<(), edge::Dir<()>>::load(&path) else {
+        let Err(err) = MGraph::<(), edge::Dir<()>>::load(&path) else {
             panic!("expected error");
         };
         let msg = err.to_string();
@@ -253,7 +275,7 @@ mod tests {
     #[test]
     fn layout_mismatch() {
         use edge::undir::E::U;
-        let g: graph::Undir<u32, u32> = (
+        let g: graph::MUndir<u32, u32> = (
             vec![(0, 10u32), (1, 20)],
             vec![(U(0, 1), 100u32)],
         )
@@ -261,7 +283,7 @@ mod tests {
             .unwrap();
         let path = tmp_path("rt_layout_mismatch.grw");
         g.save(&path).unwrap();
-        let Err(err) = Graph::<i64, edge::Undir<i64>>::load(&path) else {
+        let Err(err) = MGraph::<i64, edge::Undir<i64>>::load(&path) else {
             panic!("expected error");
         };
         let msg = err.to_string();
@@ -271,7 +293,7 @@ mod tests {
     #[test]
     fn read_header_round_trip() {
         use edge::undir::E::U;
-        let g: graph::Undir<u32, u32> = (
+        let g: graph::MUndir<u32, u32> = (
             vec![(0, 10u32), (1, 20)],
             vec![(U(0, 1), 100u32)],
         )

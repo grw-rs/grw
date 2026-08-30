@@ -69,6 +69,8 @@ pub struct Query<NV, ER: graph::Edge> {
     pub(crate) is_injective: Vec<bool>,
     pub(crate) has_non_injective: bool,
     pub(crate) pattern_adj_bits: Vec<u64>,
+    pub(crate) induced_bits: u64,
+    pub(crate) has_mixed_induced: bool,
     pub(crate) has_predicates: bool,
     pub(crate) node_has_predicates: Vec<bool>,
     pub(crate) node_has_neg_adj: Vec<bool>,
@@ -98,6 +100,19 @@ impl<NV, ER: graph::Edge> Query<NV, ER> {
 
     pub fn has_translated_nodes(&self) -> bool {
         !self.translated_indices.is_empty()
+    }
+
+    /// Whether binding `pattern_idx` has to scan the candidate's target
+    /// neighbourhood against the injective bindings already in `reverse`.
+    ///
+    /// An induced node always does — it tolerates no unmirrored target edge.
+    /// In a mixed query an injective *non-induced* node does too, because
+    /// some already-bound induced node may be sitting next to the candidate
+    /// and induced-ness is a property of the pair, not of arrival order.
+    #[inline(always)]
+    pub(crate) fn needs_reverse_scan(&self, pattern_idx: usize) -> bool {
+        self.node_morphism[pattern_idx].is_induced()
+            || (self.has_mixed_induced && self.is_injective[pattern_idx])
     }
 }
 

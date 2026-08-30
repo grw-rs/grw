@@ -1,6 +1,6 @@
-# `graph!` — Construction
+# `mgraph!` — Construction
 
-The `graph!` macro constructs a graph from a declarative description of nodes and edges.
+The `mgraph!` macro constructs a graph from a declarative description of nodes and edges.
 
 ## DSL Primitives
 
@@ -31,10 +31,10 @@ This is because `N(0) ^ N(1)` returns node 0 (with an edge to 1 attached), so th
 ### Path (grouping)
 
 ```rust
-use grw::graph::{self, Graph, edge};
+use grw::graph::{self, MGraph, edge};
 
 // path: 0 — 1 — 2
-let g: Graph<(), edge::Undir<()>> = graph![
+let g: MGraph<(), edge::Undir<()>> = mgraph![
     N(0) ^ (N(1) ^ N(2))
 ].unwrap();
 ```
@@ -44,7 +44,7 @@ let g: Graph<(), edge::Undir<()>> = graph![
 
 ```rust
 // triangle: chain + n() closes the cycle
-let g: Graph<(), edge::Undir<()>> = graph![
+let g: MGraph<(), edge::Undir<()>> = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 ```
@@ -54,7 +54,7 @@ let g: Graph<(), edge::Undir<()>> = graph![
 
 ```rust
 // star: flat chaining fans out from one node
-let g: Graph<(), edge::Undir<()>> = graph![
+let g: MGraph<(), edge::Undir<()>> = mgraph![
     N(0) ^ N(1)
          ^ N(2)
          ^ N(3)
@@ -67,17 +67,17 @@ let g: Graph<(), edge::Undir<()>> = graph![
 
 ```rust
 // node values
-let g: Graph<&str, edge::Undir<()>> = graph![
+let g: MGraph<&str, edge::Undir<()>> = mgraph![
     N(0).val("alice") ^ (N(1).val("bob") ^ N(2).val("carol"))
 ].unwrap();
 
 // edge values — & E().val(...) before direction operator
-let g: Graph<(), edge::Undir<f64>> = graph![
+let g: MGraph<(), edge::Undir<f64>> = mgraph![
     N(0) & E().val(1.5) ^ (N(1) & E().val(2.0) ^ N(2))
 ].unwrap();
 
 // both
-let g: Graph<&str, edge::Undir<u32>> = graph![
+let g: MGraph<&str, edge::Undir<u32>> = mgraph![
     N(0).val("a") & E().val(10) ^ N(1).val("b")
 ].unwrap();
 ```
@@ -86,14 +86,14 @@ let g: Graph<&str, edge::Undir<u32>> = graph![
 
 ```rust
 // ids assigned automatically
-let g: Graph<(), edge::Undir<()>> = graph![N_() ^ N_() ^ N_()].unwrap();
+let g: MGraph<(), edge::Undir<()>> = mgraph![N_() ^ N_() ^ N_()].unwrap();
 ```
 
 ## Directed Graphs
 
 ```rust
 // path: 0 → 1 → 2
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) >> (N(1) >> N(2))
 ].unwrap();
 ```
@@ -101,7 +101,7 @@ let g: Graph<(), edge::Dir<()>> = graph![
 
 ```rust
 // fan-out: flat chaining from one node
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) >> N(1)
          >> N(2)
          >> N(3)
@@ -111,7 +111,7 @@ let g: Graph<(), edge::Dir<()>> = graph![
 
 ```rust
 // bidirectional: n() references existing nodes
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) >> N(1),
     n(1) >> n(0),
 ].unwrap();
@@ -120,7 +120,7 @@ let g: Graph<(), edge::Dir<()>> = graph![
 
 ```rust
 // incoming edges with <<
-let g: Graph<(), edge::Dir<()>> = graph![
+let g: MGraph<(), edge::Dir<()>> = mgraph![
     N(0) << N(1),   // edge from 1 to 0
 ].unwrap();
 ```
@@ -130,7 +130,7 @@ let g: Graph<(), edge::Dir<()>> = graph![
 Mix undirected and directed edges in one graph:
 
 ```rust
-let g: Graph<(), edge::Anydir<()>> = graph![
+let g: MGraph<(), edge::Anydir<()>> = mgraph![
     N(0) ^ (N(1) >> N(2)),  // 0 — 1 → 2
     N(3) << n(2),            // 2 → 3
 ].unwrap();
@@ -139,7 +139,7 @@ let g: Graph<(), edge::Anydir<()>> = graph![
 
 ```rust
 // all three edge types between one pair
-let g: Graph<(), edge::Anydir<()>> = graph![
+let g: MGraph<(), edge::Anydir<()>> = mgraph![
     N(0) ^ N(1),         // undirected
     n(0) >> n(1),        // directed 0 → 1
     n(1) >> n(0),        // directed 1 → 0
@@ -152,7 +152,7 @@ let g: Graph<(), edge::Anydir<()>> = graph![
 When the type can't be inferred, use the turbofish form:
 
 ```rust
-let g = graph![<(), grw::graph::edge::Undir<()>>; N(0) ^ N(1)].unwrap();
+let g = mgraph![<(), grw::graph::edge::Undir<()>>; N(0) ^ N(1)].unwrap();
 ```
 
 ## Multiple Fragments
@@ -161,7 +161,7 @@ Use commas to separate disconnected components or back-references:
 
 ```rust
 // two separate edges, then connect them
-let g: Graph<(), edge::Undir<()>> = graph![
+let g: MGraph<(), edge::Undir<()>> = mgraph![
     N(0) ^ N(1),
     N(2) ^ N(3),
     n(0) ^ n(2),

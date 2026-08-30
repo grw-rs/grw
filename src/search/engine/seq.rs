@@ -8,42 +8,42 @@ use super::{Match, State, Ctx, CsrAdj, Index, ReverseLookup, feature};
 pub struct Seq;
 
 impl Seq {
-    pub fn search<'g, NV: 'g, ER: graph::Edge + 'g>(
+    pub fn search<'g, NV: 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>>(
         query: &'g Query<NV, ER>,
-        target: &'g super::Graph<'g, NV, ER>,
-    ) -> Iter<'g, NV, ER> {
+        target: &'g super::Graph<'g, NV, ER, G>,
+    ) -> Iter<'g, NV, ER, G> {
         Iter::new(query, target)
     }
 
-    pub fn search_watched<'g, NV: 'g, ER: graph::Edge + 'g, W: crate::watch::Watcher<NV, ER>>(
+    pub fn search_watched<'g, NV: 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>, W: crate::watch::Watcher<NV, ER>>(
         query: &'g Query<NV, ER>,
-        target: &'g super::Graph<'g, NV, ER>,
+        target: &'g super::Graph<'g, NV, ER, G>,
         watcher: W,
-    ) -> WatchedIter<'g, NV, ER, W> {
+    ) -> WatchedIter<'g, NV, ER, G, W> {
         let ctx = Ctx { query, index: target, target: target.graph };
         let state = State::new(query, target.graph, target, Vec::new());
         WatchedIter { ctx, state, watcher }
     }
 
-    pub fn search_bound<'g, NV: 'g, ER: graph::Edge + 'g>(
+    pub fn search_bound<'g, NV: 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>>(
         query: &'g Query<NV, ER>,
-        target: &'g super::Graph<'g, NV, ER>,
+        target: &'g super::Graph<'g, NV, ER, G>,
         bindings: Vec<Option<id::N>>,
-    ) -> Iter<'g, NV, ER> {
+    ) -> Iter<'g, NV, ER, G> {
         Iter::new_bound(query, target, bindings)
     }
 }
 
-pub struct Iter<'g, NV, ER: graph::Edge> {
-    ctx: Ctx<'g, NV, ER, super::Graph<'g, NV, ER>>,
+pub struct Iter<'g, NV, ER: graph::Edge, G> {
+    ctx: Ctx<'g, NV, ER, G, super::Graph<'g, NV, ER, G>>,
     state: State<Vec<u32>>,
     watcher: crate::watch::Silent,
 }
 
-impl<'g, NV, ER: graph::Edge> Iter<'g, NV, ER> {
+impl<'g, NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Iter<'g, NV, ER, G> {
     fn new(
         query: &'g Query<NV, ER>,
-        target: &'g super::Graph<'g, NV, ER>,
+        target: &'g super::Graph<'g, NV, ER, G>,
     ) -> Self {
         let ctx = Ctx { query, index: target, target: target.graph };
         let state = State::new(query, target.graph, target, Vec::new());
@@ -52,7 +52,7 @@ impl<'g, NV, ER: graph::Edge> Iter<'g, NV, ER> {
 
     fn new_bound(
         query: &'g Query<NV, ER>,
-        target: &'g super::Graph<'g, NV, ER>,
+        target: &'g super::Graph<'g, NV, ER, G>,
         bindings: Vec<Option<id::N>>,
     ) -> Self {
         let ctx = Ctx { query, index: target, target: target.graph };
@@ -61,25 +61,25 @@ impl<'g, NV, ER: graph::Edge> Iter<'g, NV, ER> {
     }
 }
 
-pub struct IntoIter<'g, NV, ER: graph::Edge> {
+pub struct IntoIter<'g, NV, ER: graph::Edge, G> {
     query: Query<NV, ER>,
-    indexed: super::Graph<'g, NV, ER>,
+    indexed: super::Graph<'g, NV, ER, G>,
     state: State<Vec<u32>>,
     watcher: crate::watch::Silent,
 }
 
-impl<'g, NV: Clone, ER: graph::Edge> IntoIter<'g, NV, ER>
+impl<'g, NV: Clone, ER: graph::Edge, G: graph::Graph<NV, ER>> IntoIter<'g, NV, ER, G>
 where
     ER::Val: Clone,
 {
-    pub(crate) fn from_session(session: super::Session<'g, NV, ER>) -> Self {
+    pub(crate) fn from_session(session: super::Session<'g, NV, ER, G>) -> Self {
         let state = State::new(&session.query, session.indexed.graph, &session.indexed, session.bindings);
         IntoIter { query: session.query, indexed: session.indexed, state, watcher: crate::watch::Silent }
     }
 }
 
 pub struct OwnedIter<NV, ER: graph::Edge> {
-    source_graph: graph::Graph<NV, ER>,
+    source_graph: graph::MGraph<NV, ER>,
     query: Query<NV, ER>,
     csr: CsrAdj<NV, ER>,
     state: State<Vec<u32>>,
@@ -91,7 +91,7 @@ where
     ER::Val: Clone,
 {
     pub fn from_graph_and_search(
-        source_graph: graph::Graph<NV, ER>,
+        source_graph: graph::MGraph<NV, ER>,
         search: crate::search::query::Search<NV, ER>,
     ) -> Result<Self, crate::search::error::Search> {
         match search {
@@ -105,20 +105,20 @@ where
     }
 }
 
-pub struct WatchedIter<'g, NV, ER: graph::Edge, W: crate::watch::Watcher<NV, ER>> {
-    ctx: Ctx<'g, NV, ER, super::Graph<'g, NV, ER>>,
+pub struct WatchedIter<'g, NV, ER: graph::Edge, G, W: crate::watch::Watcher<NV, ER>> {
+    ctx: Ctx<'g, NV, ER, G, super::Graph<'g, NV, ER, G>>,
     state: State<Vec<u32>>,
     watcher: W,
 }
 
-impl<'g, NV, ER: graph::Edge, W: crate::watch::Watcher<NV, ER>> WatchedIter<'g, NV, ER, W> {
+impl<'g, NV, ER: graph::Edge, G, W: crate::watch::Watcher<NV, ER>> WatchedIter<'g, NV, ER, G, W> {
     pub fn into_watcher(self) -> W {
         self.watcher
     }
 }
 
 impl<R: ReverseLookup> State<R> {
-    pub(crate) fn initial_candidates<NV, ER: graph::Edge, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>) -> Vec<id::N> {
+    pub(crate) fn initial_candidates<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>) -> Vec<id::N> {
         let depth0_idx = self.search_order[0];
         let morphism = ctx.query.node_morphism[depth0_idx];
         let exact_iso = !ctx.query.has_non_injective;
@@ -187,14 +187,14 @@ impl<R: ReverseLookup> State<R> {
         result
     }
 
-    fn candidates_for_into<NV, ER: graph::Edge, EP: feature::Edge, I: Index<NV, ER>>(&mut self, ctx: &Ctx<'_, NV, ER, I>, depth: usize, out: &mut Vec<id::N>) {
+    fn candidates_for_into<NV, ER: graph::Edge, EP: feature::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&mut self, ctx: &Ctx<'_, NV, ER, G, I>, depth: usize, out: &mut Vec<id::N>) {
         out.clear();
         let pattern_idx = self.search_order[depth];
 
         if let Some(&Some(target_n)) = self.bindings.get(pattern_idx) {
             if (*target_n as usize) >= ctx.index.node_vals_len()
                 || ctx.index.degree(*target_n) == 0
-                    && !ctx.target.nodes.has(target_n)
+                    && !ctx.target.has_node(target_n)
             {
                 return;
             }
@@ -340,7 +340,7 @@ impl<R: ReverseLookup> State<R> {
         out.sort_unstable();
     }
 
-    fn check_ban_clusters<NV, ER: graph::Edge, I: Index<NV, ER>, W: crate::watch::Watcher<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, watcher: &mut W) -> bool {
+    fn check_ban_clusters<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>, W: crate::watch::Watcher<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, watcher: &mut W) -> bool {
         for (idx, ban) in ctx.query.ban_clusters.iter().enumerate() {
             if self.ban_cluster_satisfiable(ctx, ban) {
                 if W::ACTIVE {
@@ -352,9 +352,9 @@ impl<R: ReverseLookup> State<R> {
         true
     }
 
-    fn ban_cluster_satisfiable<NV, ER: graph::Edge, I: Index<NV, ER>>(
+    fn ban_cluster_satisfiable<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
         &self,
-        ctx: &Ctx<'_, NV, ER, I>,
+        ctx: &Ctx<'_, NV, ER, G, I>,
         ban: &super::super::query::BanCluster,
     ) -> bool {
         if !self.ban_shared_edges_satisfied(ctx, ban) {
@@ -367,9 +367,9 @@ impl<R: ReverseLookup> State<R> {
         self.ban_backtrack(ctx, ban, &mut ban_mapping, 0)
     }
 
-    fn ban_backtrack<NV, ER: graph::Edge, I: Index<NV, ER>>(
+    fn ban_backtrack<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
         &self,
-        ctx: &Ctx<'_, NV, ER, I>,
+        ctx: &Ctx<'_, NV, ER, G, I>,
         ban: &super::super::query::BanCluster,
         ban_mapping: &mut Vec<Option<id::N>>,
         depth: usize,
@@ -416,7 +416,7 @@ impl<R: ReverseLookup> State<R> {
     }
 
     #[inline(always)]
-    fn count_leaf_fused<NV, ER: graph::Edge, EP: feature::Edge, I: Index<NV, ER>, W: crate::watch::Watcher<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, I>, leaf_depth: usize, watcher: &mut W) -> Option<usize> {
+    fn count_leaf_fused<NV, ER: graph::Edge, EP: feature::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>, W: crate::watch::Watcher<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, leaf_depth: usize, watcher: &mut W) -> Option<usize> {
         let leaf_pi = self.search_order[leaf_depth];
 
         if let Some(&Some(_)) = self.bindings.get(leaf_pi) {
@@ -430,6 +430,7 @@ impl<R: ReverseLookup> State<R> {
         let exact_iso = !ctx.query.has_non_injective;
         let pattern_degree = if exact_iso { ctx.query.pattern_degrees[leaf_pi] } else { ctx.query.effective_degrees[leaf_pi] };
         let is_injective = ctx.query.is_injective[leaf_pi];
+        let needs_reverse_scan = ctx.query.needs_reverse_scan(leaf_pi);
         let can_fast = ER::SLOT_COUNT == 1 && !ctx.query.node_has_predicates[leaf_pi] && leaf_pi < 64;
 
         let mut other_mapped = [0u32; 63];
@@ -489,7 +490,7 @@ impl<R: ReverseLookup> State<R> {
                 }
                 if !ok { continue; }
 
-                if morphism == Morphism::Iso || morphism == Morphism::SubIso {
+                if needs_reverse_scan {
                     if !self.is_feasible_reverse_only(ctx, leaf_pi, raw) {
                         continue;
                     }
@@ -529,7 +530,7 @@ impl<R: ReverseLookup> State<R> {
                     }
                     if !ok { continue; }
                 }
-                if morphism == Morphism::Iso || morphism == Morphism::SubIso {
+                if needs_reverse_scan {
                     if ER::SLOT_COUNT > 1 {
                         if !self.is_feasible(ctx, leaf_pi, id::N(raw as Id), watcher) {
                             continue;
@@ -556,9 +557,10 @@ impl<R: ReverseLookup> State<R> {
         BP: feature::Ban,
         EM: feature::Emit,
         IJ: feature::Inj,
+        G: graph::Graph<NV, ER>,
         I: Index<NV, ER>,
         W: crate::watch::Watcher<NV, ER>,
-    >(&mut self, ctx: &Ctx<'a, NV, ER, I>, watcher: &mut W) -> (Option<Match>, usize) {
+    >(&mut self, ctx: &Ctx<'a, NV, ER, G, I>, watcher: &mut W) -> (Option<Match>, usize) {
         if self.exhausted {
             return (None, 0);
         }
@@ -623,8 +625,7 @@ impl<R: ReverseLookup> State<R> {
             let pattern_idx = self.search_order[depth];
 
             if (self.forward_verified_depths >> depth) & 1 == 1 {
-                let morphism = ctx.query.node_morphism[pattern_idx];
-                if morphism == Morphism::Iso || morphism == Morphism::SubIso {
+                if ctx.query.needs_reverse_scan(pattern_idx) {
                     if ER::SLOT_COUNT > 1 {
                         if !self.is_feasible(ctx, pattern_idx, candidate, watcher) {
                             continue;
@@ -762,16 +763,15 @@ impl<R: ReverseLookup> State<R> {
                 && !BP::ACTIVE
                 && !ctx.query.has_surjective
             {
-                if let Some(leaf_count) = self.count_leaf_fused::<NV, ER, EP, I, W>(ctx, depth + 1, watcher) {
+                if let Some(leaf_count) = self.count_leaf_fused::<NV, ER, EP, G, I, W>(ctx, depth + 1, watcher) {
                     total += leaf_count;
                 } else {
                     let mut buf = self.candidate_pool.pop().unwrap_or_default();
-                    self.candidates_for_into::<NV, ER, EP, I>(ctx, depth + 1, &mut buf);
+                    self.candidates_for_into::<NV, ER, EP, G, I>(ctx, depth + 1, &mut buf);
                     let leaf_pi = self.search_order[depth + 1];
                     let fv = (self.forward_verified_depths >> (depth + 1)) & 1 == 1;
                     if fv {
-                        let m = ctx.query.node_morphism[leaf_pi];
-                        if m == Morphism::Iso || m == Morphism::SubIso {
+                        if ctx.query.needs_reverse_scan(leaf_pi) {
                             if ER::SLOT_COUNT > 1 {
                                 for &c in &buf {
                                     if self.is_feasible(ctx, leaf_pi, c, watcher) {
@@ -808,7 +808,7 @@ impl<R: ReverseLookup> State<R> {
             }
 
             let mut buf = self.candidate_pool.pop().unwrap_or_default();
-            self.candidates_for_into::<NV, ER, EP, I>(ctx, depth + 1, &mut buf);
+            self.candidates_for_into::<NV, ER, EP, G, I>(ctx, depth + 1, &mut buf);
 
             self.stack.push(super::StackFrame {
                 depth: depth + 1,
@@ -826,19 +826,19 @@ macro_rules! dispatch_advance {
             $ctx.query.has_ban_clusters,
             $ctx.query.has_non_injective,
         ) {
-            (false, false, false) => $state.advance::<_, _, feature::PlainEdges, feature::NoBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
-            (false, true, false)  => $state.advance::<_, _, feature::PlainEdges, feature::WithBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
-            (true, false, false)  => $state.advance::<_, _, feature::PredEdges, feature::NoBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
-            (true, true, false)   => $state.advance::<_, _, feature::PredEdges, feature::WithBans, $emit, feature::AllInjective, _, _>($ctx, $watcher),
-            (false, false, true) => $state.advance::<_, _, feature::PlainEdges, feature::NoBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
-            (false, true, true)  => $state.advance::<_, _, feature::PlainEdges, feature::WithBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
-            (true, false, true)  => $state.advance::<_, _, feature::PredEdges, feature::NoBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
-            (true, true, true)   => $state.advance::<_, _, feature::PredEdges, feature::WithBans, $emit, feature::MixedMorphisms, _, _>($ctx, $watcher),
+            (false, false, false) => $state.advance::<_, _, feature::PlainEdges, feature::NoBans, $emit, feature::AllInjective, _, _, _>($ctx, $watcher),
+            (false, true, false)  => $state.advance::<_, _, feature::PlainEdges, feature::WithBans, $emit, feature::AllInjective, _, _, _>($ctx, $watcher),
+            (true, false, false)  => $state.advance::<_, _, feature::PredEdges, feature::NoBans, $emit, feature::AllInjective, _, _, _>($ctx, $watcher),
+            (true, true, false)   => $state.advance::<_, _, feature::PredEdges, feature::WithBans, $emit, feature::AllInjective, _, _, _>($ctx, $watcher),
+            (false, false, true) => $state.advance::<_, _, feature::PlainEdges, feature::NoBans, $emit, feature::MixedMorphisms, _, _, _>($ctx, $watcher),
+            (false, true, true)  => $state.advance::<_, _, feature::PlainEdges, feature::WithBans, $emit, feature::MixedMorphisms, _, _, _>($ctx, $watcher),
+            (true, false, true)  => $state.advance::<_, _, feature::PredEdges, feature::NoBans, $emit, feature::MixedMorphisms, _, _, _>($ctx, $watcher),
+            (true, true, true)   => $state.advance::<_, _, feature::PredEdges, feature::WithBans, $emit, feature::MixedMorphisms, _, _, _>($ctx, $watcher),
         }
     };
 }
 
-impl<'g, NV, ER: graph::Edge> Iterator for Iter<'g, NV, ER> {
+impl<'g, NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Iterator for Iter<'g, NV, ER, G> {
     type Item = Match;
 
     fn next(&mut self) -> Option<Match> {
@@ -850,7 +850,7 @@ impl<'g, NV, ER: graph::Edge> Iterator for Iter<'g, NV, ER> {
     }
 }
 
-impl<'g, NV, ER: graph::Edge> Iterator for IntoIter<'g, NV, ER> {
+impl<'g, NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Iterator for IntoIter<'g, NV, ER, G> {
     type Item = Match;
 
     fn next(&mut self) -> Option<Match> {
@@ -894,7 +894,7 @@ impl<NV: 'static, ER: graph::Edge + 'static> Iterator for OwnedIter<NV, ER> {
     }
 }
 
-impl<'g, NV, ER: graph::Edge, W: crate::watch::Watcher<NV, ER>> Iterator for WatchedIter<'g, NV, ER, W> {
+impl<'g, NV, ER: graph::Edge, G: graph::Graph<NV, ER>, W: crate::watch::Watcher<NV, ER>> Iterator for WatchedIter<'g, NV, ER, G, W> {
     type Item = Match;
 
     fn next(&mut self) -> Option<Match> {
@@ -906,17 +906,17 @@ impl<R: ReverseLookup> State<R> {
     /// Count all remaining matches without materializing a single `Match` —
     /// dispatches with `feature::Count`, which skips `build_match` and fuses
     /// leaf counting. One call runs the search to exhaustion.
-    pub(crate) fn stream_count<'a, NV, ER: graph::Edge, I: Index<NV, ER>>(
+    pub(crate) fn stream_count<'a, NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
         &mut self,
-        ctx: &Ctx<'a, NV, ER, I>,
+        ctx: &Ctx<'a, NV, ER, G, I>,
     ) -> usize {
         let mut watcher = crate::watch::Silent;
         dispatch_advance!(self, ctx, feature::Count, &mut watcher).1
     }
 
-    pub(crate) fn stream_fold<'a, NV, ER: graph::Edge, I: Index<NV, ER>, A>(
+    pub(crate) fn stream_fold<'a, NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>, A>(
         &mut self,
-        ctx: &Ctx<'a, NV, ER, I>,
+        ctx: &Ctx<'a, NV, ER, G, I>,
         mut acc: A,
         mut f: impl FnMut(A, Match) -> (A, bool),
     ) -> A {

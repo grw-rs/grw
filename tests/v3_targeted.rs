@@ -1,6 +1,6 @@
 use grw::{
     Id, NR, id,
-    graph::{Undir0, edge},
+    graph::{MUndir0, edge},
     modify::{self, N, N_, X, e, n, x},
 };
 
@@ -31,9 +31,9 @@ fn degree_histogram(
     result
 }
 
-fn roundtrip(g: &Undir0) {
+fn roundtrip(g: &MUndir0) {
     let (ns, es) = g.to_vecs();
-    let rebuilt: Undir0 = (ns, es).try_into().unwrap();
+    let rebuilt: MUndir0 = (ns, es).try_into().unwrap();
     assert_eq!(g.node_count(), rebuilt.node_count(), "node count mismatch");
     assert_eq!(g.edge_count(), rebuilt.edge_count(), "edge count mismatch");
 
@@ -49,7 +49,7 @@ fn roundtrip(g: &Undir0) {
 
 #[test]
 fn t1_1_add_isolated_node() {
-    let mut g = Undir0::default();
+    let mut g = MUndir0::default();
     let ops: Vec<UOp> = vec![N_().into()];
     g.modify(ops).unwrap();
     roundtrip(&g);
@@ -59,7 +59,7 @@ fn t1_1_add_isolated_node() {
 
 #[test]
 fn t1_2_add_edge_pair() {
-    let mut g = Undir0::default();
+    let mut g = MUndir0::default();
     let ops: Vec<UOp> = vec![(N_() ^ N_()).into()];
     g.modify(ops).unwrap();
     roundtrip(&g);
@@ -69,7 +69,7 @@ fn t1_2_add_edge_pair() {
 
 #[test]
 fn t1_3_build_triangle() {
-    let mut g = Undir0::default();
+    let mut g = MUndir0::default();
     let ops: Vec<UOp> = vec![(N(1) ^ (N(2) ^ (N(3) ^ n(1)))).into()];
     g.modify(ops).unwrap();
     roundtrip(&g);
@@ -79,7 +79,7 @@ fn t1_3_build_triangle() {
 
 #[test]
 fn t1_4_build_star() {
-    let mut g = Undir0::default();
+    let mut g = MUndir0::default();
     let ops: Vec<UOp> = vec![(N_() ^ N_() ^ N_() ^ N_()).into()];
     g.modify(ops).unwrap();
     roundtrip(&g);
@@ -89,7 +89,7 @@ fn t1_4_build_star() {
 
 #[test]
 fn t1_5_graft_onto_star_spoke() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -105,7 +105,7 @@ fn t1_5_graft_onto_star_spoke() {
 
 #[test]
 fn t1_6_close_triangle_via_exist_edge() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
     ]
@@ -121,7 +121,7 @@ fn t1_6_close_triangle_via_exist_edge() {
 
 #[test]
 fn t1_7_remove_spoke_from_star() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -139,7 +139,7 @@ fn t1_7_remove_spoke_from_star() {
 
 #[test]
 fn t1_8_remove_node_from_triangle() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -157,7 +157,7 @@ fn t1_8_remove_node_from_triangle() {
 
 #[test]
 fn t1_9_remove_edge_from_triangle_with_tail() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -177,7 +177,7 @@ fn t1_9_remove_edge_from_triangle_with_tail() {
 
 #[test]
 fn t2_1_graft_onto_core_member() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -194,7 +194,7 @@ fn t2_1_graft_onto_core_member() {
 
 #[test]
 fn t2_2_star_graft_creating_bridge() {
-    let mut g: Undir0 = (
+    let mut g: MUndir0 = (
         14 as Id,
         vec![
             edge::undir::E::U(0, 1),
@@ -216,7 +216,7 @@ fn t2_2_star_graft_creating_bridge() {
 
 #[test]
 fn t2_3_two_cores_disconnect_bridge() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -236,7 +236,7 @@ fn t2_3_two_cores_disconnect_bridge() {
 
 #[test]
 fn t2_4_exist_edges_create_new_core() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -255,7 +255,7 @@ fn t2_4_exist_edges_create_new_core() {
 
 #[test]
 fn t2_5_core_grows_via_graft() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -273,7 +273,7 @@ fn t2_5_core_grows_via_graft() {
 
 #[test]
 fn t2_6_core_splits_via_edge_removal() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -297,7 +297,7 @@ fn t2_6_core_splits_via_edge_removal() {
 
 #[test]
 fn t3_1_build_up_then_tear_down() {
-    let mut g = Undir0::default();
+    let mut g = MUndir0::default();
 
     let ops: Vec<UOp> = vec![(N(1) ^ N(2) ^ N(3) ^ N(4)).into()];
     let r = g.modify(ops).unwrap();
@@ -324,7 +324,7 @@ fn t3_1_build_up_then_tear_down() {
 
 #[test]
 fn t3_2_incremental_growth() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -354,7 +354,7 @@ fn t3_2_incremental_growth() {
 
 #[test]
 fn t3_3_edge_churn() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -382,7 +382,7 @@ fn t3_3_edge_churn() {
 
 #[test]
 fn t2b_1_graft_plus_exist_edge_same_batch() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -401,7 +401,7 @@ fn t2b_1_graft_plus_exist_edge_same_batch() {
 
 #[test]
 fn t2b_2_removal_plus_graft_same_batch() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -420,7 +420,7 @@ fn t2b_2_removal_plus_graft_same_batch() {
 
 #[test]
 fn t2b_3_removal_plus_exist_edge_same_batch() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -440,7 +440,7 @@ fn t2b_3_removal_plus_exist_edge_same_batch() {
 
 #[test]
 fn t2b_4_edge_removal_plus_graft_same_batch() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -461,7 +461,7 @@ fn t2b_4_edge_removal_plus_graft_same_batch() {
 
 #[test]
 fn t2b_5_multiple_grafts_same_batch() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -481,7 +481,7 @@ fn t2b_5_multiple_grafts_same_batch() {
 
 #[test]
 fn t2b_6_graft_with_new_to_new_edges() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),
@@ -499,7 +499,7 @@ fn t2b_6_graft_with_new_to_new_edges() {
 
 #[test]
 fn t2b_7_removal_plus_multiple_grafts_plus_exist_edge() {
-    let mut g: Undir0 = (
+    let mut g: MUndir0 = (
         8 as Id,
         vec![
             edge::undir::E::U(0, 1),
@@ -526,7 +526,7 @@ fn t2b_7_removal_plus_multiple_grafts_plus_exist_edge() {
 
 #[test]
 fn t2b_8_graft_onto_core_plus_exist_edge_forming_larger_core() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(1, 2),
         edge::undir::E::U(2, 0),
@@ -551,7 +551,7 @@ fn t2b_8_graft_onto_core_plus_exist_edge_forming_larger_core() {
 
 #[test]
 fn t2b_9_two_step_grow_then_graft_plus_exist() {
-    let mut g: Undir0 = vec![
+    let mut g: MUndir0 = vec![
         edge::undir::E::U(0, 1),
         edge::undir::E::U(0, 2),
         edge::undir::E::U(0, 3),

@@ -4,7 +4,7 @@ GRW is an embedded graph rewriting system that runs inside a Rust process. It pr
 
 ## The Three DSLs
 
-- **`graph!`** — graph literal (like `vec!`) for constructing graphs declaratively
+- **`mgraph!`** — graph literal (like `vec!`) for constructing graphs declaratively
 - **`modify!`** — transactional graph mutation: add/remove/change nodes and edges atomically
 - **`search!`** — graph pattern matching iterator with morphism control
 
@@ -19,7 +19,7 @@ use grw::*;
 use grw::graph::edge;
 
 // construct a triangle
-let g: graph::Undir0 = graph![
+let g: graph::MUndir0 = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 

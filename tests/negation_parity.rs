@@ -6,7 +6,7 @@ type DER = grw::graph::edge::Dir<()>;
 type AER = grw::graph::edge::Anydir<()>;
 
 fn count<NV: Clone, ER: graph::Edge + 'static>(
-    g: &graph::Graph<NV, ER>,
+    g: &graph::MGraph<NV, ER>,
     compiled: search::Search<NV, ER>,
 ) -> usize
 where
@@ -17,7 +17,7 @@ where
 }
 
 fn count_result<NV: Clone, ER: graph::Edge + 'static>(
-    g: &graph::Graph<NV, ER>,
+    g: &graph::MGraph<NV, ER>,
     compiled: Result<search::Search<NV, ER>, search::error::Search>,
 ) -> Result<usize, String>
 where
@@ -55,7 +55,7 @@ fn parity_result(label: &str, neg_get: Result<usize, String>, ban_equiv: Result<
 
 #[test]
 fn all_negated_nonempty_graph() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { !N_() }
@@ -70,7 +70,7 @@ fn all_negated_nonempty_graph() {
 
 #[test]
 fn all_negated_empty_graph() {
-    let g: graph::Undir0 = graph![<(), UER>;].unwrap();
+    let g: graph::MUndir0 = mgraph![<(), UER>;].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { !N_() }
@@ -85,7 +85,7 @@ fn all_negated_empty_graph() {
 
 #[test]
 fn all_negated_with_test_no_match() {
-    let g: graph::Undir<i32, ()> = graph![N(0).val(1) ^ N(1).val(2)].unwrap();
+    let g: graph::MUndir<i32, ()> = mgraph![N(0).val(1) ^ N(1).val(2)].unwrap();
 
     let neg_get = count(&g, search![<i32, UER>;
         get(Mono) { !N_().test(|v: &i32| *v > 100) }
@@ -100,7 +100,7 @@ fn all_negated_with_test_no_match() {
 
 #[test]
 fn all_negated_with_test_has_match() {
-    let g: graph::Undir<i32, ()> = graph![N(0).val(1) ^ N(1).val(200)].unwrap();
+    let g: graph::MUndir<i32, ()> = mgraph![N(0).val(1) ^ N(1).val(200)].unwrap();
 
     let neg_get = count(&g, search![<i32, UER>;
         get(Mono) { !N_().test(|v: &i32| *v > 100) }
@@ -119,7 +119,7 @@ fn all_negated_with_test_has_match() {
 
 #[test]
 fn negated_freestanding_isolated_exists() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1), N(2)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1), !N_() }
@@ -135,7 +135,7 @@ fn negated_freestanding_isolated_exists() {
 
 #[test]
 fn negated_freestanding_no_isolated() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1), !N_() }
@@ -151,7 +151,7 @@ fn negated_freestanding_no_isolated() {
 
 #[test]
 fn negated_freestanding_val() {
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         N(2).val(30)
     ].unwrap();
@@ -170,7 +170,7 @@ fn negated_freestanding_val() {
 
 #[test]
 fn negated_freestanding_test() {
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         N(2).val(30)
     ].unwrap();
@@ -193,7 +193,7 @@ fn negated_freestanding_test() {
 
 #[test]
 fn negated_connected_neighbor() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2)
     ].unwrap();
@@ -212,7 +212,7 @@ fn negated_connected_neighbor() {
 
 #[test]
 fn negated_connected_neighbor_triangle() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(0) ^ n(2)
@@ -236,7 +236,7 @@ fn negated_connected_neighbor_triangle() {
 
 #[test]
 fn negated_edge_different_slot_anydir() {
-    let g: graph::Anydir0 = graph![
+    let g: graph::MAnydir0 = mgraph![
         N(0) >> N(1),
         N(2)
     ].unwrap();
@@ -255,7 +255,7 @@ fn negated_edge_different_slot_anydir() {
 
 #[test]
 fn negated_edge_undir_no_edge() {
-    let g: graph::Undir0 = graph![N(0), N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0), N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0), N(1), n(0) & !E() ^ n(1) }
@@ -271,7 +271,7 @@ fn negated_edge_undir_no_edge() {
 
 #[test]
 fn negated_edge_undir_edge_exists() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0), N(1), n(0) & !E() ^ n(1) }
@@ -291,7 +291,7 @@ fn negated_edge_undir_edge_exists() {
 
 #[test]
 fn negated_node_and_negated_edge() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2)
     ].unwrap();
@@ -314,7 +314,7 @@ fn negated_node_and_negated_edge() {
 
 #[test]
 fn negated_context_val() {
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         n(1) ^ N(2).val(30),
         n(0) ^ n(2)
@@ -334,7 +334,7 @@ fn negated_context_val() {
 
 #[test]
 fn negated_context_test() {
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         n(1) ^ N(2).val(30),
         n(0) ^ n(2)
@@ -368,7 +368,7 @@ fn ban_negated_edge_shared_contradicts() {
 
 #[test]
 fn ban_negated_freestanding_node() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -383,7 +383,7 @@ fn ban_negated_freestanding_node() {
 
 #[test]
 fn ban_negated_edge_to_new_node() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -402,7 +402,7 @@ fn ban_negated_edge_to_new_node() {
 
 #[test]
 fn all_negated_iso() {
-    let g: graph::Undir0 = graph![<(), UER>;].unwrap();
+    let g: graph::MUndir0 = mgraph![<(), UER>;].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Iso) { !N_() }
@@ -417,7 +417,7 @@ fn all_negated_iso() {
 
 #[test]
 fn all_negated_homo() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Homo) { !N_() }
@@ -432,7 +432,7 @@ fn all_negated_homo() {
 
 #[test]
 fn negated_freestanding_subiso() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(0) ^ n(2)
@@ -456,7 +456,7 @@ fn negated_freestanding_subiso() {
 
 #[test]
 fn negated_freestanding_dir() {
-    let g: graph::Dir0 = graph![N(0) >> N(1), N(2)].unwrap();
+    let g: graph::MDir0 = mgraph![N(0) >> N(1), N(2)].unwrap();
 
     let neg_get = count(&g, search![<(), DER>;
         get(Mono) { N(0) >> N(1), !N_() }
@@ -472,7 +472,7 @@ fn negated_freestanding_dir() {
 
 #[test]
 fn negated_edge_dir_reverse() {
-    let g: graph::Dir0 = graph![N(0) >> N(1)].unwrap();
+    let g: graph::MDir0 = mgraph![N(0) >> N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), DER>;
         get(Mono) { N(0) >> N(1), n(0) & !E() << n(1) }
@@ -488,7 +488,7 @@ fn negated_edge_dir_reverse() {
 
 #[test]
 fn negated_edge_dir_bidirectional() {
-    let g: graph::Dir0 = graph![N(0) >> (N(1) >> n(0))].unwrap();
+    let g: graph::MDir0 = mgraph![N(0) >> (N(1) >> n(0))].unwrap();
 
     let neg_get = count(&g, search![<(), DER>;
         get(Mono) { N(0) >> N(1), n(0) & !E() << n(1) }
@@ -508,7 +508,7 @@ fn negated_edge_dir_bidirectional() {
 
 #[test]
 fn all_negated_val_nonempty_match() {
-    let g: graph::Undir<i32, ()> = graph![N(0).val(10) ^ N(1).val(20)].unwrap();
+    let g: graph::MUndir<i32, ()> = mgraph![N(0).val(10) ^ N(1).val(20)].unwrap();
 
     let neg_get = count(&g, search![<i32, UER>;
         get(Mono) { !N_().val(10) }
@@ -523,7 +523,7 @@ fn all_negated_val_nonempty_match() {
 
 #[test]
 fn all_negated_val_nonempty_no_match() {
-    let g: graph::Undir<i32, ()> = graph![N(0).val(10) ^ N(1).val(20)].unwrap();
+    let g: graph::MUndir<i32, ()> = mgraph![N(0).val(10) ^ N(1).val(20)].unwrap();
 
     let neg_get = count(&g, search![<i32, UER>;
         get(Mono) { !N_().val(99) }
@@ -542,7 +542,7 @@ fn all_negated_val_nonempty_no_match() {
 
 #[test]
 fn ban_negated_freestanding_node_proxy() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -561,7 +561,7 @@ fn ban_negated_freestanding_node_proxy() {
 
 #[test]
 fn ban_negated_edge_to_new_node_proxy() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -604,7 +604,7 @@ fn same_slot_positive_and_negated_contradicts() {
 
 #[test]
 fn negated_freestanding_homo_3node() {
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(0) ^ n(2)
@@ -624,7 +624,7 @@ fn negated_freestanding_homo_3node() {
 
 #[test]
 fn negated_freestanding_homo_2node() {
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Homo) { N(0) ^ N(1), !N_() }
@@ -651,7 +651,7 @@ fn connected_neg_pair_found() {
     // graph: path 0-1-2-3 (4 nodes)
     // pattern: get edge 0^1, reject if negated pair !N(2)^!N(3) exists
     // graph HAS a pair of connected unmapped nodes (2-3) → should reject
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(2) ^ N(3)
@@ -674,7 +674,7 @@ fn connected_neg_pair_not_found() {
     // graph: just 0-1 (2 nodes)
     // pattern: get edge 0^1, reject if negated pair !N(2)^!N(3) exists
     // graph has NO extra pair of connected nodes → should survive
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1), !N(2) ^ !N(3) }
@@ -693,7 +693,7 @@ fn connected_neg_pair_partial_no_edge() {
     // graph: 0-1, isolated 2, isolated 3 (no edge between 2 and 3)
     // pattern: reject if !N(2)^!N(3) found (connected pair)
     // two unmapped nodes exist but NOT connected → shadow ban unsatisfied → survive
-    let g: graph::Undir0 = graph![N(0) ^ N(1), N(2), N(3)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2), N(3)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1), !N(2) ^ !N(3) }
@@ -712,7 +712,7 @@ fn connected_neg_triangle() {
     // graph: complete K5
     // pattern: get edge 0^1, reject if negated triangle !N(2)^!N(3)^!N(4) found
     // K5 has plenty of triangles among unmapped nodes → reject
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1), n(0) ^ N(2), n(0) ^ N(3), n(0) ^ N(4),
         n(1) ^ n(2), n(1) ^ n(3), n(1) ^ n(4),
         n(2) ^ n(3), n(2) ^ n(4),
@@ -735,7 +735,7 @@ fn connected_neg_triangle() {
 fn connected_neg_triangle_not_found() {
     // graph: path 0-1-2-3-4 (no triangles among 2,3,4)
     // pattern: reject if negated triangle found → should survive
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(2) ^ N(3),
@@ -766,7 +766,7 @@ fn neg_two_islands_both_found() {
     // graph: 0-1, 2, 3-4 (two unmapped components: isolated 2, edge 3-4)
     // pattern: get 0^1, island1=!N_() (any unmapped), island2=!N(3)^!N(4)
     // both islands found → reject
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2),
         N(3) ^ N(4)
@@ -789,7 +789,7 @@ fn neg_two_islands_one_missing() {
     // graph: 0-1, 2 (isolated 2, but no edge pair for second island)
     // pattern: get 0^1, island1=!N_(), island2=!N(3)^!N(4)
     // island1 found (node 2), island2 NOT found (no connected pair) → survive
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -811,7 +811,7 @@ fn neg_two_freestanding_islands_both_found() {
     // graph: 0-1, 2, 3  (two unmapped isolated nodes)
     // pattern: get 0^1, !N_(), !N_()  (two separate freestanding negated nodes)
     // under Mono both must map to different unmapped nodes: 2 and 3 → reject
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2),
         N(3)
@@ -834,7 +834,7 @@ fn neg_two_freestanding_islands_one_short() {
     // graph: 0-1, 2  (only one unmapped node)
     // pattern: get 0^1, !N_(), !N_()  (need two different unmapped nodes under Mono)
     // only 1 unmapped node, can't satisfy both → survive
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -861,7 +861,7 @@ fn separate_bans_or_first_fires() {
     // ban1: N_() (any unmapped node) → fires (finds 2)
     // ban2: N(3)^N(4) (connected pair) → doesn't fire
     // OR: ban1 fires → reject
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -882,7 +882,7 @@ fn separate_bans_or_neither_fires() {
     // ban1: N_() → doesn't fire under Mono (all nodes mapped)
     // ban2: N(3)^N(4) → doesn't fire
     // OR: neither fires → survive
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1) },
@@ -903,7 +903,7 @@ fn and_vs_or_single_ban_and() {
     // graph: 0-1, 2 (one unmapped node, no connected pair)
     // single ban with TWO elements: N_(), N(3)^N(4)
     // AND: N_() found, but N(3)^N(4) not found → ban unsatisfied → survive
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -923,7 +923,7 @@ fn and_vs_or_separate_bans_or() {
     // ban1: N_() → fires
     // ban2: N(3)^N(4) → doesn't fire
     // OR: ban1 fires → reject
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         N(2)
     ].unwrap();
@@ -947,7 +947,7 @@ fn neg_connected_to_positive_found() {
     // graph: 0-1-2-3
     // pattern: get 0^1, negated: n(1)^!N_() (neighbor of mapped node 1)
     // node 2 is unmapped neighbor of 1 → violation → reject
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(2) ^ N(3)
@@ -970,7 +970,7 @@ fn neg_connected_to_positive_not_found() {
     // graph: 0-1 (node 1 has no other neighbors besides 0)
     // pattern: get 0^1, negated: n(1)^!N_()
     // under Mono, only candidate for !N_() neighbor of 1 is node 0, but it's mapped → no violation
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1) ^ !N_() }
@@ -989,7 +989,7 @@ fn neg_chain_from_positive() {
     // graph: 0-1-2-3-4
     // pattern: get 0^1, negated chain: n(1)^!N(2)^!N(3)
     // nodes 2,3 are unmapped and connected via 1-2-3 → violation
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2),
         n(2) ^ N(3),
@@ -1013,7 +1013,7 @@ fn neg_chain_from_positive_too_short() {
     // graph: 0-1-2 (only one extra node after 1)
     // pattern: get 0^1, negated chain: n(1)^!N(2)^!N(3)
     // need 2 unmapped connected nodes from 1, only have 1 (node 2) → survive
-    let g: graph::Undir0 = graph![
+    let g: graph::MUndir0 = mgraph![
         N(0) ^ N(1),
         n(1) ^ N(2)
     ].unwrap();
@@ -1039,7 +1039,7 @@ fn multi_ban_first_fires_second_doesnt() {
     // ban1: N_() → fires (node 2 exists)
     // ban2: N(3)^N(4) → doesn't fire (no connected pair)
     // OR → reject
-    let g: graph::Undir0 = graph![N(0) ^ N(1), N(2)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2)].unwrap();
 
     let result = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1) },
@@ -1056,7 +1056,7 @@ fn multi_ban_second_fires_first_doesnt() {
     // ban1: N_().val(99) → doesn't fire (no node with val 99)
     // ban2: N_() → fires (node 2 exists)
     // OR → reject
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         N(2).val(30)
     ].unwrap();
@@ -1076,7 +1076,7 @@ fn multi_ban_none_fires() {
     // ban1: N(3)^N(4) → no connected unmapped pair
     // ban2: N_().val(99) → no node with val 99
     // OR: neither fires → survive
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         N(2).val(30)
     ].unwrap();
@@ -1100,7 +1100,7 @@ fn connected_neg_with_val_found() {
     // graph: 0(10)-1(20)-2(30)
     // pattern: get 0^1, reject if negated neighbor of 1 has val 30
     // node 2 is neighbor of 1 with val 30 → reject
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         n(1) ^ N(2).val(30)
     ].unwrap();
@@ -1122,7 +1122,7 @@ fn connected_neg_with_val_not_found() {
     // graph: 0(10)-1(20)-2(30)
     // pattern: get 0^1, reject if negated neighbor of 1 has val 99
     // no node with val 99 → survive
-    let g: graph::Undir<i32, ()> = graph![
+    let g: graph::MUndir<i32, ()> = mgraph![
         N(0).val(10) ^ N(1).val(20),
         n(1) ^ N(2).val(30)
     ].unwrap();
@@ -1148,7 +1148,7 @@ fn connected_neg_dir_outgoing_found() {
     // graph: 0→1→2
     // pattern: get 0>>1, reject if 1 has outgoing negated neighbor
     // node 2 is outgoing neighbor of 1 → reject
-    let g: graph::Dir0 = graph![
+    let g: graph::MDir0 = mgraph![
         N(0) >> N(1),
         n(1) >> N(2)
     ].unwrap();
@@ -1170,7 +1170,7 @@ fn connected_neg_dir_outgoing_not_found() {
     // graph: 0→1 (no outgoing from 1)
     // pattern: get 0>>1, reject if 1 has outgoing negated neighbor
     // no outgoing from 1 → survive
-    let g: graph::Dir0 = graph![N(0) >> N(1)].unwrap();
+    let g: graph::MDir0 = mgraph![N(0) >> N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), DER>;
         get(Mono) { N(0) >> (N(1) >> !N_()) }
@@ -1189,7 +1189,7 @@ fn connected_neg_dir_incoming_only() {
     // graph: 0→1←2
     // pattern: get 0>>1, reject if 1 has outgoing negated neighbor (>>)
     // node 2 points TO 1 (incoming), not from 1 → survive
-    let g: graph::Dir0 = graph![
+    let g: graph::MDir0 = mgraph![
         N(0) >> N(1),
         N(2) >> n(1)
     ].unwrap();
@@ -1216,7 +1216,7 @@ fn connected_neg_homo_reuses_mapped() {
     // pattern: get(Homo) 0^1, reject if negated neighbor of 1
     // under Homo, node 0 is unmapped-equivalent (can be reused) and IS neighbor of 1
     // ban fires → reject
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Homo) { N(0) ^ N(1) ^ !N_() }
@@ -1234,7 +1234,7 @@ fn connected_neg_homo_reuses_mapped() {
 fn connected_neg_mono_doesnt_reuse_mapped() {
     // same graph and pattern but Mono — !N_() must be unmapped
     // only neighbor of 1 is 0, which is already mapped → survive
-    let g: graph::Undir0 = graph![N(0) ^ N(1)].unwrap();
+    let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
     let neg_get = count(&g, search![<(), UER>;
         get(Mono) { N(0) ^ N(1) ^ !N_() }

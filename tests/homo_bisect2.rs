@@ -1,7 +1,8 @@
 use grw::search::{Search, Seq, RevCsr};
+use grw::Graph as _;
 type ER = grw::edge::Undir<()>;
 
-fn count(p: grw::Search<(), ER>, g: &grw::Graph<(), ER>) -> usize {
+fn count(p: grw::Search<(), ER>, g: &grw::MGraph<(), ER>) -> usize {
     let t = g.index(RevCsr);
     let Search::Resolved(r) = p else { panic!() };
     Seq::search(&r.query(), &t).count()
@@ -9,7 +10,7 @@ fn count(p: grw::Search<(), ER>, g: &grw::Graph<(), ER>) -> usize {
 
 #[test]
 fn disconnected_bisect() {
-    let g = grw::graph![<(), ER>; N(0) ^ N(1)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
 
     let x1 = grw::search![<(), ER>; get(Morphism::Mono) { N(0) }];
     println!("x1 mono single: {}", count(x1.unwrap(), &g));
@@ -39,7 +40,7 @@ fn disconnected_bisect() {
 #[test]
 fn disconnected_depth2() {
     // path a(0)-b(1)-c(2)
-    let g = grw::graph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2)].unwrap();
+    let g = grw::mgraph![<(), ER>; N(0) ^ N(1), n(1) ^ N(2)].unwrap();
 
     let x6 = grw::search![<(), ER>;
         get(Morphism::Mono) { N(0) ^ N(1) },

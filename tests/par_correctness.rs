@@ -48,13 +48,14 @@ fn extract_subgraph(
         .collect()
 }
 
-fn check<NV, ER>(label: &str, session: &Session<'_, NV, ER>)
+fn check<NV, ER, G>(label: &str, session: &Session<'_, NV, ER, G>)
 where
     NV: Clone + Sync + Send + 'static,
     ER: graph::Edge + 'static,
     ER::Val: Send + Sync + Clone,
     ER::Slot: Send + Sync,
     ER::CsrStore: Send + Sync,
+    G: graph::Graph<NV, ER> + Sync,
 {
     let seq_count = session.iter().count();
     let par_count = session.par_iter().count();
@@ -459,7 +460,7 @@ fn par_vs_seq_undir_unvalued() {
     let data = gen_undir_data(&mut rng);
     let undir_edges: Vec<edge::undir::E<Id>> = data.edges.iter().map(|&(a, b)| edge::undir::E::U(a, b)).collect();
     let node_ids: Vec<Id> = (0..SIZE).collect();
-    let graph: graph::Undir0 = graph::Undir0::try_from((node_ids, undir_edges)).unwrap();
+    let graph: graph::MUndir0 = graph::MUndir0::try_from((node_ids, undir_edges)).unwrap();
     eprintln!("undir unvalued: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let clusters = build_undir_pattern(Morphism::SubIso, pat);
@@ -475,7 +476,7 @@ fn par_vs_seq_undir_nv() {
     let data = gen_undir_data(&mut rng);
     let undir_edges: Vec<edge::undir::E<Id>> = data.edges.iter().map(|&(a, b)| edge::undir::E::U(a, b)).collect();
     let nodes: Vec<(Id, i32)> = (0..SIZE).map(|i| (i, data.node_labels[&i])).collect();
-    let graph: graph::UndirN<i32> = (nodes, undir_edges).try_into().unwrap();
+    let graph: graph::MUndirN<i32> = (nodes, undir_edges).try_into().unwrap();
     eprintln!("undir nv: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let pat_nodes: BTreeSet<Id> = pat.iter().flat_map(|(a, b)| [*a, *b]).collect();
@@ -495,7 +496,7 @@ fn par_vs_seq_undir_ev() {
         (edge::undir::E::U(a, b), data.edge_labels[&(a, b)])
     }).collect();
     let node_ids: Vec<Id> = (0..SIZE).collect();
-    let graph: graph::UndirE<i32> = (node_ids, edges_with_val).try_into().unwrap();
+    let graph: graph::MUndirE<i32> = (node_ids, edges_with_val).try_into().unwrap();
     eprintln!("undir ev: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let el: BTreeMap<(Id, Id), i32> = pat.iter().map(|&e| (e, data.edge_labels[&e])).collect();
@@ -514,7 +515,7 @@ fn par_vs_seq_undir_nvev() {
     let edges_with_val: Vec<(edge::undir::E<Id>, i32)> = data.edges.iter().map(|&(a, b)| {
         (edge::undir::E::U(a, b), data.edge_labels[&(a, b)])
     }).collect();
-    let graph: graph::Undir<i32, i32> = (nodes, edges_with_val).try_into().unwrap();
+    let graph: graph::MUndir<i32, i32> = (nodes, edges_with_val).try_into().unwrap();
     eprintln!("undir nvev: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let pat_nodes: BTreeSet<Id> = pat.iter().flat_map(|(a, b)| [*a, *b]).collect();
@@ -533,7 +534,7 @@ fn par_vs_seq_dir_unvalued() {
     let data = gen_dir_data(&mut rng);
     let dir_edges: Vec<edge::dir::E<Id>> = data.edges.iter().map(|&(a, b)| edge::dir::E::D(a, b)).collect();
     let node_ids: Vec<Id> = (0..SIZE).collect();
-    let graph: graph::Dir0 = graph::Dir0::try_from((node_ids, dir_edges)).unwrap();
+    let graph: graph::MDir0 = graph::MDir0::try_from((node_ids, dir_edges)).unwrap();
     eprintln!("dir unvalued: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let clusters = build_dir_pattern(Morphism::SubIso, pat);
@@ -549,7 +550,7 @@ fn par_vs_seq_dir_nv() {
     let data = gen_dir_data(&mut rng);
     let dir_edges: Vec<edge::dir::E<Id>> = data.edges.iter().map(|&(a, b)| edge::dir::E::D(a, b)).collect();
     let nodes: Vec<(Id, i32)> = (0..SIZE).map(|i| (i, data.node_labels[&i])).collect();
-    let graph: graph::DirN<i32> = (nodes, dir_edges).try_into().unwrap();
+    let graph: graph::MDirN<i32> = (nodes, dir_edges).try_into().unwrap();
     eprintln!("dir nv: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let pat_nodes: BTreeSet<Id> = pat.iter().flat_map(|(a, b)| [*a, *b]).collect();
@@ -569,7 +570,7 @@ fn par_vs_seq_dir_ev() {
         (edge::dir::E::D(a, b), data.edge_labels[&(a, b)])
     }).collect();
     let node_ids: Vec<Id> = (0..SIZE).collect();
-    let graph: graph::DirE<i32> = (node_ids, edges_with_val).try_into().unwrap();
+    let graph: graph::MDirE<i32> = (node_ids, edges_with_val).try_into().unwrap();
     eprintln!("dir ev: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let el: BTreeMap<(Id, Id), i32> = pat.iter().map(|&e| (e, data.edge_labels[&e])).collect();
@@ -588,7 +589,7 @@ fn par_vs_seq_dir_nvev() {
     let edges_with_val: Vec<(edge::dir::E<Id>, i32)> = data.edges.iter().map(|&(a, b)| {
         (edge::dir::E::D(a, b), data.edge_labels[&(a, b)])
     }).collect();
-    let graph: graph::Dir<i32, i32> = (nodes, edges_with_val).try_into().unwrap();
+    let graph: graph::MDir<i32, i32> = (nodes, edges_with_val).try_into().unwrap();
     eprintln!("dir nvev: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let pat_nodes: BTreeSet<Id> = pat.iter().flat_map(|(a, b)| [*a, *b]).collect();
@@ -609,7 +610,7 @@ fn par_vs_seq_anydir_unvalued() {
         if data.is_directed[&(a, b)] { edge::anydir::E::D(a, b) } else { edge::anydir::E::U(a, b) }
     }).collect();
     let node_ids: Vec<Id> = (0..SIZE).collect();
-    let graph: graph::Anydir0 = graph::Anydir0::try_from((node_ids, anydir_edges)).unwrap();
+    let graph: graph::MAnydir0 = graph::MAnydir0::try_from((node_ids, anydir_edges)).unwrap();
     eprintln!("anydir unvalued: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let dir_map: BTreeMap<(Id, Id), bool> = pat.iter().map(|&e| (e, data.is_directed[&e])).collect();
@@ -628,7 +629,7 @@ fn par_vs_seq_anydir_nv() {
         if data.is_directed[&(a, b)] { edge::anydir::E::D(a, b) } else { edge::anydir::E::U(a, b) }
     }).collect();
     let nodes: Vec<(Id, i32)> = (0..SIZE).map(|i| (i, data.node_labels[&i])).collect();
-    let graph: graph::AnydirN<i32> = (nodes, anydir_edges).try_into().unwrap();
+    let graph: graph::MAnydirN<i32> = (nodes, anydir_edges).try_into().unwrap();
     eprintln!("anydir nv: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let pat_nodes: BTreeSet<Id> = pat.iter().flat_map(|(a, b)| [*a, *b]).collect();
@@ -650,7 +651,7 @@ fn par_vs_seq_anydir_ev() {
         (edef, data.edge_labels[&(a, b)])
     }).collect();
     let node_ids: Vec<Id> = (0..SIZE).collect();
-    let graph: graph::AnydirE<i32> = (node_ids, edges_with_val).try_into().unwrap();
+    let graph: graph::MAnydirE<i32> = (node_ids, edges_with_val).try_into().unwrap();
     eprintln!("anydir ev: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let el: BTreeMap<(Id, Id), i32> = pat.iter().map(|&e| (e, data.edge_labels[&e])).collect();
@@ -671,7 +672,7 @@ fn par_vs_seq_anydir_nvev() {
         let edef = if data.is_directed[&(a, b)] { edge::anydir::E::D(a, b) } else { edge::anydir::E::U(a, b) };
         (edef, data.edge_labels[&(a, b)])
     }).collect();
-    let graph: graph::Anydir<i32, i32> = (nodes, edges_with_val).try_into().unwrap();
+    let graph: graph::MAnydir<i32, i32> = (nodes, edges_with_val).try_into().unwrap();
     eprintln!("anydir nvev: {}n/{}e", graph.node_count(), graph.edge_count());
     run_patterns(&mut rng, &data.edges, |pat, idx| {
         let pat_nodes: BTreeSet<Id> = pat.iter().flat_map(|(a, b)| [*a, *b]).collect();

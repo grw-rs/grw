@@ -5,7 +5,7 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 use grw::graph::edge;
-use grw::graph::{self, Graph};
+use grw::graph::{self, MGraph};
 use grw::modify::{self, LocalId, Node};
 use grw::modify::node::{Bind, Exist, New};
 use grw::{Id, NR, id};
@@ -123,7 +123,7 @@ struct Params {
 }
 
 fn chaos_step<ER: ChaosEdge>(
-    graph: &mut Graph<(), ER>,
+    graph: &mut MGraph<(), ER>,
     shadow: &mut Shadow<ER>,
     rng: &mut SmallRng,
     step: usize,
@@ -131,8 +131,8 @@ fn chaos_step<ER: ChaosEdge>(
     params: &Params,
 ) where
     ER::Val: Default,
-    for<'a> Graph<(), ER>: TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>,
-    <Graph<(), ER> as TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>>::Error: std::fmt::Debug,
+    for<'a> MGraph<(), ER>: TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>,
+    <MGraph<(), ER> as TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>>::Error: std::fmt::Debug,
 {
     let existing: Vec<Id> = shadow.nodes.iter().copied().collect();
 
@@ -255,7 +255,7 @@ fn chaos_step<ER: ChaosEdge>(
         shadow.edges.len(),
     );
 
-    let _rebuilt: Graph<(), ER> = shadow.to_vecs().try_into().unwrap_or_else(|_| {
+    let _rebuilt: MGraph<(), ER> = shadow.to_vecs().try_into().unwrap_or_else(|_| {
         panic!(
             "step {step}: shadow rebuild failed (seed={seed})\n\
              shadow: {} nodes, {} edges",
@@ -290,11 +290,11 @@ fn chaos_monkey<ER: ChaosEdge>(
     steps: usize,
 ) where
     ER::Val: Default,
-    for<'a> Graph<(), ER>: TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>,
-    <Graph<(), ER> as TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>>::Error: std::fmt::Debug,
+    for<'a> MGraph<(), ER>: TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>,
+    <MGraph<(), ER> as TryFrom<(Vec<(Id, ())>, Vec<(ER::Def, ())>)>>::Error: std::fmt::Debug,
 {
     let mut rng = SmallRng::seed_from_u64(seed);
-    let mut graph = Graph::<(), ER>::default();
+    let mut graph = MGraph::<(), ER>::default();
     let mut shadow = Shadow::<ER>::new();
 
     let params = Params {

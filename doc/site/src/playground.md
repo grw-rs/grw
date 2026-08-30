@@ -1,17 +1,17 @@
 # Playground
 
-Try GRW directly in your browser. Type `graph!`, `modify!`, or `search!` commands and see the results live.
+Try GRW directly in your browser. Type `mgraph!`, `modify!`, or `search!` commands and see the results live.
 
 <div id="playground-app">
 <div id="pg-controls">
   <div id="pg-examples">
-    <button class="pg-btn" id="btn-graph">graph!</button>
+    <button class="pg-btn" id="btn-graph">mgraph!</button>
     <button class="pg-btn" id="btn-modify">modify!</button>
     <button class="pg-btn" id="btn-search">search!</button>
     <button class="pg-btn pg-btn-dim" id="btn-reset">reset</button>
   </div>
   <div id="pg-editor-wrap">
-    <textarea id="pg-input" spellcheck="false" rows="4">g = graph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]</textarea>
+    <textarea id="pg-input" spellcheck="false" rows="4">g = mgraph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]</textarea>
     <button class="pg-btn pg-btn-run" id="btn-run">run</button>
   </div>
 </div>
@@ -44,7 +44,7 @@ import init, { _eval as grwEval, list_graphs, get_graph, reset } from './playgro
 await init('./playground/grw_playground_bg.wasm');
 
 const EXAMPLES = {
-    graph: 'g = graph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]',
+    graph: 'g = mgraph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]',
     modify: 'modify!(g, [X(0) ^ N(3)])',
     search: 'search!(g, get(Mono) { N(0) ^ N(1) })',
 };

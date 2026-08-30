@@ -20,9 +20,9 @@
 ## Adding Nodes and Edges
 
 ```rust
-use grw::graph::{self, Graph, edge};
+use grw::graph::{self, MGraph, edge};
 
-let mut g: Graph<(), edge::Undir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<()>> = MGraph::default();
 
 // add two connected nodes
 modify!(g, [N(1) ^ N(2)]).unwrap();
@@ -40,7 +40,7 @@ assert_eq!(g.edge_count(), 2);
 <svg viewBox="0 0 237 213" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="connect existing"><line x1="88" y1="93" x2="149" y2="61" stroke="#46c6d6" stroke-width="2.4"/><line x1="88" y1="112" x2="149" y2="144" stroke="#7ee0a3" stroke-width="2.4"/><circle cx="70" cy="102" r="21" fill="#f0a63f26"/><circle cx="70" cy="102" r="15" fill="#f0a63f"/><text x="70" y="107" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="52" r="21" fill="#f0a63f26"/><circle cx="167" cy="52" r="15" fill="#f0a63f"/><text x="167" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="167" cy="153" r="21" fill="#7ee0a326"/><circle cx="167" cy="153" r="15" fill="#7ee0a3"/><text x="167" y="158" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg>
 
 ```rust
-let mut g: Graph<(), edge::Dir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Dir<()>> = MGraph::default();
 
 // directed path
 modify!(g, [N(1) >> (N(2) >> N(3))]).unwrap();
@@ -50,7 +50,7 @@ assert_eq!(g.edge_count(), 2);
 <svg viewBox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="directed path"><defs><marker id="modify-dir-path-g" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#7ee0a3"/></marker></defs><line x1="90" y1="58" x2="139" y2="58" stroke="#7ee0a3" stroke-width="2.4" marker-end="url(#modify-dir-path-g)"/><line x1="187" y1="58" x2="236" y2="58" stroke="#7ee0a3" stroke-width="2.4" marker-end="url(#modify-dir-path-g)"/><circle cx="70" cy="58" r="21" fill="#7ee0a326"/><circle cx="70" cy="58" r="15" fill="#7ee0a3"/><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#7ee0a326"/><circle cx="167" cy="58" r="15" fill="#7ee0a3"/><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="58" r="21" fill="#7ee0a326"/><circle cx="264" cy="58" r="15" fill="#7ee0a3"/><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg>
 
 ```rust
-let mut g: Graph<(), edge::Undir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<()>> = MGraph::default();
 
 // triangle via back-reference
 modify!(g, [N(1) ^ (N(2) ^ (N(3) ^ n(1)))]).unwrap();
@@ -62,7 +62,7 @@ assert_eq!(g.edge_count(), 3);
 ### With Values
 
 ```rust
-let mut g: Graph<&str, edge::Undir<u32>> = Graph::default();
+let mut g: MGraph<&str, edge::Undir<u32>> = MGraph::default();
 
 // node and edge values
 modify!(g, [
@@ -83,7 +83,7 @@ assert_eq!(g.node_count(), 3);
 ## Removing Nodes and Edges
 
 ```rust
-let mut g: Graph<(), edge::Undir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<()>> = MGraph::default();
 modify!(g, [N(1) ^ N(2) ^ N(3)]).unwrap();
 
 // remove node 1 (and its edges)
@@ -93,7 +93,7 @@ assert_eq!(g.node_count(), 2);
 <svg viewBox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="remove node"><line x1="90" y1="58" x2="147" y2="58" stroke="#e2596e" stroke-width="2.4" stroke-dasharray="6 5"/><line x1="112" y1="51" x2="126" y2="65" stroke="#e2596e" stroke-width="2.4"/><line x1="112" y1="65" x2="126" y2="51" stroke="#e2596e" stroke-width="2.4"/><line x1="187" y1="58" x2="244" y2="58" stroke="#e2596e" stroke-width="2.4" stroke-dasharray="6 5"/><line x1="209" y1="51" x2="223" y2="65" stroke="#e2596e" stroke-width="2.4"/><line x1="209" y1="65" x2="223" y2="51" stroke="#e2596e" stroke-width="2.4"/><circle cx="70" cy="58" r="21" fill="#f0a63f26"/><circle cx="70" cy="58" r="15" fill="#f0a63f"/><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="19" fill="#e2596e1f"/><circle cx="167" cy="58" r="15" fill="none" stroke="#e2596e" stroke-width="2.2" stroke-dasharray="4 4"/><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#e2596e">1</text><circle cx="264" cy="58" r="21" fill="#f0a63f26"/><circle cx="264" cy="58" r="15" fill="#f0a63f"/><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg>
 
 ```rust
-let mut g: Graph<(), edge::Dir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Dir<()>> = MGraph::default();
 modify!(g, [N(1) >> N(2)]).unwrap();
 
 // remove edge, keep both nodes
@@ -106,7 +106,7 @@ assert_eq!(g.edge_count(), 0);
 ## Updating Values
 
 ```rust
-let mut g: Graph<&str, edge::Undir<()>> = Graph::default();
+let mut g: MGraph<&str, edge::Undir<()>> = MGraph::default();
 modify!(g, [N(1).val("old")]).unwrap();
 assert_eq!(g.get(0), Some(&"old"));
 
@@ -117,7 +117,7 @@ assert_eq!(g.get(0), Some(&"new"));
 <svg viewBox="0 0 141 132" style="max-width:141px;display:block;margin:0.8em auto" role="img" aria-label="swap value"><circle cx="71" cy="58" r="21" fill="#7ee0a326"/><circle cx="71" cy="58" r="15" fill="#7ee0a3"/><text x="71" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><text x="71" y="29" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">"new"</text></svg>
 
 ```rust
-let mut g: Graph<(), edge::Undir<u32>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<u32>> = MGraph::default();
 modify!(g, [N(1) & E().val(100u32) ^ N(2)]).unwrap();
 
 // swap edge value
@@ -135,7 +135,7 @@ The returned `Modification` struct contains:
 - **`swapped_node_vals`** / **`swapped_edge_vals`** — old values that were replaced
 
 ```rust
-let mut g: Graph<(), edge::Undir<()>> = Graph::default();
+let mut g: MGraph<(), edge::Undir<()>> = MGraph::default();
 let result = modify!(g, [N(1) ^ N(2)]).unwrap();
 
 // the local id 1 was assigned a real graph node id

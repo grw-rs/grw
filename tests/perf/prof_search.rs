@@ -7,7 +7,7 @@ use grw::search::{self, dsl, Morphism, Seq, Search, RevCsr};
 use grw::Id;
 
 type ER = edge::Anydir<i32>;
-type G = grw::graph::Anydir<i32, i32>;
+type G = grw::graph::MAnydir<i32, i32>;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

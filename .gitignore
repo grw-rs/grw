@@ -5,3 +5,4 @@ __meta/
 *.zip
 *.tar.gz
 perf.data*
+.claude/

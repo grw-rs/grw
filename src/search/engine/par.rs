@@ -9,10 +9,10 @@ use rayon::iter::plumbing::{bridge_unindexed, UnindexedConsumer, UnindexedProduc
 pub struct Par;
 
 impl Par {
-    pub fn search<'g, NV: Sync + Send + Clone + 'g, ER: graph::Edge + 'g>(
+    pub fn search<'g, NV: Sync + Send + Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER> + Sync>(
         query: &'g Query<NV, ER>,
-        target: &'g super::Graph<'g, NV, ER>,
-    ) -> ParIter<'g, NV, ER>
+        target: &'g super::Graph<'g, NV, ER, G>,
+    ) -> ParIter<'g, NV, ER, G>
     where
         ER::Val: Send + Sync + Clone,
         ER::Slot: Send + Sync,
@@ -22,21 +22,21 @@ impl Par {
     }
 }
 
-pub struct ParIter<'g, NV, ER: graph::Edge> {
+pub struct ParIter<'g, NV, ER: graph::Edge, G> {
     query: &'g Query<NV, ER>,
-    indexed: &'g super::Graph<'g, NV, ER>,
+    indexed: &'g super::Graph<'g, NV, ER, G>,
 }
 
-impl<'g, NV, ER: graph::Edge> ParIter<'g, NV, ER> {
-    pub(crate) fn new(query: &'g Query<NV, ER>, indexed: &'g super::Graph<'g, NV, ER>) -> Self {
+impl<'g, NV, ER: graph::Edge, G> ParIter<'g, NV, ER, G> {
+    pub(crate) fn new(query: &'g Query<NV, ER>, indexed: &'g super::Graph<'g, NV, ER, G>) -> Self {
         ParIter { query, indexed }
     }
 }
 
-struct SearchProducer<'g, NV, ER: graph::Edge> {
+struct SearchProducer<'g, NV, ER: graph::Edge, G> {
     candidates: Vec<crate::id::N>,
     query: &'g Query<NV, ER>,
-    indexed: &'g super::Graph<'g, NV, ER>,
+    indexed: &'g super::Graph<'g, NV, ER, G>,
     shared: Arc<Shared>,
     /// Splitting floor: every leaf pays one O(node_count) State build, so
     /// unbounded splitting (rayon splits on steal pressure) re-creates the
@@ -45,14 +45,14 @@ struct SearchProducer<'g, NV, ER: graph::Edge> {
     min_chunk: usize,
 }
 
-unsafe impl<'g, NV: Sync, ER: graph::Edge> Send for SearchProducer<'g, NV, ER>
+unsafe impl<'g, NV: Sync, ER: graph::Edge, G: Sync> Send for SearchProducer<'g, NV, ER, G>
 where
     ER::Val: Sync,
     ER::Slot: Sync,
     ER::CsrStore: Sync,
 {}
 
-impl<'g, NV: Sync + Send + Clone, ER: graph::Edge> UnindexedProducer for SearchProducer<'g, NV, ER>
+impl<'g, NV: Sync + Send + Clone, ER: graph::Edge, G: graph::Graph<NV, ER> + Sync> UnindexedProducer for SearchProducer<'g, NV, ER, G>
 where
     ER::Val: Send + Sync + Clone,
     ER::Slot: Send + Sync,
@@ -120,7 +120,7 @@ where
     }
 }
 
-impl<'g, NV: Sync + Send + Clone + 'g, ER: graph::Edge + 'g> ParallelIterator for ParIter<'g, NV, ER>
+impl<'g, NV: Sync + Send + Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER> + Sync> ParallelIterator for ParIter<'g, NV, ER, G>
 where
     ER::Val: Send + Sync + Clone,
     ER::Slot: Send + Sync,

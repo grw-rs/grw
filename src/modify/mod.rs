@@ -1,6 +1,6 @@
 pub mod dsl;
 pub mod error;
-mod apply;
+pub(crate) mod apply;
 
 pub use apply::Modification;
 
@@ -37,7 +37,7 @@ impl<NV, ER: graph::Edge> Fragment<NV, ER, Unchecked> {
     }
 }
 
-impl<NV: Sync, ER: graph::Edge> graph::Graph<NV, ER> {
+impl<NV: Sync, ER: graph::Edge> graph::MGraph<NV, ER> {
     pub fn apply(
         &mut self,
         fragment: Fragment<NV, ER, Checked>,

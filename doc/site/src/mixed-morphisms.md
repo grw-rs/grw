@@ -146,12 +146,24 @@ node must be the image of some pattern node. Two nuances:
 ## Advanced: induced morphisms in mixtures
 
 `SubIso` and `Iso` add the *induced* axis: extra target edges between
-matched nodes are forbidden. In a mixed pattern this check runs against the
-**injective population** — a `SubIso` node rejects candidates with target
-edges to any injective binding that the pattern doesn't mirror, while free
-bindings are invisible to it. Mixing induced clusters with free clusters is
-rarely what you want; prefer `Mono` + `Homo` mixtures unless you
-specifically need exact neighborhoods.
+matched nodes are forbidden. In a mixed pattern, the axis it is measured
+against is the injective population — the same population the distinctness
+rule builds:
+
+> **Induced-ness holds between a `SubIso`/`Iso` node and every injective
+> binding.** For a node `i` in an induced cluster and any node `j` bound
+> injectively — in *any* injective cluster, not just `i`'s own — a target
+> edge `m(i)—m(j)` is legal only if the pattern has `i—j`. Bindings from
+> free clusters (`Homo`, `Epi`) are invisible to the check: they neither
+> trigger it nor are protected by it.
+
+So an induced node's neighbourhood is pinned exactly against everything the
+pattern promised to keep distinct, and left unconstrained against everything
+it did not. A free node may sit on a target neighbour of an induced node
+without rejecting the match — that target edge simply is not part of what
+induced-ness reads. Mixing induced clusters with free clusters is rarely
+what you want; prefer `Mono` + `Homo` mixtures unless you specifically need
+exact neighborhoods.
 
 ## Rules of thumb
 

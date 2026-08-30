@@ -1,13 +1,14 @@
 use crate::graph::*;
 use crate::graph::dsl::LocalId;
 use crate::graph;
+use crate::mgraph;
 use crate::id;
 
 #[test]
 fn t_graph_noval_noval() {
     use crate::edge::anydir::E::{D, U};
 
-    let g = Anydir0::try_from((10, vec![U(0, 1), D(1, 2), U(2, 3)])).unwrap();
+    let g = MAnydir0::try_from((10, vec![U(0, 1), D(1, 2), U(2, 3)])).unwrap();
 
     assert_eq!(g.node_count(), 10);
     assert_eq!(g.edge_count(), 3);
@@ -17,7 +18,7 @@ fn t_graph_noval_noval() {
 fn t_graph_noval_ev() {
     use crate::edge::dir::E::D;
 
-    let g = DirE::<String>::try_from((
+    let g = MDirE::<String>::try_from((
         10,
         vec![
             (D(0, 1), String::from("D 0-1 val")),
@@ -35,7 +36,7 @@ fn t_graph_noval_ev() {
 fn t_graph_nv_noval() {
     use crate::edge::undir::E::U;
 
-    let g = UndirN::<String>::try_from((
+    let g = MUndirN::<String>::try_from((
         vec![
             (0, String::from("N(0) val")),
             (1, String::from("N(1) val")),
@@ -54,7 +55,7 @@ fn t_graph_nv_noval() {
 fn t_graph_nv_ev() {
     use crate::edge::anydir::E::{D, U};
 
-    let g = Anydir::<String, String>::try_from((
+    let g = MAnydir::<String, String>::try_from((
         vec![
             (0, String::from("N(0) val")),
             (1, String::from("N(1) val")),
@@ -79,7 +80,7 @@ fn t_graph_nv_ev_not_found() {
     use crate::edge::anydir::E::{D, U};
     use crate::{Id, id};
 
-    let g = Anydir::<String, String>::try_from((
+    let g = MAnydir::<String, String>::try_from((
         vec![(0, String::from("N(0) val")), (1, String::from("N(1) val"))],
         vec![
             (U(0, 1), String::from("U 0-1 val")),
@@ -98,7 +99,7 @@ fn t_graph_nv_ev_duplicate() {
     use crate::edge::anydir::E::{D, U};
     use crate::{Id, id};
 
-    let g = Anydir::<String, String>::try_from((
+    let g = MAnydir::<String, String>::try_from((
         vec![
             (0, String::from("N(0) val")),
             (1, String::from("N(1) val")),
@@ -120,21 +121,21 @@ fn t_graph_nv_ev_duplicate() {
 fn t_graph_edges_only() {
     use crate::edge::undir::E::U;
 
-    let _ = Undir0::try_from(vec![U(0, 1), U(4, 8)]).unwrap();
+    let _ = MUndir0::try_from(vec![U(0, 1), U(4, 8)]).unwrap();
 }
 
 #[test]
 fn t_graph_count_and_edges() {
     use crate::edge::dir::E::D;
 
-    let _ = Dir0::try_from((10, vec![D(0, 1), D(4, 8)])).unwrap();
+    let _ = MDir0::try_from((10, vec![D(0, 1), D(4, 8)])).unwrap();
 }
 
 #[test]
 fn t_graph_valued_nodes_and_edges() {
     use crate::edge::anydir::E::U;
 
-    let _ = Anydir::<String, String>::try_from((
+    let _ = MAnydir::<String, String>::try_from((
         vec![(0, String::from("a")), (1, String::from("b"))],
         vec![(U(0, 1), String::from("edge"))],
     ))
@@ -146,7 +147,7 @@ fn t_edge_id_indexing() {
     use crate::edge::undir::E::U;
     use crate::id;
 
-    let g = Undir0::try_from(vec![U(0, 1), U(1, 2), U(2, 3)]).unwrap();
+    let g = MUndir0::try_from(vec![U(0, 1), U(1, 2), U(2, 3)]).unwrap();
 
     assert_eq!(g.edge_count(), 3);
     let rec0 = g.edges.get_by_id(id::E(0)).unwrap();
@@ -158,7 +159,7 @@ fn t_edge_id_indexing() {
 fn t_has_get_edge() {
     use crate::edge::dir::E::D;
 
-    let g = Dir0::try_from(vec![D(0, 1), D(1, 2)]).unwrap();
+    let g = MDir0::try_from(vec![D(0, 1), D(1, 2)]).unwrap();
 
     assert!(g.has(D(0, 1)));
     assert!(g.has(D(1, 2)));
@@ -169,7 +170,7 @@ fn t_has_get_edge() {
 fn t_adjacency_multi_edge_dir() {
     use crate::edge::dir::E::D;
 
-    let g = Dir0::try_from(vec![D(0, 1), D(1, 0)]).unwrap();
+    let g = MDir0::try_from(vec![D(0, 1), D(1, 0)]).unwrap();
 
     assert_eq!(g.edge_count(), 2);
     assert!(g.is_adjacent(0, 1));
@@ -183,7 +184,7 @@ fn t_adjacency_multi_edge_dir() {
 fn t_adjacency_multi_edge_anydir() {
     use crate::edge::anydir::E::{D, U};
 
-    let g = Anydir0::try_from(vec![U(0, 1), D(0, 1)]).unwrap();
+    let g = MAnydir0::try_from(vec![U(0, 1), D(0, 1)]).unwrap();
 
     assert_eq!(g.edge_count(), 2);
     assert!(g.is_adjacent(0, 1));
@@ -196,7 +197,7 @@ fn t_adjacency_multi_edge_anydir() {
 fn t_self_loop_undir() {
     use crate::edge::undir::E::U;
 
-    let g = Undir0::try_from((3, vec![U(0, 1), U(1, 1)])).unwrap();
+    let g = MUndir0::try_from((3, vec![U(0, 1), U(1, 1)])).unwrap();
 
     assert_eq!(g.edge_count(), 2);
     assert!(g.is_adjacent(1, 1));
@@ -210,7 +211,7 @@ fn t_self_loop_undir() {
 fn t_self_loop_dir() {
     use crate::edge::dir::E::D;
 
-    let g = Dir0::try_from((3, vec![D(0, 1), D(1, 1)])).unwrap();
+    let g = MDir0::try_from((3, vec![D(0, 1), D(1, 1)])).unwrap();
 
     assert_eq!(g.edge_count(), 2);
     assert!(g.is_adjacent(1, 1));
@@ -223,7 +224,7 @@ fn t_self_loop_dir() {
 fn t_to_vecs_roundtrip() {
     use crate::edge::undir::E::U;
 
-    let g = Undir0::try_from(vec![U(0, 1), U(1, 2)]).unwrap();
+    let g = MUndir0::try_from(vec![U(0, 1), U(1, 2)]).unwrap();
     let (nodes, edges) = g.to_vecs();
 
     assert_eq!(nodes.len(), 3);
@@ -235,7 +236,7 @@ fn t_rel_api() {
     use crate::edge::dir::E::D;
     use crate::id;
 
-    let g = Dir::<(), u32>::try_from((
+    let g = MDir::<(), u32>::try_from((
         3,
         vec![(D(0, 1), 10u32), (D(1, 0), 20u32)],
     ))
@@ -253,13 +254,13 @@ fn t_rel_api() {
 #[test]
 fn test_from_undir_edges() {
     use edge::undir::E::U;
-    let _ = Undir0::try_from(vec![U(0, 1), U(4, 8)]).unwrap();
+    let _ = MUndir0::try_from(vec![U(0, 1), U(4, 8)]).unwrap();
 }
 
 #[test]
 fn test_from_undir_valued_edges() {
     use edge::undir::E::U;
-    let _ = UndirE::<String>::try_from(vec![
+    let _ = MUndirE::<String>::try_from(vec![
         (U(0, 1), String::from("01")),
         (U(4, 8), String::from("48")),
     ])
@@ -271,13 +272,13 @@ fn test_from_undir_valued_edges() {
 #[test]
 fn test_from_dir_edges() {
     use edge::dir::E::D;
-    let _ = Dir0::try_from(vec![D(0, 1), D(4, 8)]).unwrap();
+    let _ = MDir0::try_from(vec![D(0, 1), D(4, 8)]).unwrap();
 }
 
 #[test]
 fn test_from_dir_valued_edges() {
     use edge::dir::E::D;
-    let _ = DirE::<String>::try_from(vec![
+    let _ = MDirE::<String>::try_from(vec![
         (D(0, 1), String::from("01")),
         (D(4, 8), String::from("48")),
     ])
@@ -289,13 +290,13 @@ fn test_from_dir_valued_edges() {
 #[test]
 fn test_from_anydir_edges() {
     use edge::anydir::E::{D, U};
-    let _ = Anydir0::try_from(vec![U(0, 1), D(4, 8)]).unwrap();
+    let _ = MAnydir0::try_from(vec![U(0, 1), D(4, 8)]).unwrap();
 }
 
 #[test]
 fn test_from_anydir_valued_edges() {
     use edge::anydir::E::{D, U};
-    let _ = AnydirE::<String>::try_from(vec![
+    let _ = MAnydirE::<String>::try_from(vec![
         (U(0, 1), String::from("01")),
         (D(4, 8), String::from("48")),
     ])
@@ -309,13 +310,13 @@ fn test_from_anydir_valued_edges() {
 #[test]
 fn test_from_count_undir_edges() {
     use edge::undir::E::U;
-    let _ = Undir0::try_from((10 as Id, vec![U(0, 1), U(4, 8)])).unwrap();
+    let _ = MUndir0::try_from((10 as Id, vec![U(0, 1), U(4, 8)])).unwrap();
 }
 
 #[test]
 fn test_from_count_undir_valued_edges() {
     use edge::undir::E::U;
-    let _ = UndirE::<String>::try_from((
+    let _ = MUndirE::<String>::try_from((
         10 as Id,
         vec![(U(0, 1), String::from("01")), (U(4, 8), String::from("48"))],
     ))
@@ -327,13 +328,13 @@ fn test_from_count_undir_valued_edges() {
 #[test]
 fn test_from_count_dir_edges() {
     use edge::dir::E::D;
-    let _ = Dir0::try_from((10 as Id, vec![D(0, 1), D(4, 8)])).unwrap();
+    let _ = MDir0::try_from((10 as Id, vec![D(0, 1), D(4, 8)])).unwrap();
 }
 
 #[test]
 fn test_from_count_dir_valued_edges() {
     use edge::dir::E::D;
-    let _ = DirE::<String>::try_from((
+    let _ = MDirE::<String>::try_from((
         10 as Id,
         vec![(D(0, 1), String::from("01")), (D(4, 8), String::from("48"))],
     ))
@@ -345,13 +346,13 @@ fn test_from_count_dir_valued_edges() {
 #[test]
 fn test_from_count_anydir_edges() {
     use edge::anydir::E::{D, U};
-    let _ = Anydir0::try_from((10 as Id, vec![U(0, 1), D(4, 8)])).unwrap();
+    let _ = MAnydir0::try_from((10 as Id, vec![U(0, 1), D(4, 8)])).unwrap();
 }
 
 #[test]
 fn test_from_count_anydir_valued_edges() {
     use edge::anydir::E::{D, U};
-    let _ = AnydirE::<String>::try_from((
+    let _ = MAnydirE::<String>::try_from((
         10 as Id,
         vec![(U(0, 1), String::from("01")), (D(4, 8), String::from("48"))],
     ))
@@ -365,13 +366,13 @@ fn test_from_count_anydir_valued_edges() {
 #[test]
 fn test_from_ids_undir_edges() {
     use edge::undir::E::U;
-    let _ = Undir0::try_from((vec![0, 1, 4, 8], vec![U(0, 1), U(4, 8)])).unwrap();
+    let _ = MUndir0::try_from((vec![0, 1, 4, 8], vec![U(0, 1), U(4, 8)])).unwrap();
 }
 
 #[test]
 fn test_from_ids_undir_valued_edges() {
     use edge::undir::E::U;
-    let _ = UndirE::<String>::try_from((
+    let _ = MUndirE::<String>::try_from((
         vec![0, 1, 4, 8],
         vec![(U(0, 1), String::from("01")), (U(4, 8), String::from("48"))],
     ))
@@ -383,13 +384,13 @@ fn test_from_ids_undir_valued_edges() {
 #[test]
 fn test_from_ids_dir_edges() {
     use edge::dir::E::D;
-    let _ = Dir0::try_from((vec![0, 1, 4, 8], vec![D(0, 1), D(4, 8)])).unwrap();
+    let _ = MDir0::try_from((vec![0, 1, 4, 8], vec![D(0, 1), D(4, 8)])).unwrap();
 }
 
 #[test]
 fn test_from_ids_dir_valued_edges() {
     use edge::dir::E::D;
-    let _ = DirE::<String>::try_from((
+    let _ = MDirE::<String>::try_from((
         vec![0, 1, 4, 8],
         vec![(D(0, 1), String::from("01")), (D(4, 8), String::from("48"))],
     ))
@@ -401,13 +402,13 @@ fn test_from_ids_dir_valued_edges() {
 #[test]
 fn test_from_ids_anydir_edges() {
     use edge::anydir::E::{D, U};
-    let _ = Anydir0::try_from((vec![0, 1, 4, 8], vec![U(0, 1), D(4, 8)])).unwrap();
+    let _ = MAnydir0::try_from((vec![0, 1, 4, 8], vec![U(0, 1), D(4, 8)])).unwrap();
 }
 
 #[test]
 fn test_from_ids_anydir_valued_edges() {
     use edge::anydir::E::{D, U};
-    let _ = AnydirE::<String>::try_from((
+    let _ = MAnydirE::<String>::try_from((
         vec![0, 1, 4, 8],
         vec![(U(0, 1), String::from("01")), (D(4, 8), String::from("48"))],
     ))
@@ -421,7 +422,7 @@ fn test_from_ids_anydir_valued_edges() {
 #[test]
 fn test_from_valued_nodes_undir_edges() {
     use edge::undir::E::U;
-    let _ = UndirN::<String>::try_from((
+    let _ = MUndirN::<String>::try_from((
         vec![
             (0, String::from("0")),
             (1, String::from("1")),
@@ -436,7 +437,7 @@ fn test_from_valued_nodes_undir_edges() {
 #[test]
 fn test_from_valued_nodes_undir_valued_edges() {
     use edge::undir::E::U;
-    let _ = Undir::<String, String>::try_from((
+    let _ = MUndir::<String, String>::try_from((
         vec![
             (0, String::from("0")),
             (1, String::from("1")),
@@ -453,7 +454,7 @@ fn test_from_valued_nodes_undir_valued_edges() {
 #[test]
 fn test_from_valued_nodes_dir_edges() {
     use edge::dir::E::D;
-    let _ = DirN::<String>::try_from((
+    let _ = MDirN::<String>::try_from((
         vec![
             (0, String::from("0")),
             (1, String::from("1")),
@@ -468,7 +469,7 @@ fn test_from_valued_nodes_dir_edges() {
 #[test]
 fn test_from_valued_nodes_dir_valued_edges() {
     use edge::dir::E::D;
-    let _ = Dir::<String, String>::try_from((
+    let _ = MDir::<String, String>::try_from((
         vec![
             (0, String::from("0")),
             (1, String::from("1")),
@@ -485,7 +486,7 @@ fn test_from_valued_nodes_dir_valued_edges() {
 #[test]
 fn test_from_valued_nodes_anydir_edges() {
     use edge::anydir::E::{D, U};
-    let _ = AnydirN::<String>::try_from((
+    let _ = MAnydirN::<String>::try_from((
         vec![
             (0, String::from("0")),
             (1, String::from("1")),
@@ -500,7 +501,7 @@ fn test_from_valued_nodes_anydir_edges() {
 #[test]
 fn test_from_valued_nodes_anydir_valued_edges() {
     use edge::anydir::E::{D, U};
-    let _ = Anydir::<String, String>::try_from((
+    let _ = MAnydir::<String, String>::try_from((
         vec![
             (0, String::from("0")),
             (1, String::from("1")),
@@ -517,7 +518,7 @@ fn test_from_valued_nodes_anydir_valued_edges() {
 #[test]
 fn test_dir_opposite_directions_ok() {
     use edge::dir::E::D;
-    let _ = Dir0::try_from(vec![D(0, 1), D(1, 0)]).unwrap();
+    let _ = MDir0::try_from(vec![D(0, 1), D(1, 0)]).unwrap();
 }
 
 // ---- Undirected U(0,1) and U(1,0) are duplicates (same edge) ----
@@ -526,7 +527,7 @@ fn test_dir_opposite_directions_ok() {
 fn test_undir_reversed_duplicate() {
     use super::error;
     use edge::undir::E::U;
-    let g = Undir0::try_from(vec![U(0, 1), U(1, 0)]);
+    let g = MUndir0::try_from(vec![U(0, 1), U(1, 0)]);
     assert_eq!(
         g.err(),
         Some(error::Edge::Duplicate(
@@ -542,7 +543,7 @@ fn test_undir_reversed_duplicate() {
 fn test_err_node_not_found_undir() {
     use super::error;
     use edge::undir::E::U;
-    let g = Undir0::try_from((vec![0, 1], vec![U(0, 1), U(2, 3)]));
+    let g = MUndir0::try_from((vec![0, 1], vec![U(0, 1), U(2, 3)]));
     assert_eq!(
         g.err(),
         Some(error::Build::Edge(error::Edge::NodeNotFound(id::N(2 as Id))))
@@ -553,7 +554,7 @@ fn test_err_node_not_found_undir() {
 fn test_err_node_not_found_dir() {
     use super::error;
     use edge::dir::E::D;
-    let g = Dir0::try_from((vec![0, 1], vec![D(0, 1), D(2, 3)]));
+    let g = MDir0::try_from((vec![0, 1], vec![D(0, 1), D(2, 3)]));
     assert_eq!(
         g.err(),
         Some(error::Build::Edge(error::Edge::NodeNotFound(id::N(2 as Id))))
@@ -564,7 +565,7 @@ fn test_err_node_not_found_dir() {
 fn test_err_node_not_found_anydir() {
     use super::error;
     use edge::anydir::E::{D, U};
-    let g = Anydir0::try_from((vec![0, 1], vec![U(0, 1), D(2, 3)]));
+    let g = MAnydir0::try_from((vec![0, 1], vec![U(0, 1), D(2, 3)]));
     assert_eq!(
         g.err(),
         Some(error::Build::Edge(error::Edge::NodeNotFound(id::N(2 as Id))))
@@ -575,7 +576,7 @@ fn test_err_node_not_found_anydir() {
 fn test_err_node_duplicate_undir() {
     use super::error;
     use edge::undir::E::U;
-    let g = UndirN::<String>::try_from((
+    let g = MUndirN::<String>::try_from((
         vec![
             (0, String::from("a")),
             (1, String::from("b")),
@@ -590,7 +591,7 @@ fn test_err_node_duplicate_undir() {
 fn test_err_node_duplicate_dir() {
     use super::error;
     use edge::dir::E::D;
-    let g = DirN::<String>::try_from((
+    let g = MDirN::<String>::try_from((
         vec![
             (0, String::from("a")),
             (1, String::from("b")),
@@ -605,7 +606,7 @@ fn test_err_node_duplicate_dir() {
 fn test_err_node_duplicate_anydir() {
     use super::error;
     use edge::anydir::E::U;
-    let g = AnydirN::<String>::try_from((
+    let g = MAnydirN::<String>::try_from((
         vec![
             (0, String::from("a")),
             (1, String::from("b")),
@@ -620,63 +621,63 @@ fn test_err_node_duplicate_anydir() {
 
 #[test]
 fn test_macro_undir_chain() {
-    let g: Graph<(), edge::Undir<()>> = graph![N(0) ^ N(1) ^ N(2)].unwrap();
+    let g: MGraph<(), edge::Undir<()>> = mgraph![N(0) ^ N(1) ^ N(2)].unwrap();
     assert_eq!(g.node_count(), 3);
     assert_eq!(g.edge_count(), 2);
 }
 
 #[test]
 fn test_macro_undir_with_node_vals() {
-    let g: Graph<&str, edge::Undir<()>> = graph![N(0).val("a") ^ N(1).val("b")].unwrap();
+    let g: MGraph<&str, edge::Undir<()>> = mgraph![N(0).val("a") ^ N(1).val("b")].unwrap();
     assert_eq!(g.node_count(), 2);
     assert_eq!(g.edge_count(), 1);
 }
 
 #[test]
 fn test_macro_undir_with_edge_vals() {
-    let g: Graph<(), edge::Undir<u32>> = graph![N(0) & E().val(42u32) ^ N(1)].unwrap();
+    let g: MGraph<(), edge::Undir<u32>> = mgraph![N(0) & E().val(42u32) ^ N(1)].unwrap();
     assert_eq!(g.node_count(), 2);
     assert_eq!(g.edge_count(), 1);
 }
 
 #[test]
 fn test_macro_dir_chain() {
-    let g: Graph<(), edge::Dir<()>> = graph![N(0) >> N(1) >> N(2)].unwrap();
+    let g: MGraph<(), edge::Dir<()>> = mgraph![N(0) >> N(1) >> N(2)].unwrap();
     assert_eq!(g.node_count(), 3);
     assert_eq!(g.edge_count(), 2);
 }
 
 #[test]
 fn test_macro_back_reference() {
-    let g: Graph<(), edge::Undir<()>> = graph![N(0) ^ N(1) ^ N(2) ^ n(0)].unwrap();
+    let g: MGraph<(), edge::Undir<()>> = mgraph![N(0) ^ N(1) ^ N(2) ^ n(0)].unwrap();
     assert_eq!(g.node_count(), 3);
     assert_eq!(g.edge_count(), 3);
 }
 
 #[test]
 fn test_macro_anonymous_nodes() {
-    let g: Graph<(), edge::Undir<()>> = graph![N_() ^ N_()].unwrap();
+    let g: MGraph<(), edge::Undir<()>> = mgraph![N_() ^ N_()].unwrap();
     assert_eq!(g.node_count(), 2);
     assert_eq!(g.edge_count(), 1);
 }
 
 #[test]
 fn test_macro_turbofish_syntax() {
-    let g = graph![<(), crate::graph::edge::Undir<()>>; N(0) ^ N(1)].unwrap();
+    let g = mgraph![<(), crate::graph::edge::Undir<()>>; N(0) ^ N(1)].unwrap();
     assert_eq!(g.node_count(), 2);
     assert_eq!(g.edge_count(), 1);
 }
 
 #[test]
 fn test_macro_multi_fragment() {
-    let g: Graph<(), edge::Undir<()>> = graph![N(0) ^ N(1), N(2) ^ N(3), n(0) ^ n(2)].unwrap();
+    let g: MGraph<(), edge::Undir<()>> = mgraph![N(0) ^ N(1), N(2) ^ N(3), n(0) ^ n(2)].unwrap();
     assert_eq!(g.node_count(), 4);
     assert_eq!(g.edge_count(), 3);
 }
 
 #[test]
 fn test_macro_single_node() {
-    let g: Graph<(), edge::Undir<()>> = graph![N(0)].unwrap();
+    let g: MGraph<(), edge::Undir<()>> = mgraph![N(0)].unwrap();
     assert_eq!(g.node_count(), 1);
     assert_eq!(g.edge_count(), 0);
 }
@@ -684,42 +685,42 @@ fn test_macro_single_node() {
 #[test]
 fn test_macro_err_duplicate_local_id() {
     use super::error;
-    let g = graph![<(), crate::graph::edge::Undir<()>>; N(0) ^ N(0)];
+    let g = mgraph![<(), crate::graph::edge::Undir<()>>; N(0) ^ N(0)];
     assert!(matches!(g, Err(error::Build::Node(error::Node::DuplicateLocalId(0)))));
 }
 
 #[test]
 fn test_macro_err_undefined_ref() {
     use super::error;
-    let g = graph![<(), crate::graph::edge::Undir<()>>; N(0) ^ n(99)];
+    let g = mgraph![<(), crate::graph::edge::Undir<()>>; N(0) ^ n(99)];
     assert!(matches!(g, Err(error::Build::Node(error::Node::UndefinedRef(99)))));
 }
 
 #[test]
 fn test_macro_err_duplicate_edge() {
     use super::error;
-    let g = graph![<(), crate::graph::edge::Undir<()>>; N(0) ^ N(1), n(0) ^ n(1)];
+    let g = mgraph![<(), crate::graph::edge::Undir<()>>; N(0) ^ N(1), n(0) ^ n(1)];
     assert!(matches!(g, Err(error::Build::Edge(..))));
 }
 
 #[test]
 fn test_macro_anon_mixed_with_explicit() {
-    let g: Graph<(), edge::Undir<()>> = graph![N(5) ^ N_() ^ N_()].unwrap();
+    let g: MGraph<(), edge::Undir<()>> = mgraph![N(5) ^ N_() ^ N_()].unwrap();
     assert_eq!(g.node_count(), 3);
     assert_eq!(g.edge_count(), 2);
 }
 
 #[test]
 fn test_macro_dir_with_edge_val() {
-    let g: Graph<(), edge::Dir<i32>> = graph![N(0) & E().val(10) >> N(1)].unwrap();
+    let g: MGraph<(), edge::Dir<i32>> = mgraph![N(0) & E().val(10) >> N(1)].unwrap();
     assert_eq!(g.node_count(), 2);
     assert_eq!(g.edge_count(), 1);
 }
 
 #[test]
 fn test_macro_node_and_edge_vals() {
-    let g: Graph<String, edge::Undir<String>> =
-        graph![N(0).val(String::from("x")) & E().val(String::from("e")) ^ N(1).val(String::from("y"))].unwrap();
+    let g: MGraph<String, edge::Undir<String>> =
+        mgraph![N(0).val(String::from("x")) & E().val(String::from("e")) ^ N(1).val(String::from("y"))].unwrap();
     assert_eq!(g.node_count(), 2);
     assert_eq!(g.edge_count(), 1);
 }
@@ -784,7 +785,7 @@ impl Watcher<(), edge::Undir<()>> for Recorder {
 #[test]
 fn silent_matches_normal_count() {
     type ER = edge::Undir<()>;
-    let g: Undir0 = Graph::try_from(
+    let g: MUndir0 = MGraph::try_from(
         vec![edge::undir::E::U(0, 1), edge::undir::E::U(1, 2), edge::undir::E::U(2, 0)]
     ).unwrap();
 
@@ -807,7 +808,7 @@ fn silent_matches_normal_count() {
 #[test]
 fn watcher_receives_bind_unbind_events() {
     type ER = edge::Undir<()>;
-    let g: Undir0 = Graph::try_from(
+    let g: MUndir0 = MGraph::try_from(
         vec![edge::undir::E::U(0, 1), edge::undir::E::U(1, 2)]
     ).unwrap();
 
@@ -831,7 +832,7 @@ fn watcher_receives_bind_unbind_events() {
 #[test]
 fn watcher_receives_events_and_returns_via_into_watcher() {
     type ER = edge::Undir<()>;
-    let g: Undir0 = Graph::try_from(
+    let g: MUndir0 = MGraph::try_from(
         vec![edge::undir::E::U(0, 1), edge::undir::E::U(1, 2)]
     ).unwrap();
 
@@ -859,7 +860,7 @@ fn watcher_receives_events_and_returns_via_into_watcher() {
 #[test]
 fn stop_terminates_early() {
     type ER = edge::Undir<()>;
-    let g: Undir0 = Graph::try_from(
+    let g: MUndir0 = MGraph::try_from(
         vec![
             edge::undir::E::U(0, 1),
             edge::undir::E::U(1, 2),
@@ -934,7 +935,7 @@ impl Watcher<(), edge::Undir<()>> for MutRecorder {
 #[test]
 fn watcher_fires_on_modify() {
     type ER = edge::Undir<()>;
-    let mut g: crate::Graph<(), ER> = Graph::try_from(
+    let mut g: crate::MGraph<(), ER> = MGraph::try_from(
         vec![edge::undir::E::U(0, 1)]
     ).unwrap();
 
@@ -950,10 +951,159 @@ fn watcher_fires_on_modify() {
     assert_eq!(rec.edges_added.len(), 1);
 }
 
+// ---- iter_edges ----
+
+#[test]
+fn test_iter_edges_empty_mgraph() {
+    let g: MUndir0 = MGraph::default();
+    assert_eq!(g.iter_edges().count(), 0);
+}
+
+#[test]
+fn test_iter_edges_empty_vgraph() {
+    let g: crate::graph::VUndir0 = crate::graph::VGraph::new();
+    assert_eq!(g.iter_edges().count(), 0);
+}
+
+#[test]
+fn test_iter_edges_matches_persist_store_order() {
+    use edge::undir::E::U;
+    let g = MUndir0::try_from(vec![U(0, 1), U(1, 2), U(2, 3), U(3, 0)]).unwrap();
+    let got: Vec<(id::N, id::N)> = g.iter_edges().map(|(a, b, _, _)| (a, b)).collect();
+    assert_eq!(
+        got,
+        vec![
+            (id::N(0), id::N(1)),
+            (id::N(1), id::N(2)),
+            (id::N(2), id::N(3)),
+            (id::N(0), id::N(3)),
+        ]
+    );
+}
+
+fn sorted_undir<G: Graph<(), edge::Undir<()>>>(g: &G) -> Vec<(id::N, id::N, edge::undir::Slot)> {
+    let mut v: Vec<_> = g.iter_edges().map(|(a, b, s, _)| (a, b, s)).collect();
+    v.sort();
+    v
+}
+
+fn sorted_dir<G: Graph<(), edge::Dir<()>>>(g: &G) -> Vec<(id::N, id::N, edge::dir::Slot)> {
+    let mut v: Vec<_> = g.iter_edges().map(|(a, b, s, _)| (a, b, s)).collect();
+    v.sort();
+    v
+}
+
+fn sorted_anydir<G: Graph<(), edge::Anydir<()>>>(g: &G) -> Vec<(id::N, id::N, edge::anydir::Slot)> {
+    let mut v: Vec<_> = g.iter_edges().map(|(a, b, s, _)| (a, b, s)).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn test_iter_edges_mgraph_vgraph_parity_undir() {
+    let m: MUndir0 = mgraph![N(0) ^ N(1), n(1) ^ N(2)].unwrap();
+    let v: crate::graph::VUndir0 = crate::vgraph![N(0) ^ N(1), n(1) ^ N(2)].unwrap();
+    assert_eq!(m.edge_count(), 2);
+    assert_eq!(sorted_undir(&m), sorted_undir(&v));
+}
+
+#[test]
+fn test_iter_edges_mgraph_vgraph_parity_dir_both_directions() {
+    let m: MDir0 = mgraph![N(0) >> N(1), n(1) >> n(0)].unwrap();
+    let v: crate::graph::VDir0 = crate::vgraph![N(0) >> N(1), n(1) >> n(0)].unwrap();
+    assert_eq!(m.edge_count(), 2);
+    assert_eq!(sorted_dir(&m), sorted_dir(&v));
+    assert_eq!(
+        sorted_dir(&m),
+        vec![
+            (id::N(0), id::N(1), edge::dir::TGT),
+            (id::N(0), id::N(1), edge::dir::SRC),
+        ]
+    );
+}
+
+#[test]
+fn test_iter_edges_mgraph_vgraph_parity_anydir_three_slots() {
+    let m: MAnydir0 = mgraph![N(0) >> N(1), n(1) >> n(0), n(0) ^ n(1)].unwrap();
+    let v: crate::graph::VAnydir0 = crate::vgraph![N(0) >> N(1), n(1) >> n(0), n(0) ^ n(1)].unwrap();
+    assert_eq!(m.edge_count(), 3);
+    assert_eq!(sorted_anydir(&m), sorted_anydir(&v));
+    assert_eq!(
+        sorted_anydir(&m),
+        vec![
+            (id::N(0), id::N(1), edge::anydir::TGT),
+            (id::N(0), id::N(1), edge::anydir::SRC),
+            (id::N(0), id::N(1), edge::anydir::UND),
+        ]
+    );
+}
+
+#[test]
+fn test_iter_edges_tombstone_and_reuse_mgraph() {
+    let mut m: MUndir0 = mgraph![N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)].unwrap();
+    assert_eq!(m.edge_count(), 3);
+    assert_eq!(m.edges.get_by_id(id::E(1)).map(|r| (r.n1, r.n2)), Some((id::N(1), id::N(2))));
+
+    m.modify(crate::modify![x(1) & !e() ^ x(2)]).unwrap();
+    let surviving: Vec<(id::N, id::N)> = m.iter_edges().map(|(a, b, _, _)| (a, b)).collect();
+    assert_eq!(surviving, vec![(id::N(0), id::N(1)), (id::N(2), id::N(3))]);
+
+    m.modify(crate::modify![x(0) ^ x(3)]).unwrap();
+    assert_eq!(m.edges.get_by_id(id::E(1)).map(|r| (r.n1, r.n2)), Some((id::N(0), id::N(3))));
+    let after_reuse: Vec<(id::N, id::N)> = m.iter_edges().map(|(a, b, _, _)| (a, b)).collect();
+    assert_eq!(
+        after_reuse,
+        vec![
+            (id::N(0), id::N(1)),
+            (id::N(0), id::N(3)),
+            (id::N(2), id::N(3)),
+        ]
+    );
+}
+
+#[test]
+fn test_iter_edges_tombstone_and_reuse_vgraph() {
+    let v0: crate::graph::VUndir0 =
+        crate::vgraph![N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)].unwrap();
+    assert_eq!(v0.edge_count(), 3);
+
+    let (v1, _) = v0.modify(crate::modify![x(1) & !e() ^ x(2)]).unwrap();
+    let surviving: Vec<(id::N, id::N)> = v1.iter_edges().map(|(a, b, _, _)| (a, b)).collect();
+    assert_eq!(surviving, vec![(id::N(0), id::N(1)), (id::N(2), id::N(3))]);
+
+    let (v2, _) = v1.modify(crate::modify![x(0) ^ x(3)]).unwrap();
+    let after_reuse: Vec<(id::N, id::N)> = v2.iter_edges().map(|(a, b, _, _)| (a, b)).collect();
+    assert_eq!(
+        after_reuse,
+        vec![
+            (id::N(0), id::N(1)),
+            (id::N(0), id::N(3)),
+            (id::N(2), id::N(3)),
+        ]
+    );
+}
+
+#[test]
+fn test_iter_edges_tombstone_and_reuse_mgraph_vgraph_parity() {
+    let mut m: MUndir0 = mgraph![N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)].unwrap();
+    let v0: crate::graph::VUndir0 =
+        crate::vgraph![N(0) ^ N(1), n(1) ^ N(2), n(2) ^ N(3)].unwrap();
+
+    m.modify(crate::modify![x(1) & !e() ^ x(2)]).unwrap();
+    let (v1, _) = v0.modify(crate::modify![x(1) & !e() ^ x(2)]).unwrap();
+    assert_eq!(sorted_undir(&m), sorted_undir(&v1));
+
+    m.modify(crate::modify![x(0) ^ x(3)]).unwrap();
+    let (v2, _) = v1.modify(crate::modify![x(0) ^ x(3)]).unwrap();
+    assert_eq!(sorted_undir(&m), sorted_undir(&v2));
+    assert_eq!(m.edge_count(), 3);
+    assert_eq!(v2.edge_count(), 3);
+}
+
 #[test]
 fn watcher_fires_on_node_remove() {
     type ER = edge::Undir<()>;
-    let mut g: crate::Graph<(), ER> = Graph::try_from(
+    let mut g: crate::MGraph<(), ER> = MGraph::try_from(
         vec![edge::undir::E::U(0, 1)]
     ).unwrap();
 

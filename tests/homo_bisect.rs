@@ -1,7 +1,8 @@
 use grw::search::{Search, Seq, RevCsr};
+use grw::Graph as _;
 type ER = grw::edge::Undir<()>;
 
-fn count(p: grw::Search<(), ER>, g: &grw::Graph<(), ER>) -> usize {
+fn count(p: grw::Search<(), ER>, g: &grw::MGraph<(), ER>) -> usize {
     let t = g.index(RevCsr);
     let Search::Resolved(r) = p else { panic!() };
     Seq::search(&r.query(), &t).count()
@@ -10,7 +11,7 @@ fn count(p: grw::Search<(), ER>, g: &grw::Graph<(), ER>) -> usize {
 #[test]
 fn bisect() {
     // target: hub 0, leaves 1,2, pads 3,4,5
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(0) ^ N(2), N(3), N(4), N(5)
     ].unwrap();
 
@@ -48,7 +49,7 @@ fn bisect() {
 // order, so variant B binds homo nodes before the mono leaf.
 #[test]
 fn declaration_order_changes_semantics() {
-    let g = grw::graph![<(), ER>;
+    let g = grw::mgraph![<(), ER>;
         N(0) ^ N(1), n(0) ^ N(2), n(0) ^ N(3)
     ].unwrap();
 
