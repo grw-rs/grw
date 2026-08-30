@@ -210,7 +210,7 @@
       <p class="lede">Build a graph, mutate it transactionally, run patterns over it, consume the matches — one loop, inside a Rust process.</p>
       <p class="sub">Three small DSLs built on <code>macro_rules!</code> — no procedural macros — overload Rust's operators so an edge is just <code>^</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code> — and a variable-length path is just <code>..</code>.</p>
       <div class="loop">
-        <a href="#act1">graph!</a><span class="sep">→</span>
+        <a href="#act1">mgraph!</a><span class="sep">→</span>
         <a href="#act2">modify!</a><span class="sep">→</span>
         <a href="#act3">search!</a><span class="sep">→</span>
         <a href="#consume">consume</a><span class="sep">↻</span>
@@ -222,8 +222,8 @@
     </div>
     <div class="heroart">
       <div class="canvas">
-        <div class="cap"><span class="dot"></span> graph! — a triangle, in code and on the canvas</div>
-        <pre><span class="k">let</span> g: <span class="f">Undir0</span> = <span class="m">graph!</span>[
+        <div class="cap"><span class="dot"></span> mgraph! — a triangle, in code and on the canvas</div>
+        <pre><span class="k">let</span> g: <span class="f">MUndir0</span> = <span class="m">mgraph!</span>[
     <span class="n">N</span>(0) ^ (<span class="n">N</span>(1) ^ (<span class="n">N</span>(2) ^ <span class="n">n</span>(0)))
 ].<span class="f">unwrap</span>();</pre>
         <div class="diagram">
@@ -250,10 +250,10 @@
 
     <div class="pair" id="act1">
       <div class="code">
-        <div class="cap"><span class="act">act 1</span><span class="dot"></span> graph! — build the fleet</div>
+        <div class="cap"><span class="act">act 1</span><span class="dot"></span> mgraph! — build the fleet</div>
         <pre><span class="k">type</span> <span class="f">ER</span> = grw::edge::<span class="f">Dir</span>&lt;<span class="f">u32</span>&gt;;  <span class="c">// latency in ms</span>
 
-<span class="m">grw::graph!</span>[&lt;&amp;<span class="k">'static</span> <span class="f">str</span>, <span class="f">ER</span>&gt;;
+<span class="m">grw::mgraph!</span>[&lt;&amp;<span class="k">'static</span> <span class="f">str</span>, <span class="f">ER</span>&gt;;
     <span class="n">N</span>(0).<span class="f">val</span>(<span class="p">"gateway"</span>) &amp; <span class="n">E</span>().<span class="f">val</span>(2) &gt;&gt; <span class="n">N</span>(1).<span class="f">val</span>(<span class="p">"auth"</span>),
     <span class="n">n</span>(0) &amp; <span class="n">E</span>().<span class="f">val</span>(3) &gt;&gt; <span class="n">N</span>(2).<span class="f">val</span>(<span class="p">"orders"</span>),
     <span class="n">n</span>(1) &amp; <span class="n">E</span>().<span class="f">val</span>(9) &gt;&gt; <span class="n">N</span>(3).<span class="f">val</span>(<span class="p">"db"</span>),
@@ -553,7 +553,7 @@ session.<span class="f">iter</span>()
     <p class="sec-lede" style="margin-top:2px"><b>iso</b> is not tabulated: on this corpus it reduces to microsecond-scale pattern-vs-pattern checks (GRW 2–3× ahead) — too small to time against parallel variants. Counting a million-node graph's 34.7M mono matches takes <b>156&nbsp;ms</b>. Loading it: ~0.3&nbsp;s for GRW (82&nbsp;ms load + 203&nbsp;ms CSR index) vs ~4&nbsp;s for the vf3 build. Heaviest pattern per tier shown; pattern sizes capped on large graphs (subiso/mono ≤ 3 nodes from 29k up); one machine, single runs. All rows use the mutable store (<code>MGraph</code>); the versioned store reaches the same index at 3.7× build cost and searches at parity — measured below. Full protocol: <a href="https://github.com/grw-rs/grw_vf3_tests">grw_vf3_tests</a> — clone, <code>./gen_data.sh</code>, <code>cargo build --release</code>, <code>./bench_all.sh</code>.</p>
     <div class="sec-head" style="margin-top:34px">
       <h2 class="sec-title">Mutable vs <span class="em">versioned.</span></h2>
-      <p class="sec-lede">GRW ships two stores behind one read trait: <code>MGraph</code> mutates in place; <code>VGraph</code> is persistent — every <code>modify</code> returns a new version, old versions stay live, structure is shared. The price is paid on writes and raw scans; through the search index the two are indistinguishable — and keeping a version costs 20&nbsp;ns, flat, at any size. 1M nodes / 2M edges, median of 3:</p>
+      <p class="sec-lede">GRW ships two stores behind one read trait: <code>MGraph</code>, built with <code>mgraph!</code>, mutates in place; <code>VGraph</code>, built with <code>vgraph!</code> — same DSL, versioned result — is persistent — every <code>modify</code> returns a new version, old versions stay live, structure is shared. The price is paid on writes and raw scans; through the search index the two are indistinguishable — and keeping a version costs 20&nbsp;ns, flat, at any size. 1M nodes / 2M edges, median of 3:</p>
     </div>
     <div class="apistrip" style="padding:6px 0">
       <table class="ptable">
@@ -580,13 +580,14 @@ session.<span class="f">iter</span>()
     </div>
     <div class="deeper">
       <a class="dcard" href="book/graph-model.html"><h4>Graph model</h4><p>Undirected, directed, and mixed edges; node and edge values; slots.</p><span class="go">book/graph-model →</span></a>
-      <a class="dcard" href="book/graph.html"><h4>graph!</h4><p>Graph literals: chains, cycles, stars, values, back-references.</p><span class="go">book/graph →</span></a>
+      <a class="dcard" href="book/graph.html"><h4>mgraph!</h4><p>Graph literals: chains, cycles, stars, values, back-references.</p><span class="go">book/graph →</span></a>
       <a class="dcard" href="book/modify.html"><h4>modify!</h4><p>Atomic mutation: add, rewire, remove nodes and edges, swap values.</p><span class="go">book/modify →</span></a>
       <a class="dcard" href="book/search.html"><h4>search!</h4><p>Clusters, negation, context nodes, predicates, the Match struct.</p><span class="go">book/search →</span></a>
       <a class="dcard" href="book/paths.html"><h4>Paths</h4><p>DFS/BFS, length bounds, Dijkstra and A*, guards, steering, consuming.</p><span class="go">book/paths →</span></a>
       <a class="dcard" href="book/morphisms.html"><h4>Morphisms</h4><p>The six mappings, their lattice, and when to reach for each.</p><span class="go">book/morphisms →</span></a>
       <a class="dcard" href="book/mixed-morphisms.html"><h4>Mixing clusters</h4><p>The distinctness rule, aliasing, self-loops, paths — every combination drawn out.</p><span class="go">book/mixed-morphisms →</span></a>
       <a class="dcard" href="book/persistence.html"><h4>Persistence</h4><p>Binary graph format with layout-hash validation.</p><span class="go">book/persistence →</span></a>
+      <a class="dcard" href="book/versioned-graph.html"><h4>vgraph!</h4><p>The persistent store: every modify is a new version, old ones stay live; measured costs.</p><span class="go">book/versioned-graph →</span></a>
       <a class="dcard" href="book/playground.html"><h4>Playground</h4><p>Run GRW in your browser — compiled to WebAssembly.</p><span class="go">book/playground →</span></a>
     </div>
   </section>
