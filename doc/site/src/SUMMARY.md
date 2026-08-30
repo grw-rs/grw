@@ -2,7 +2,6 @@
 
 [Introduction](./intro.md)
 
-[Playground](./playground.md)
 
 # User Guide
 
