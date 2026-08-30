@@ -537,20 +537,38 @@ session.<span class="f">iter</span>()
       <table class="ptable">
         <thead><tr><th>nodes</th><th style="text-align:left">morphism</th><th>matches</th><th>VF3</th><th>seq</th><th>seq count</th><th>par</th><th>par count</th></tr></thead>
         <tbody>
-          <tr><td>10,458</td><td class="mor">subiso</td><td>1.95M</td><td>378ms</td><td>2.4× (156ms)</td><td>7.1× (54ms)</td><td>18× (21ms)</td><td>40× (9.5ms)</td></tr>
-          <tr><td>10,458</td><td class="mor">mono</td><td>344k</td><td>74ms</td><td>3.5× (21ms)</td><td>16× (4.7ms)</td><td>14× (5.1ms)</td><td>57× (1.3ms)</td></tr>
-          <tr><td>104,374</td><td class="mor">subiso</td><td>3.50M</td><td>877ms</td><td>2.9× (301ms)</td><td>6.9× (126ms)</td><td>22× (39ms)</td><td>39× (22ms)</td></tr>
-          <tr><td>104,374</td><td class="mor">mono</td><td>3.50M</td><td>851ms</td><td>4.0× (215ms)</td><td>18× (47ms)</td><td>27× (31ms)</td><td>61× (14ms)</td></tr>
-          <tr><td>253,122</td><td class="mor">subiso</td><td>8.53M</td><td>2.36s</td><td>3.1× (765ms)</td><td>6.8× (347ms)</td><td>21× (113ms)</td><td>36× (65ms)</td></tr>
-          <tr><td>253,122</td><td class="mor">mono</td><td>8.53M</td><td>2.27s</td><td>4.1× (554ms)</td><td>19× (118ms)</td><td>28× (80ms)</td><td>61× (37ms)</td></tr>
-          <tr><td>503,122</td><td class="mor">subiso</td><td>17.2M</td><td>4.88s</td><td>3.0× (1.63s)</td><td>6.3× (769ms)</td><td>22× (220ms)</td><td>34× (145ms)</td></tr>
-          <tr><td>503,122</td><td class="mor">mono</td><td>17.3M</td><td>4.72s</td><td>4.2× (1.11s)</td><td>18× (258ms)</td><td>29× (162ms)</td><td>64× (74ms)</td></tr>
-          <tr class="hl"><td>1,013,122</td><td class="mor">subiso</td><td>34.7M</td><td>10.33s</td><td>2.9× (3.61s)</td><td>5.4× (1.90s)</td><td>20× (506ms)</td><td>33× (314ms)</td></tr>
-          <tr class="hl"><td>1,013,122</td><td class="mor">mono</td><td>34.7M</td><td>10.00s</td><td>4.4× (2.28s)</td><td>17× (584ms)</td><td>28× (363ms)</td><td>59× (168ms)</td></tr>
+          <tr><td>10,458</td><td class="mor">subiso</td><td>1.95M</td><td>377ms</td><td>2.6× (146ms)</td><td>7.2× (53ms)</td><td>19× (20ms)</td><td>44× (8.6ms)</td></tr>
+          <tr><td>10,458</td><td class="mor">mono</td><td>344k</td><td>70ms</td><td>3.5× (20ms)</td><td>16× (4.4ms)</td><td>16× (4.2ms)</td><td>59× (1.2ms)</td></tr>
+          <tr><td>104,374</td><td class="mor">subiso</td><td>3.50M</td><td>844ms</td><td>3.0× (280ms)</td><td>7.4× (115ms)</td><td>19× (45ms)</td><td>36× (23ms)</td></tr>
+          <tr><td>104,374</td><td class="mor">mono</td><td>3.50M</td><td>805ms</td><td>4.0× (199ms)</td><td>18× (46ms)</td><td>24× (34ms)</td><td>50× (16ms)</td></tr>
+          <tr><td>253,122</td><td class="mor">subiso</td><td>8.53M</td><td>2.29s</td><td>3.2× (721ms)</td><td>7.0× (326ms)</td><td>22× (105ms)</td><td>38× (60ms)</td></tr>
+          <tr><td>253,122</td><td class="mor">mono</td><td>8.53M</td><td>2.22s</td><td>4.5× (492ms)</td><td>19× (115ms)</td><td>26× (85ms)</td><td>64× (35ms)</td></tr>
+          <tr><td>503,122</td><td class="mor">subiso</td><td>17.2M</td><td>4.80s</td><td>3.1× (1.54s)</td><td>6.4× (755ms)</td><td>22× (219ms)</td><td>36× (133ms)</td></tr>
+          <tr><td>503,122</td><td class="mor">mono</td><td>17.3M</td><td>4.59s</td><td>4.4× (1.05s)</td><td>19× (245ms)</td><td>29× (159ms)</td><td>66× (69ms)</td></tr>
+          <tr class="hl"><td>1,013,122</td><td class="mor">subiso</td><td>34.7M</td><td>10.08s</td><td>2.8× (3.58s)</td><td>5.9× (1.71s)</td><td>18× (573ms)</td><td>29× (351ms)</td></tr>
+          <tr class="hl"><td>1,013,122</td><td class="mor">mono</td><td>34.7M</td><td>9.66s</td><td>4.5× (2.15s)</td><td>17× (579ms)</td><td>26× (368ms)</td><td>62× (156ms)</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="sec-lede" style="margin-top:2px"><b>iso</b> is not tabulated: on this corpus it reduces to microsecond-scale pattern-vs-pattern checks (GRW 2–3× ahead) — too small to time against parallel variants. Counting a million-node graph's 34.7M mono matches takes <b>168&nbsp;ms</b>. Loading it: ~0.5&nbsp;s for GRW (135&nbsp;ms load + 355&nbsp;ms CSR index) vs ~4&nbsp;s for the vf3 build. Heaviest pattern per tier shown; pattern sizes capped on large graphs (subiso/mono ≤ 3 nodes from 29k up); one machine, single runs. Full protocol: <a href="https://github.com/grw-rs/grw_vf3_tests">grw_vf3_tests</a> — clone, <code>./gen_data.sh</code>, <code>cargo build --release</code>, <code>./bench_all.sh</code>.</p>
+    <p class="sec-lede" style="margin-top:2px"><b>iso</b> is not tabulated: on this corpus it reduces to microsecond-scale pattern-vs-pattern checks (GRW 2–3× ahead) — too small to time against parallel variants. Counting a million-node graph's 34.7M mono matches takes <b>156&nbsp;ms</b>. Loading it: ~0.3&nbsp;s for GRW (82&nbsp;ms load + 203&nbsp;ms CSR index) vs ~4&nbsp;s for the vf3 build. Heaviest pattern per tier shown; pattern sizes capped on large graphs (subiso/mono ≤ 3 nodes from 29k up); one machine, single runs. Full protocol: <a href="https://github.com/grw-rs/grw_vf3_tests">grw_vf3_tests</a> — clone, <code>./gen_data.sh</code>, <code>cargo build --release</code>, <code>./bench_all.sh</code>.</p>
+    <div class="sec-head" style="margin-top:34px">
+      <h2 class="sec-title">Mutable vs <span class="em">versioned.</span></h2>
+      <p class="sec-lede">GRW ships two stores behind one read trait: <code>MGraph</code> mutates in place; <code>VGraph</code> is persistent — every <code>modify</code> returns a new version, old versions stay live, structure is shared. The price is paid on writes and raw scans; through the search index the two are indistinguishable — and keeping a version costs 20&nbsp;ns, flat, at any size. 1M nodes / 2M edges, median of 3:</p>
+    </div>
+    <div class="apistrip" style="padding:6px 0">
+      <table class="ptable">
+        <thead><tr><th style="text-align:left">measurement</th><th>MGraph</th><th>VGraph</th><th>V&nbsp;/&nbsp;M</th></tr></thead>
+        <tbody>
+          <tr><td class="mor">bulk build</td><td>602ms</td><td>10.49s</td><td>17.4×</td></tr>
+          <tr><td class="mor">1000 small modifies</td><td>1.7ms</td><td>23.2ms</td><td>13.5×</td></tr>
+          <tr><td class="mor">full edge scan</td><td>1.9ms</td><td>25.0ms</td><td>13.2×</td></tr>
+          <tr><td class="mor">index build (CSR)</td><td>208ms</td><td>777ms</td><td>3.7×</td></tr>
+          <tr class="hl"><td class="mor">search (triangle, mono)</td><td>1.41s</td><td>1.45s</td><td>1.03×</td></tr>
+          <tr class="hl"><td class="mor">snapshot / keep a version</td><td>29.8ms</td><td>20ns</td><td>~0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sec-lede" style="margin-top:2px">Same story at 10k and 100k nodes: search within 4% either way, version retention flat at 20&nbsp;ns while a deep copy grows linearly (213&nbsp;µs → 3.1&nbsp;ms → 29.8&nbsp;ms). Reproduce: <code>cargo run --release --example graph_perf -- 1000000 3 42</code> in the grw repo.</p>
   </section>
 
   <!-- GO DEEPER -->

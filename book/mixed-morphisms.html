@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
+            window.path_to_searchindex_js = "searchindex-b31d37da.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-29ac6ec0.js"></script>
+        <script src="toc-e2d77381.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -304,12 +304,24 @@ if its paths sweep every node.</li>
 </ul>
 <h2 id="advanced-induced-morphisms-in-mixtures"><a class="header" href="#advanced-induced-morphisms-in-mixtures">Advanced: induced morphisms in mixtures</a></h2>
 <p><code>SubIso</code> and <code>Iso</code> add the <em>induced</em> axis: extra target edges between
-matched nodes are forbidden. In a mixed pattern this check runs against the
-<strong>injective population</strong> — a <code>SubIso</code> node rejects candidates with target
-edges to any injective binding that the pattern doesn’t mirror, while free
-bindings are invisible to it. Mixing induced clusters with free clusters is
-rarely what you want; prefer <code>Mono</code> + <code>Homo</code> mixtures unless you
-specifically need exact neighborhoods.</p>
+matched nodes are forbidden. In a mixed pattern, the axis it is measured
+against is the injective population — the same population the distinctness
+rule builds:</p>
+<blockquote>
+<p><strong>Induced-ness holds between a <code>SubIso</code>/<code>Iso</code> node and every injective
+binding.</strong> For a node <code>i</code> in an induced cluster and any node <code>j</code> bound
+injectively — in <em>any</em> injective cluster, not just <code>i</code>’s own — a target
+edge <code>m(i)—m(j)</code> is legal only if the pattern has <code>i—j</code>. Bindings from
+free clusters (<code>Homo</code>, <code>Epi</code>) are invisible to the check: they neither
+trigger it nor are protected by it.</p>
+</blockquote>
+<p>So an induced node’s neighbourhood is pinned exactly against everything the
+pattern promised to keep distinct, and left unconstrained against everything
+it did not. A free node may sit on a target neighbour of an induced node
+without rejecting the match — that target edge simply is not part of what
+induced-ness reads. Mixing induced clusters with free clusters is rarely
+what you want; prefer <code>Mono</code> + <code>Homo</code> mixtures unless you specifically need
+exact neighborhoods.</p>
 <h2 id="rules-of-thumb"><a class="header" href="#rules-of-thumb">Rules of thumb</a></h2>
 <ol>
 <li><strong>Distinct entities → one injective population.</strong> Any number of clusters;
@@ -327,7 +339,7 @@ injectivity composes across them.</li>
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="morphisms.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="versioned-graph.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -341,7 +353,7 @@ injectivity composes across them.</li>
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="morphisms.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="versioned-graph.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

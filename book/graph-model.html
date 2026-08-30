@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
+            window.path_to_searchindex_js = "searchindex-b31d37da.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-29ac6ec0.js"></script>
+        <script src="toc-e2d77381.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,7 +179,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="graph-model"><a class="header" href="#graph-model">Graph Model</a></h1>
-<p>A graph <code>Graph&lt;NV, ER&gt;</code> is parameterized by two type parameters:</p>
+<p>A graph <code>MGraph&lt;NV, ER&gt;</code> is parameterized by two type parameters:</p>
 <ul>
 <li><strong><code>NV</code></strong> — node value type (use <code>()</code> for no attributes)</li>
 <li><strong><code>ER</code></strong> — edge relation type, which determines the edge topology</li>
@@ -208,22 +208,22 @@
 <h2 id="type-aliases"><a class="header" href="#type-aliases">Type Aliases</a></h2>
 <p>Common configurations have convenient aliases:</p>
 <pre><code class="language-rust">// Undirected
-type Undir0      = Graph&lt;(), edge::Undir&lt;()&gt;&gt;;      // no attributes
-type UndirN&lt;NV&gt;  = Graph&lt;NV, edge::Undir&lt;()&gt;&gt;;      // node values only
-type UndirE&lt;EV&gt;  = Graph&lt;(), edge::Undir&lt;EV&gt;&gt;;      // edge values only
-type Undir&lt;N, E&gt; = Graph&lt;NV, edge::Undir&lt;EV&gt;&gt;;      // both
+type MUndir0      = MGraph&lt;(), edge::Undir&lt;()&gt;&gt;;      // no attributes
+type MUndirN&lt;NV&gt;  = MGraph&lt;NV, edge::Undir&lt;()&gt;&gt;;      // node values only
+type MUndirE&lt;EV&gt;  = MGraph&lt;(), edge::Undir&lt;EV&gt;&gt;;      // edge values only
+type MUndir&lt;N, E&gt; = MGraph&lt;NV, edge::Undir&lt;EV&gt;&gt;;      // both
 
 // Directed
-type Dir0         = Graph&lt;(), edge::Dir&lt;()&gt;&gt;;
-type DirN&lt;NV&gt;     = Graph&lt;NV, edge::Dir&lt;()&gt;&gt;;
-type DirE&lt;EV&gt;     = Graph&lt;(), edge::Dir&lt;EV&gt;&gt;;
-type Dir&lt;NV, EV&gt;  = Graph&lt;NV, edge::Dir&lt;EV&gt;&gt;;
+type MDir0         = MGraph&lt;(), edge::Dir&lt;()&gt;&gt;;
+type MDirN&lt;NV&gt;     = MGraph&lt;NV, edge::Dir&lt;()&gt;&gt;;
+type MDirE&lt;EV&gt;     = MGraph&lt;(), edge::Dir&lt;EV&gt;&gt;;
+type MDir&lt;NV, EV&gt;  = MGraph&lt;NV, edge::Dir&lt;EV&gt;&gt;;
 
 // Anydirected
-type Anydir0         = Graph&lt;(), edge::Anydir&lt;()&gt;&gt;;
-type AnydirN&lt;NV&gt;     = Graph&lt;NV, edge::Anydir&lt;()&gt;&gt;;
-type AnydirE&lt;EV&gt;     = Graph&lt;(), edge::Anydir&lt;EV&gt;&gt;;
-type Anydir&lt;NV, EV&gt;  = Graph&lt;NV, edge::Anydir&lt;EV&gt;&gt;;</code></pre>
+type MAnydir0         = MGraph&lt;(), edge::Anydir&lt;()&gt;&gt;;
+type MAnydirN&lt;NV&gt;     = MGraph&lt;NV, edge::Anydir&lt;()&gt;&gt;;
+type MAnydirE&lt;EV&gt;     = MGraph&lt;(), edge::Anydir&lt;EV&gt;&gt;;
+type MAnydir&lt;NV, EV&gt;  = MGraph&lt;NV, edge::Anydir&lt;EV&gt;&gt;;</code></pre>
 <h2 id="node-and-edge-access"><a class="header" href="#node-and-edge-access">Node and Edge Access</a></h2>
 <pre><code class="language-rust">// count
 g.node_count()

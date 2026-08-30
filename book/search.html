@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
+            window.path_to_searchindex_js = "searchindex-b31d37da.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-29ac6ec0.js"></script>
+        <script src="toc-e2d77381.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -192,7 +192,7 @@
 <tr><td><code>ban(morphism) { ... }</code></td><td>Forbidden pattern cluster — matches are rejected</td></tr>
 <tr><td><code>N(id)</code></td><td>Pattern node</td></tr>
 <tr><td><code>n(id)</code></td><td>Reference to pattern node</td></tr>
-<tr><td><code>^</code> <code>&gt;&gt;</code> <code>&lt;&lt;</code></td><td>Edge operators (same as <code>graph!</code>)</td></tr>
+<tr><td><code>^</code> <code>&gt;&gt;</code> <code>&lt;&lt;</code></td><td>Edge operators (same as <code>mgraph!</code>)</td></tr>
 <tr><td><code>!N(id)</code></td><td>Negated node — the edge must NOT exist</td></tr>
 <tr><td><code>N(id).val(v)</code></td><td>Node value — exact match</td></tr>
 <tr><td><code>N(id).test(|v| ...)</code></td><td>Node value predicate</td></tr>
@@ -207,7 +207,7 @@
 use grw::graph::edge;
 
 // target graph: triangle
-let g: graph::Undir0 = graph![
+let g: graph::MUndir0 = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 

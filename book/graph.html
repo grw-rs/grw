@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>graph! — Construction - GRW — Graph Rewriting in Rust</title>
+        <title>mgraph! — Construction - GRW — Graph Rewriting in Rust</title>
 
 
         <!-- Custom HTML head -->
@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
+            window.path_to_searchindex_js = "searchindex-b31d37da.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-29ac6ec0.js"></script>
+        <script src="toc-e2d77381.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -178,8 +178,8 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="graph--construction"><a class="header" href="#graph--construction"><code>graph!</code> — Construction</a></h1>
-<p>The <code>graph!</code> macro constructs a graph from a declarative description of nodes and edges.</p>
+                        <h1 id="mgraph--construction"><a class="header" href="#mgraph--construction"><code>mgraph!</code> — Construction</a></h1>
+<p>The <code>mgraph!</code> macro constructs a graph from a declarative description of nodes and edges.</p>
 <h2 id="dsl-primitives"><a class="header" href="#dsl-primitives">DSL Primitives</a></h2>
 <div class="table-wrapper">
 <table>
@@ -209,22 +209,22 @@
 <p>This is because <code>N(0) ^ N(1)</code> returns node 0 (with an edge to 1 attached), so the next <code>^ N(2)</code> adds another edge from 0.</p>
 <h2 id="undirected-graphs"><a class="header" href="#undirected-graphs">Undirected Graphs</a></h2>
 <h3 id="path-grouping"><a class="header" href="#path-grouping">Path (grouping)</a></h3>
-<pre><code class="language-rust">use grw::graph::{self, Graph, edge};
+<pre><code class="language-rust">use grw::graph::{self, MGraph, edge};
 
 // path: 0 — 1 — 2
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ (N(1) ^ N(2))
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="path"><line x1="90" y1="58" x2="147" y2="58" stroke="#46c6d6" stroke-width="2.4" /><line x1="187" y1="58" x2="244" y2="58" stroke="#46c6d6" stroke-width="2.4" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="58" r="21" fill="#f0a63f26" /><circle cx="264" cy="58" r="15" fill="#f0a63f" /><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
 <h3 id="triangle-back-reference"><a class="header" href="#triangle-back-reference">Triangle (back-reference)</a></h3>
 <pre><code class="language-rust">// triangle: chain + n() closes the cycle
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 334 171" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="triangle"><line x1="87" y1="101" x2="150" y2="62" stroke="#46c6d6" stroke-width="2.4" /><line x1="184" y1="62" x2="247" y2="101" stroke="#46c6d6" stroke-width="2.4" /><line x1="244" y1="111" x2="90" y2="111" stroke="#46c6d6" stroke-width="2.4" /><circle cx="70" cy="111" r="21" fill="#f0a63f26" /><circle cx="70" cy="111" r="15" fill="#f0a63f" /><text x="70" y="116" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="52" r="21" fill="#f0a63f26" /><circle cx="167" cy="52" r="15" fill="#f0a63f" /><text x="167" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="111" r="21" fill="#f0a63f26" /><circle cx="264" cy="111" r="15" fill="#f0a63f" /><text x="264" y="116" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
 <h3 id="star-flat-chaining"><a class="header" href="#star-flat-chaining">Star (flat chaining)</a></h3>
 <pre><code class="language-rust">// star: flat chaining fans out from one node
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ N(1)
          ^ N(2)
          ^ N(3)
@@ -233,54 +233,54 @@ let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
 <p><svg viewbox="0 0 359 237" style="max-width:359px;display:block;margin:0.8em auto" role="img" aria-label="star"><line x1="166" y1="67" x2="83" y2="162" stroke="#46c6d6" stroke-width="2.4" /><line x1="174" y1="71" x2="148" y2="158" stroke="#46c6d6" stroke-width="2.4" /><line x1="185" y1="71" x2="210" y2="158" stroke="#46c6d6" stroke-width="2.4" /><line x1="193" y1="67" x2="276" y2="162" stroke="#46c6d6" stroke-width="2.4" /><circle cx="179" cy="52" r="21" fill="#f0a63f26" /><circle cx="179" cy="52" r="15" fill="#f0a63f" /><text x="179" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="70" cy="177" r="21" fill="#f0a63f26" /><circle cx="70" cy="177" r="15" fill="#f0a63f" /><text x="70" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="143" cy="177" r="21" fill="#f0a63f26" /><circle cx="143" cy="177" r="15" fill="#f0a63f" /><text x="143" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text><circle cx="216" cy="177" r="21" fill="#f0a63f26" /><circle cx="216" cy="177" r="15" fill="#f0a63f" /><text x="216" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">3</text><circle cx="289" cy="177" r="21" fill="#f0a63f26" /><circle cx="289" cy="177" r="15" fill="#f0a63f" /><text x="289" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">4</text></svg></p>
 <h3 id="with-values"><a class="header" href="#with-values">With Values</a></h3>
 <pre><code class="language-rust">// node values
-let g: Graph&lt;&amp;str, edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;&amp;str, edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0).val("alice") ^ (N(1).val("bob") ^ N(2).val("carol"))
 ].unwrap();
 
 // edge values — &amp; E().val(...) before direction operator
-let g: Graph&lt;(), edge::Undir&lt;f64&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;f64&gt;&gt; = mgraph![
     N(0) &amp; E().val(1.5) ^ (N(1) &amp; E().val(2.0) ^ N(2))
 ].unwrap();
 
 // both
-let g: Graph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = graph![
+let g: MGraph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = mgraph![
     N(0).val("a") &amp; E().val(10) ^ N(1).val("b")
 ].unwrap();</code></pre>
 <h3 id="anonymous-nodes"><a class="header" href="#anonymous-nodes">Anonymous Nodes</a></h3>
 <pre><code class="language-rust">// ids assigned automatically
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![N_() ^ N_() ^ N_()].unwrap();</code></pre>
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N_() ^ N_() ^ N_()].unwrap();</code></pre>
 <h2 id="directed-graphs"><a class="header" href="#directed-graphs">Directed Graphs</a></h2>
 <pre><code class="language-rust">// path: 0 → 1 → 2
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &gt;&gt; (N(1) &gt;&gt; N(2))
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="directed path"><defs><marker id="dir-path-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><line x1="90" y1="58" x2="139" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-path-a)" /><line x1="187" y1="58" x2="236" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-path-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="58" r="21" fill="#f0a63f26" /><circle cx="264" cy="58" r="15" fill="#f0a63f" /><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
 <pre><code class="language-rust">// fan-out: flat chaining from one node
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &gt;&gt; N(1)
          &gt;&gt; N(2)
          &gt;&gt; N(3)
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 237 286" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="fan-out"><defs><marker id="dir-fanout-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><line x1="85" y1="126" x2="146" y2="71" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-fanout-a)" /><line x1="90" y1="139" x2="139" y2="139" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-fanout-a)" /><line x1="85" y1="152" x2="146" y2="207" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-fanout-a)" /><circle cx="70" cy="139" r="21" fill="#f0a63f26" /><circle cx="70" cy="139" r="15" fill="#f0a63f" /><text x="70" y="144" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="52" r="21" fill="#f0a63f26" /><circle cx="167" cy="52" r="15" fill="#f0a63f" /><text x="167" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="167" cy="139" r="21" fill="#f0a63f26" /><circle cx="167" cy="139" r="15" fill="#f0a63f" /><text x="167" y="144" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text><circle cx="167" cy="226" r="21" fill="#f0a63f26" /><circle cx="167" cy="226" r="15" fill="#f0a63f" /><text x="167" y="231" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">3</text></svg></p>
 <pre><code class="language-rust">// bidirectional: n() references existing nodes
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &gt;&gt; N(1),
     n(1) &gt;&gt; n(0),
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 237 132" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="bidirectional"><defs><marker id="dir-bidir-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><path d="M90 58 Q 119 38 139 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-bidir-a)" /><path d="M147 58 Q 119 38 98 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-bidir-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text></svg></p>
 <pre><code class="language-rust">// incoming edges with &lt;&lt;
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &lt;&lt; N(1),   // edge from 1 to 0
 ].unwrap();</code></pre>
 <h2 id="anydirected-graphs"><a class="header" href="#anydirected-graphs">Anydirected Graphs</a></h2>
 <p>Mix undirected and directed edges in one graph:</p>
-<pre><code class="language-rust">let g: Graph&lt;(), edge::Anydir&lt;()&gt;&gt; = graph![
+<pre><code class="language-rust">let g: MGraph&lt;(), edge::Anydir&lt;()&gt;&gt; = mgraph![
     N(0) ^ (N(1) &gt;&gt; N(2)),  // 0 — 1 → 2
     N(3) &lt;&lt; n(2),            // 2 → 3
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 472 132" style="max-width:472px;display:block;margin:0.8em auto" role="img" aria-label="anydir mixed"><defs><marker id="anydir-mixed-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><line x1="90" y1="58" x2="147" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-mixed-a)" /><line x1="195" y1="58" x2="261" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-mixed-a)" /><line x1="309" y1="58" x2="374" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-mixed-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="175" cy="58" r="21" fill="#f0a63f26" /><circle cx="175" cy="58" r="15" fill="#f0a63f" /><text x="175" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="289" cy="58" r="21" fill="#f0a63f26" /><circle cx="289" cy="58" r="15" fill="#f0a63f" /><text x="289" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text><circle cx="402" cy="58" r="21" fill="#f0a63f26" /><circle cx="402" cy="58" r="15" fill="#f0a63f" /><text x="402" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">3</text><text x="119" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">^</text><text x="228" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&gt;&gt;</text><text x="341" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&lt;&lt;</text></svg></p>
 <pre><code class="language-rust">// all three edge types between one pair
-let g: Graph&lt;(), edge::Anydir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Anydir&lt;()&gt;&gt; = mgraph![
     N(0) ^ N(1),         // undirected
     n(0) &gt;&gt; n(1),        // directed 0 → 1
     n(1) &gt;&gt; n(0),        // directed 1 → 0
@@ -288,11 +288,11 @@ let g: Graph&lt;(), edge::Anydir&lt;()&gt;&gt; = graph![
 <p><svg viewbox="0 0 253 132" style="max-width:253px;display:block;margin:0.8em auto" role="img" aria-label="anydir triple"><defs><marker id="anydir-triple-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><path d="M90 58 Q 127 18 155 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-triple-a)" /><line x1="90" y1="58" x2="155" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-triple-a)" /><path d="M163 58 Q 127 18 98 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-triple-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="183" cy="58" r="21" fill="#f0a63f26" /><circle cx="183" cy="58" r="15" fill="#f0a63f" /><text x="183" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><text x="127" y="28" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&gt;&gt;</text><text x="123" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">^</text><text x="127" y="28" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&lt;&lt;</text></svg></p>
 <h2 id="turbofish-syntax"><a class="header" href="#turbofish-syntax">Turbofish Syntax</a></h2>
 <p>When the type can’t be inferred, use the turbofish form:</p>
-<pre><code class="language-rust">let g = graph![&lt;(), grw::graph::edge::Undir&lt;()&gt;&gt;; N(0) ^ N(1)].unwrap();</code></pre>
+<pre><code class="language-rust">let g = mgraph![&lt;(), grw::graph::edge::Undir&lt;()&gt;&gt;; N(0) ^ N(1)].unwrap();</code></pre>
 <h2 id="multiple-fragments"><a class="header" href="#multiple-fragments">Multiple Fragments</a></h2>
 <p>Use commas to separate disconnected components or back-references:</p>
 <pre><code class="language-rust">// two separate edges, then connect them
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ N(1),
     N(2) ^ N(3),
     n(0) ^ n(2),

@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
+            window.path_to_searchindex_js = "searchindex-b31d37da.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-29ac6ec0.js"></script>
+        <script src="toc-e2d77381.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -182,7 +182,7 @@
 <p>GRW is an embedded graph rewriting system that runs inside a Rust process. It provides type-safe domain-specific languages for graph construction, transactional mutation, and morphism-based pattern matching.</p>
 <h2 id="the-three-dsls"><a class="header" href="#the-three-dsls">The Three DSLs</a></h2>
 <ul>
-<li><strong><code>graph!</code></strong> — graph literal (like <code>vec!</code>) for constructing graphs declaratively</li>
+<li><strong><code>mgraph!</code></strong> — graph literal (like <code>vec!</code>) for constructing graphs declaratively</li>
 <li><strong><code>modify!</code></strong> — transactional graph mutation: add/remove/change nodes and edges atomically</li>
 <li><strong><code>search!</code></strong> — graph pattern matching iterator with morphism control</li>
 </ul>
@@ -193,7 +193,7 @@
 use grw::graph::edge;
 
 // construct a triangle
-let g: graph::Undir0 = graph![
+let g: graph::MUndir0 = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 

@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
+            window.path_to_searchindex_js = "searchindex-b31d37da.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-29ac6ec0.js"></script>
+        <script src="toc-e2d77381.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -183,7 +183,7 @@
 <p>GRW is an embedded graph rewriting system that runs inside a Rust process. It provides type-safe domain-specific languages for graph construction, transactional mutation, and morphism-based pattern matching.</p>
 <h2 id="the-three-dsls"><a class="header" href="#the-three-dsls">The Three DSLs</a></h2>
 <ul>
-<li><strong><code>graph!</code></strong> — graph literal (like <code>vec!</code>) for constructing graphs declaratively</li>
+<li><strong><code>mgraph!</code></strong> — graph literal (like <code>vec!</code>) for constructing graphs declaratively</li>
 <li><strong><code>modify!</code></strong> — transactional graph mutation: add/remove/change nodes and edges atomically</li>
 <li><strong><code>search!</code></strong> — graph pattern matching iterator with morphism control</li>
 </ul>
@@ -194,7 +194,7 @@
 use grw::graph::edge;
 
 // construct a triangle
-let g: graph::Undir0 = graph![
+let g: graph::MUndir0 = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 
@@ -215,12 +215,12 @@ for m in &amp;session {
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="playground"><a class="header" href="#playground">Playground</a></h1>
-<p>Try GRW directly in your browser. Type <code>graph!</code>, <code>modify!</code>, or <code>search!</code> commands and see the results live.</p>
+<p>Try GRW directly in your browser. Type <code>mgraph!</code>, <code>modify!</code>, or <code>search!</code> commands and see the results live.</p>
 <div id="playground-app">
 <div id="pg-controls">
   
 <div id="pg-examples">
-    <button class="pg-btn" id="btn-graph">graph!</button>
+    <button class="pg-btn" id="btn-graph">mgraph!</button>
     <button class="pg-btn" id="btn-modify">modify!</button>
     <button class="pg-btn" id="btn-search">search!</button>
     <button class="pg-btn pg-btn-dim" id="btn-reset">reset</button>
@@ -228,7 +228,7 @@ for m in &amp;session {
 
   
 <div id="pg-editor-wrap">
-    <textarea id="pg-input" spellcheck="false" rows="4">g = graph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]</textarea>
+    <textarea id="pg-input" spellcheck="false" rows="4">g = mgraph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]</textarea>
     <button class="pg-btn pg-btn-run" id="btn-run">run</button>
   </div>
 
@@ -267,7 +267,7 @@ import init, { _eval as grwEval, list_graphs, get_graph, reset } from './playgro
 await init('./playground/grw_playground_bg.wasm');
 
 const EXAMPLES = {
-    graph: 'g = graph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]',
+    graph: 'g = mgraph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))]',
     modify: 'modify!(g, [X(0) ^ N(3)])',
     search: 'search!(g, get(Mono) { N(0) ^ N(1) })',
 };
@@ -387,7 +387,7 @@ input.addEventListener('keypress', (e) => { e.stopPropagation(); });
 </script>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="graph-model"><a class="header" href="#graph-model">Graph Model</a></h1>
-<p>A graph <code>Graph&lt;NV, ER&gt;</code> is parameterized by two type parameters:</p>
+<p>A graph <code>MGraph&lt;NV, ER&gt;</code> is parameterized by two type parameters:</p>
 <ul>
 <li><strong><code>NV</code></strong> — node value type (use <code>()</code> for no attributes)</li>
 <li><strong><code>ER</code></strong> — edge relation type, which determines the edge topology</li>
@@ -416,22 +416,22 @@ input.addEventListener('keypress', (e) => { e.stopPropagation(); });
 <h2 id="type-aliases"><a class="header" href="#type-aliases">Type Aliases</a></h2>
 <p>Common configurations have convenient aliases:</p>
 <pre><code class="language-rust">// Undirected
-type Undir0      = Graph&lt;(), edge::Undir&lt;()&gt;&gt;;      // no attributes
-type UndirN&lt;NV&gt;  = Graph&lt;NV, edge::Undir&lt;()&gt;&gt;;      // node values only
-type UndirE&lt;EV&gt;  = Graph&lt;(), edge::Undir&lt;EV&gt;&gt;;      // edge values only
-type Undir&lt;N, E&gt; = Graph&lt;NV, edge::Undir&lt;EV&gt;&gt;;      // both
+type MUndir0      = MGraph&lt;(), edge::Undir&lt;()&gt;&gt;;      // no attributes
+type MUndirN&lt;NV&gt;  = MGraph&lt;NV, edge::Undir&lt;()&gt;&gt;;      // node values only
+type MUndirE&lt;EV&gt;  = MGraph&lt;(), edge::Undir&lt;EV&gt;&gt;;      // edge values only
+type MUndir&lt;N, E&gt; = MGraph&lt;NV, edge::Undir&lt;EV&gt;&gt;;      // both
 
 // Directed
-type Dir0         = Graph&lt;(), edge::Dir&lt;()&gt;&gt;;
-type DirN&lt;NV&gt;     = Graph&lt;NV, edge::Dir&lt;()&gt;&gt;;
-type DirE&lt;EV&gt;     = Graph&lt;(), edge::Dir&lt;EV&gt;&gt;;
-type Dir&lt;NV, EV&gt;  = Graph&lt;NV, edge::Dir&lt;EV&gt;&gt;;
+type MDir0         = MGraph&lt;(), edge::Dir&lt;()&gt;&gt;;
+type MDirN&lt;NV&gt;     = MGraph&lt;NV, edge::Dir&lt;()&gt;&gt;;
+type MDirE&lt;EV&gt;     = MGraph&lt;(), edge::Dir&lt;EV&gt;&gt;;
+type MDir&lt;NV, EV&gt;  = MGraph&lt;NV, edge::Dir&lt;EV&gt;&gt;;
 
 // Anydirected
-type Anydir0         = Graph&lt;(), edge::Anydir&lt;()&gt;&gt;;
-type AnydirN&lt;NV&gt;     = Graph&lt;NV, edge::Anydir&lt;()&gt;&gt;;
-type AnydirE&lt;EV&gt;     = Graph&lt;(), edge::Anydir&lt;EV&gt;&gt;;
-type Anydir&lt;NV, EV&gt;  = Graph&lt;NV, edge::Anydir&lt;EV&gt;&gt;;</code></pre>
+type MAnydir0         = MGraph&lt;(), edge::Anydir&lt;()&gt;&gt;;
+type MAnydirN&lt;NV&gt;     = MGraph&lt;NV, edge::Anydir&lt;()&gt;&gt;;
+type MAnydirE&lt;EV&gt;     = MGraph&lt;(), edge::Anydir&lt;EV&gt;&gt;;
+type MAnydir&lt;NV, EV&gt;  = MGraph&lt;NV, edge::Anydir&lt;EV&gt;&gt;;</code></pre>
 <h2 id="node-and-edge-access"><a class="header" href="#node-and-edge-access">Node and Edge Access</a></h2>
 <pre><code class="language-rust">// count
 g.node_count()
@@ -455,8 +455,8 @@ g.is_adjacent(0, 1)
 // edge relation (typed access to all edges between a pair)
 let rel = g.rel((0, 1));   // returns Rel with typed slot access</code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="graph--construction"><a class="header" href="#graph--construction"><code>graph!</code> — Construction</a></h1>
-<p>The <code>graph!</code> macro constructs a graph from a declarative description of nodes and edges.</p>
+<h1 id="mgraph--construction"><a class="header" href="#mgraph--construction"><code>mgraph!</code> — Construction</a></h1>
+<p>The <code>mgraph!</code> macro constructs a graph from a declarative description of nodes and edges.</p>
 <h2 id="dsl-primitives"><a class="header" href="#dsl-primitives">DSL Primitives</a></h2>
 <div class="table-wrapper">
 <table>
@@ -486,22 +486,22 @@ let rel = g.rel((0, 1));   // returns Rel with typed slot access</code></pre>
 <p>This is because <code>N(0) ^ N(1)</code> returns node 0 (with an edge to 1 attached), so the next <code>^ N(2)</code> adds another edge from 0.</p>
 <h2 id="undirected-graphs"><a class="header" href="#undirected-graphs">Undirected Graphs</a></h2>
 <h3 id="path-grouping"><a class="header" href="#path-grouping">Path (grouping)</a></h3>
-<pre><code class="language-rust">use grw::graph::{self, Graph, edge};
+<pre><code class="language-rust">use grw::graph::{self, MGraph, edge};
 
 // path: 0 — 1 — 2
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ (N(1) ^ N(2))
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="path"><line x1="90" y1="58" x2="147" y2="58" stroke="#46c6d6" stroke-width="2.4" /><line x1="187" y1="58" x2="244" y2="58" stroke="#46c6d6" stroke-width="2.4" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="58" r="21" fill="#f0a63f26" /><circle cx="264" cy="58" r="15" fill="#f0a63f" /><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
 <h3 id="triangle-back-reference"><a class="header" href="#triangle-back-reference">Triangle (back-reference)</a></h3>
 <pre><code class="language-rust">// triangle: chain + n() closes the cycle
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 334 171" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="triangle"><line x1="87" y1="101" x2="150" y2="62" stroke="#46c6d6" stroke-width="2.4" /><line x1="184" y1="62" x2="247" y2="101" stroke="#46c6d6" stroke-width="2.4" /><line x1="244" y1="111" x2="90" y2="111" stroke="#46c6d6" stroke-width="2.4" /><circle cx="70" cy="111" r="21" fill="#f0a63f26" /><circle cx="70" cy="111" r="15" fill="#f0a63f" /><text x="70" y="116" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="52" r="21" fill="#f0a63f26" /><circle cx="167" cy="52" r="15" fill="#f0a63f" /><text x="167" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="111" r="21" fill="#f0a63f26" /><circle cx="264" cy="111" r="15" fill="#f0a63f" /><text x="264" y="116" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
 <h3 id="star-flat-chaining"><a class="header" href="#star-flat-chaining">Star (flat chaining)</a></h3>
 <pre><code class="language-rust">// star: flat chaining fans out from one node
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ N(1)
          ^ N(2)
          ^ N(3)
@@ -510,54 +510,54 @@ let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
 <p><svg viewbox="0 0 359 237" style="max-width:359px;display:block;margin:0.8em auto" role="img" aria-label="star"><line x1="166" y1="67" x2="83" y2="162" stroke="#46c6d6" stroke-width="2.4" /><line x1="174" y1="71" x2="148" y2="158" stroke="#46c6d6" stroke-width="2.4" /><line x1="185" y1="71" x2="210" y2="158" stroke="#46c6d6" stroke-width="2.4" /><line x1="193" y1="67" x2="276" y2="162" stroke="#46c6d6" stroke-width="2.4" /><circle cx="179" cy="52" r="21" fill="#f0a63f26" /><circle cx="179" cy="52" r="15" fill="#f0a63f" /><text x="179" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="70" cy="177" r="21" fill="#f0a63f26" /><circle cx="70" cy="177" r="15" fill="#f0a63f" /><text x="70" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="143" cy="177" r="21" fill="#f0a63f26" /><circle cx="143" cy="177" r="15" fill="#f0a63f" /><text x="143" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text><circle cx="216" cy="177" r="21" fill="#f0a63f26" /><circle cx="216" cy="177" r="15" fill="#f0a63f" /><text x="216" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">3</text><circle cx="289" cy="177" r="21" fill="#f0a63f26" /><circle cx="289" cy="177" r="15" fill="#f0a63f" /><text x="289" y="182" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">4</text></svg></p>
 <h3 id="with-values"><a class="header" href="#with-values">With Values</a></h3>
 <pre><code class="language-rust">// node values
-let g: Graph&lt;&amp;str, edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;&amp;str, edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0).val("alice") ^ (N(1).val("bob") ^ N(2).val("carol"))
 ].unwrap();
 
 // edge values — &amp; E().val(...) before direction operator
-let g: Graph&lt;(), edge::Undir&lt;f64&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;f64&gt;&gt; = mgraph![
     N(0) &amp; E().val(1.5) ^ (N(1) &amp; E().val(2.0) ^ N(2))
 ].unwrap();
 
 // both
-let g: Graph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = graph![
+let g: MGraph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = mgraph![
     N(0).val("a") &amp; E().val(10) ^ N(1).val("b")
 ].unwrap();</code></pre>
 <h3 id="anonymous-nodes"><a class="header" href="#anonymous-nodes">Anonymous Nodes</a></h3>
 <pre><code class="language-rust">// ids assigned automatically
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![N_() ^ N_() ^ N_()].unwrap();</code></pre>
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N_() ^ N_() ^ N_()].unwrap();</code></pre>
 <h2 id="directed-graphs"><a class="header" href="#directed-graphs">Directed Graphs</a></h2>
 <pre><code class="language-rust">// path: 0 → 1 → 2
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &gt;&gt; (N(1) &gt;&gt; N(2))
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="directed path"><defs><marker id="dir-path-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><line x1="90" y1="58" x2="139" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-path-a)" /><line x1="187" y1="58" x2="236" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-path-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="58" r="21" fill="#f0a63f26" /><circle cx="264" cy="58" r="15" fill="#f0a63f" /><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
 <pre><code class="language-rust">// fan-out: flat chaining from one node
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &gt;&gt; N(1)
          &gt;&gt; N(2)
          &gt;&gt; N(3)
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 237 286" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="fan-out"><defs><marker id="dir-fanout-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><line x1="85" y1="126" x2="146" y2="71" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-fanout-a)" /><line x1="90" y1="139" x2="139" y2="139" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-fanout-a)" /><line x1="85" y1="152" x2="146" y2="207" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-fanout-a)" /><circle cx="70" cy="139" r="21" fill="#f0a63f26" /><circle cx="70" cy="139" r="15" fill="#f0a63f" /><text x="70" y="144" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="52" r="21" fill="#f0a63f26" /><circle cx="167" cy="52" r="15" fill="#f0a63f" /><text x="167" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="167" cy="139" r="21" fill="#f0a63f26" /><circle cx="167" cy="139" r="15" fill="#f0a63f" /><text x="167" y="144" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text><circle cx="167" cy="226" r="21" fill="#f0a63f26" /><circle cx="167" cy="226" r="15" fill="#f0a63f" /><text x="167" y="231" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">3</text></svg></p>
 <pre><code class="language-rust">// bidirectional: n() references existing nodes
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &gt;&gt; N(1),
     n(1) &gt;&gt; n(0),
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 237 132" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="bidirectional"><defs><marker id="dir-bidir-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><path d="M90 58 Q 119 38 139 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-bidir-a)" /><path d="M147 58 Q 119 38 98 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#dir-bidir-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text></svg></p>
 <pre><code class="language-rust">// incoming edges with &lt;&lt;
-let g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = mgraph![
     N(0) &lt;&lt; N(1),   // edge from 1 to 0
 ].unwrap();</code></pre>
 <h2 id="anydirected-graphs"><a class="header" href="#anydirected-graphs">Anydirected Graphs</a></h2>
 <p>Mix undirected and directed edges in one graph:</p>
-<pre><code class="language-rust">let g: Graph&lt;(), edge::Anydir&lt;()&gt;&gt; = graph![
+<pre><code class="language-rust">let g: MGraph&lt;(), edge::Anydir&lt;()&gt;&gt; = mgraph![
     N(0) ^ (N(1) &gt;&gt; N(2)),  // 0 — 1 → 2
     N(3) &lt;&lt; n(2),            // 2 → 3
 ].unwrap();</code></pre>
 <p><svg viewbox="0 0 472 132" style="max-width:472px;display:block;margin:0.8em auto" role="img" aria-label="anydir mixed"><defs><marker id="anydir-mixed-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><line x1="90" y1="58" x2="147" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-mixed-a)" /><line x1="195" y1="58" x2="261" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-mixed-a)" /><line x1="309" y1="58" x2="374" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-mixed-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="175" cy="58" r="21" fill="#f0a63f26" /><circle cx="175" cy="58" r="15" fill="#f0a63f" /><text x="175" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="289" cy="58" r="21" fill="#f0a63f26" /><circle cx="289" cy="58" r="15" fill="#f0a63f" /><text x="289" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text><circle cx="402" cy="58" r="21" fill="#f0a63f26" /><circle cx="402" cy="58" r="15" fill="#f0a63f" /><text x="402" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">3</text><text x="119" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">^</text><text x="228" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&gt;&gt;</text><text x="341" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&lt;&lt;</text></svg></p>
 <pre><code class="language-rust">// all three edge types between one pair
-let g: Graph&lt;(), edge::Anydir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Anydir&lt;()&gt;&gt; = mgraph![
     N(0) ^ N(1),         // undirected
     n(0) &gt;&gt; n(1),        // directed 0 → 1
     n(1) &gt;&gt; n(0),        // directed 1 → 0
@@ -565,11 +565,11 @@ let g: Graph&lt;(), edge::Anydir&lt;()&gt;&gt; = graph![
 <p><svg viewbox="0 0 253 132" style="max-width:253px;display:block;margin:0.8em auto" role="img" aria-label="anydir triple"><defs><marker id="anydir-triple-a" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#46c6d6" /></marker></defs><path d="M90 58 Q 127 18 155 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-triple-a)" /><line x1="90" y1="58" x2="155" y2="58" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-triple-a)" /><path d="M163 58 Q 127 18 98 58" fill="none" stroke="#46c6d6" stroke-width="2.4" marker-end="url(#anydir-triple-a)" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="183" cy="58" r="21" fill="#f0a63f26" /><circle cx="183" cy="58" r="15" fill="#f0a63f" /><text x="183" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><text x="127" y="28" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&gt;&gt;</text><text x="123" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">^</text><text x="127" y="28" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">&lt;&lt;</text></svg></p>
 <h2 id="turbofish-syntax"><a class="header" href="#turbofish-syntax">Turbofish Syntax</a></h2>
 <p>When the type can’t be inferred, use the turbofish form:</p>
-<pre><code class="language-rust">let g = graph![&lt;(), grw::graph::edge::Undir&lt;()&gt;&gt;; N(0) ^ N(1)].unwrap();</code></pre>
+<pre><code class="language-rust">let g = mgraph![&lt;(), grw::graph::edge::Undir&lt;()&gt;&gt;; N(0) ^ N(1)].unwrap();</code></pre>
 <h2 id="multiple-fragments"><a class="header" href="#multiple-fragments">Multiple Fragments</a></h2>
 <p>Use commas to separate disconnected components or back-references:</p>
 <pre><code class="language-rust">// two separate edges, then connect them
-let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
     N(0) ^ N(1),
     N(2) ^ N(3),
     n(0) ^ n(2),
@@ -598,9 +598,9 @@ let g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = graph![
 </table>
 </div>
 <h2 id="adding-nodes-and-edges"><a class="header" href="#adding-nodes-and-edges">Adding Nodes and Edges</a></h2>
-<pre><code class="language-rust">use grw::graph::{self, Graph, edge};
+<pre><code class="language-rust">use grw::graph::{self, MGraph, edge};
 
-let mut g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = Graph::default();
+let mut g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = MGraph::default();
 
 // add two connected nodes
 modify!(g, [N(1) ^ N(2)]).unwrap();
@@ -612,14 +612,14 @@ modify!(g, [X(0) ^ N(3)]).unwrap();
 assert_eq!(g.node_count(), 3);
 assert_eq!(g.edge_count(), 2);</code></pre>
 <p><svg viewbox="0 0 237 213" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="connect existing"><line x1="88" y1="93" x2="149" y2="61" stroke="#46c6d6" stroke-width="2.4" /><line x1="88" y1="112" x2="149" y2="144" stroke="#7ee0a3" stroke-width="2.4" /><circle cx="70" cy="102" r="21" fill="#f0a63f26" /><circle cx="70" cy="102" r="15" fill="#f0a63f" /><text x="70" y="107" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="52" r="21" fill="#f0a63f26" /><circle cx="167" cy="52" r="15" fill="#f0a63f" /><text x="167" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="167" cy="153" r="21" fill="#7ee0a326" /><circle cx="167" cy="153" r="15" fill="#7ee0a3" /><text x="167" y="158" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
-<pre><code class="language-rust">let mut g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = MGraph::default();
 
 // directed path
 modify!(g, [N(1) &gt;&gt; (N(2) &gt;&gt; N(3))]).unwrap();
 assert_eq!(g.node_count(), 3);
 assert_eq!(g.edge_count(), 2);</code></pre>
 <p><svg viewbox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="directed path"><defs><marker id="modify-dir-path-g" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#7ee0a3" /></marker></defs><line x1="90" y1="58" x2="139" y2="58" stroke="#7ee0a3" stroke-width="2.4" marker-end="url(#modify-dir-path-g)" /><line x1="187" y1="58" x2="236" y2="58" stroke="#7ee0a3" stroke-width="2.4" marker-end="url(#modify-dir-path-g)" /><circle cx="70" cy="58" r="21" fill="#7ee0a326" /><circle cx="70" cy="58" r="15" fill="#7ee0a3" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#7ee0a326" /><circle cx="167" cy="58" r="15" fill="#7ee0a3" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="58" r="21" fill="#7ee0a326" /><circle cx="264" cy="58" r="15" fill="#7ee0a3" /><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
-<pre><code class="language-rust">let mut g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = MGraph::default();
 
 // triangle via back-reference
 modify!(g, [N(1) ^ (N(2) ^ (N(3) ^ n(1)))]).unwrap();
@@ -627,7 +627,7 @@ assert_eq!(g.node_count(), 3);
 assert_eq!(g.edge_count(), 3);</code></pre>
 <p><svg viewbox="0 0 334 171" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="triangle"><line x1="87" y1="101" x2="150" y2="62" stroke="#7ee0a3" stroke-width="2.4" /><line x1="184" y1="62" x2="247" y2="101" stroke="#7ee0a3" stroke-width="2.4" /><line x1="244" y1="111" x2="90" y2="111" stroke="#7ee0a3" stroke-width="2.4" /><circle cx="70" cy="111" r="21" fill="#7ee0a326" /><circle cx="70" cy="111" r="15" fill="#7ee0a3" /><text x="70" y="116" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="52" r="21" fill="#7ee0a326" /><circle cx="167" cy="52" r="15" fill="#7ee0a3" /><text x="167" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><circle cx="264" cy="111" r="21" fill="#7ee0a326" /><circle cx="264" cy="111" r="15" fill="#7ee0a3" /><text x="264" y="116" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
 <h3 id="with-values-1"><a class="header" href="#with-values-1">With Values</a></h3>
-<pre><code class="language-rust">let mut g: Graph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = MGraph::default();
 
 // node and edge values
 modify!(g, [
@@ -641,14 +641,14 @@ modify!(g, [N(3).val("c")]).unwrap();
 assert_eq!(g.node_count(), 3);</code></pre>
 <p><svg viewbox="0 0 258 218" style="max-width:258px;display:block;margin:0.8em auto" role="img" aria-label="isolated"><line x1="90" y1="158" x2="168" y2="158" stroke="#46c6d6" stroke-width="2.4" /><circle cx="70" cy="158" r="21" fill="#f0a63f26" /><circle cx="70" cy="158" r="15" fill="#f0a63f" /><text x="70" y="163" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><text x="70" y="129" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">“a”</text><circle cx="188" cy="158" r="21" fill="#f0a63f26" /><circle cx="188" cy="158" r="15" fill="#f0a63f" /><text x="188" y="163" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><text x="188" y="129" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">“b”</text><circle cx="70" cy="52" r="21" fill="#7ee0a326" /><circle cx="70" cy="52" r="15" fill="#7ee0a3" /><text x="70" y="57" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text><text x="70" y="23" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">“c”</text><text x="129" y="170" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">42</text></svg></p>
 <h2 id="removing-nodes-and-edges"><a class="header" href="#removing-nodes-and-edges">Removing Nodes and Edges</a></h2>
-<pre><code class="language-rust">let mut g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = MGraph::default();
 modify!(g, [N(1) ^ N(2) ^ N(3)]).unwrap();
 
 // remove node 1 (and its edges)
 modify!(g, [!X(1)]).unwrap();
 assert_eq!(g.node_count(), 2);</code></pre>
 <p><svg viewbox="0 0 334 132" style="max-width:334px;display:block;margin:0.8em auto" role="img" aria-label="remove node"><line x1="90" y1="58" x2="147" y2="58" stroke="#e2596e" stroke-width="2.4" stroke-dasharray="6 5" /><line x1="112" y1="51" x2="126" y2="65" stroke="#e2596e" stroke-width="2.4" /><line x1="112" y1="65" x2="126" y2="51" stroke="#e2596e" stroke-width="2.4" /><line x1="187" y1="58" x2="244" y2="58" stroke="#e2596e" stroke-width="2.4" stroke-dasharray="6 5" /><line x1="209" y1="51" x2="223" y2="65" stroke="#e2596e" stroke-width="2.4" /><line x1="209" y1="65" x2="223" y2="51" stroke="#e2596e" stroke-width="2.4" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="19" fill="#e2596e1f" /><circle cx="167" cy="58" r="15" fill="none" stroke="#e2596e" stroke-width="2.2" stroke-dasharray="4 4" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#e2596e">1</text><circle cx="264" cy="58" r="21" fill="#f0a63f26" /><circle cx="264" cy="58" r="15" fill="#f0a63f" /><text x="264" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">2</text></svg></p>
-<pre><code class="language-rust">let mut g: Graph&lt;(), edge::Dir&lt;()&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;(), edge::Dir&lt;()&gt;&gt; = MGraph::default();
 modify!(g, [N(1) &gt;&gt; N(2)]).unwrap();
 
 // remove edge, keep both nodes
@@ -657,7 +657,7 @@ assert_eq!(g.node_count(), 2);
 assert_eq!(g.edge_count(), 0);</code></pre>
 <p><svg viewbox="0 0 237 132" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="remove edge"><defs><marker id="modify-remove-edge-r" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#e2596e" /></marker></defs><line x1="90" y1="58" x2="139" y2="58" stroke="#e2596e" stroke-width="2.4" stroke-dasharray="6 5" marker-end="url(#modify-remove-edge-r)" /><line x1="108" y1="51" x2="122" y2="65" stroke="#e2596e" stroke-width="2.4" /><line x1="108" y1="65" x2="122" y2="51" stroke="#e2596e" stroke-width="2.4" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text></svg></p>
 <h2 id="updating-values"><a class="header" href="#updating-values">Updating Values</a></h2>
-<pre><code class="language-rust">let mut g: Graph&lt;&amp;str, edge::Undir&lt;()&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;&amp;str, edge::Undir&lt;()&gt;&gt; = MGraph::default();
 modify!(g, [N(1).val("old")]).unwrap();
 assert_eq!(g.get(0), Some(&amp;"old"));
 
@@ -665,7 +665,7 @@ assert_eq!(g.get(0), Some(&amp;"old"));
 modify!(g, [X(0).val("new")]).unwrap();
 assert_eq!(g.get(0), Some(&amp;"new"));</code></pre>
 <p><svg viewbox="0 0 141 132" style="max-width:141px;display:block;margin:0.8em auto" role="img" aria-label="swap value"><circle cx="71" cy="58" r="21" fill="#7ee0a326" /><circle cx="71" cy="58" r="15" fill="#7ee0a3" /><text x="71" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><text x="71" y="29" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">“new”</text></svg></p>
-<pre><code class="language-rust">let mut g: Graph&lt;(), edge::Undir&lt;u32&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;(), edge::Undir&lt;u32&gt;&gt; = MGraph::default();
 modify!(g, [N(1) &amp; E().val(100u32) ^ N(2)]).unwrap();
 
 // swap edge value
@@ -679,7 +679,7 @@ modify!(g, [X(0) &amp; e().val(200u32) ^ X(1)]).unwrap();</code></pre>
 <li><strong><code>removed_nodes</code></strong> / <strong><code>removed_edges</code></strong> — what was deleted</li>
 <li><strong><code>swapped_node_vals</code></strong> / <strong><code>swapped_edge_vals</code></strong> — old values that were replaced</li>
 </ul>
-<pre><code class="language-rust">let mut g: Graph&lt;(), edge::Undir&lt;()&gt;&gt; = Graph::default();
+<pre><code class="language-rust">let mut g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = MGraph::default();
 let result = modify!(g, [N(1) ^ N(2)]).unwrap();
 
 // the local id 1 was assigned a real graph node id
@@ -706,7 +706,7 @@ let real_id = result.new_node_ids[&amp;LocalId(1)];</code></pre>
 <tr><td><code>ban(morphism) { ... }</code></td><td>Forbidden pattern cluster — matches are rejected</td></tr>
 <tr><td><code>N(id)</code></td><td>Pattern node</td></tr>
 <tr><td><code>n(id)</code></td><td>Reference to pattern node</td></tr>
-<tr><td><code>^</code> <code>&gt;&gt;</code> <code>&lt;&lt;</code></td><td>Edge operators (same as <code>graph!</code>)</td></tr>
+<tr><td><code>^</code> <code>&gt;&gt;</code> <code>&lt;&lt;</code></td><td>Edge operators (same as <code>mgraph!</code>)</td></tr>
 <tr><td><code>!N(id)</code></td><td>Negated node — the edge must NOT exist</td></tr>
 <tr><td><code>N(id).val(v)</code></td><td>Node value — exact match</td></tr>
 <tr><td><code>N(id).test(|v| ...)</code></td><td>Node value predicate</td></tr>
@@ -721,7 +721,7 @@ let real_id = result.new_node_ids[&amp;LocalId(1)];</code></pre>
 use grw::graph::edge;
 
 // target graph: triangle
-let g: graph::Undir0 = graph![
+let g: graph::MUndir0 = mgraph![
     N(0) ^ (N(1) ^ (N(2) ^ n(0)))
 ].unwrap();
 
@@ -1032,12 +1032,24 @@ if its paths sweep every node.</li>
 </ul>
 <h2 id="advanced-induced-morphisms-in-mixtures"><a class="header" href="#advanced-induced-morphisms-in-mixtures">Advanced: induced morphisms in mixtures</a></h2>
 <p><code>SubIso</code> and <code>Iso</code> add the <em>induced</em> axis: extra target edges between
-matched nodes are forbidden. In a mixed pattern this check runs against the
-<strong>injective population</strong> — a <code>SubIso</code> node rejects candidates with target
-edges to any injective binding that the pattern doesn’t mirror, while free
-bindings are invisible to it. Mixing induced clusters with free clusters is
-rarely what you want; prefer <code>Mono</code> + <code>Homo</code> mixtures unless you
-specifically need exact neighborhoods.</p>
+matched nodes are forbidden. In a mixed pattern, the axis it is measured
+against is the injective population — the same population the distinctness
+rule builds:</p>
+<blockquote>
+<p><strong>Induced-ness holds between a <code>SubIso</code>/<code>Iso</code> node and every injective
+binding.</strong> For a node <code>i</code> in an induced cluster and any node <code>j</code> bound
+injectively — in <em>any</em> injective cluster, not just <code>i</code>’s own — a target
+edge <code>m(i)—m(j)</code> is legal only if the pattern has <code>i—j</code>. Bindings from
+free clusters (<code>Homo</code>, <code>Epi</code>) are invisible to the check: they neither
+trigger it nor are protected by it.</p>
+</blockquote>
+<p>So an induced node’s neighbourhood is pinned exactly against everything the
+pattern promised to keep distinct, and left unconstrained against everything
+it did not. A free node may sit on a target neighbour of an induced node
+without rejecting the match — that target edge simply is not part of what
+induced-ness reads. Mixing induced clusters with free clusters is rarely
+what you want; prefer <code>Mono</code> + <code>Homo</code> mixtures unless you specifically need
+exact neighborhoods.</p>
 <h2 id="rules-of-thumb"><a class="header" href="#rules-of-thumb">Rules of thumb</a></h2>
 <ol>
 <li><strong>Distinct entities → one injective population.</strong> Any number of clusters;
@@ -1046,6 +1058,235 @@ injectivity composes across them.</li>
 <li><strong>Counting distinct structures → no free nodes</strong> in the counted part.</li>
 <li><strong>Cycles → free endpoints + an injective path cluster</strong> referencing them.</li>
 </ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="versioned-graphs"><a class="header" href="#versioned-graphs">Versioned Graphs</a></h1>
+<p><code>MGraph</code> mutates in place: <code>modify!</code> takes <code>&amp;mut self</code> and the graph you had
+is the graph you now have. <code>VGraph</code> is the same graph as a <strong>value</strong>. Every
+edit returns a <em>new</em> graph and leaves the old one exactly as it was —
+readable, searchable, and still yours.</p>
+<pre><code class="language-rust">let (g2, _) = g1.modify(modify![X(0).val(99u32)]).unwrap();
+
+assert_eq!(g2.node_val(id::N(0)), Some(&amp;99));
+assert_eq!(g1.node_val(id::N(0)), Some(&amp;1));   // g1 never moved</code></pre>
+<p>Nothing is copied to make that true. Nodes and edges live in a persistent
+32-way trie; an edit rebuilds only the path from the root to what changed and
+shares every untouched subtree with its parent version. Cloning a <code>VGraph</code>
+copies a handful of trie roots and bumps some refcounts — it does not walk the
+graph.</p>
+<svg viewbox="0 0 470 190" style="max-width:470px;display:block;margin:1em auto" role="img" aria-label="Three versions sharing untouched subtrees; only the path to the edited node is rebuilt">
+  <text x="60" y="26" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">v1</text>
+  <text x="215" y="26" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">v2</text>
+  <text x="370" y="26" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">v3</text>
+  <circle cx="60" cy="52" r="12" fill="#46c6d6" />
+  <circle cx="215" cy="52" r="12" fill="#46c6d6" />
+  <circle cx="370" cy="52" r="12" fill="#46c6d6" />
+  <path d="M60 64 L28 108" stroke="#46c6d6" stroke-width="2" />
+  <path d="M60 64 L120 108" stroke="#46c6d6" stroke-width="2" />
+  <path d="M215 64 L28 108" stroke="#8b95a9" stroke-width="1.6" stroke-dasharray="4 4" />
+  <path d="M215 64 L215 108" stroke="#f0a63f" stroke-width="2.4" />
+  <path d="M370 64 L28 108" stroke="#8b95a9" stroke-width="1.6" stroke-dasharray="4 4" />
+  <path d="M370 64 L370 108" stroke="#f0a63f" stroke-width="2.4" />
+  <circle cx="28" cy="120" r="12" fill="#46c6d6" />
+  <circle cx="120" cy="120" r="12" fill="#46c6d6" />
+  <circle cx="215" cy="120" r="12" fill="#f0a63f" />
+  <circle cx="370" cy="120" r="12" fill="#f0a63f" />
+  <text x="28" y="152" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">shared</text>
+  <text x="248" y="152" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">rebuilt on the edited path only</text>
+</svg>
+<p>That buys three things at once: <strong>snapshots</strong> you can hand to another thread
+without a lock, <strong>rollback</strong> that is just keeping the older binding around,
+and <strong>history</strong> — a version chain is nothing more than the versions you chose
+not to drop.</p>
+<pre><code class="language-rust">let mut history = vec![g1.clone()];
+let mut g = g1;
+for i in 2..6 as grw::Id {
+    let (next, _) = g.modify(modify![N(i) ^ x(0)]).unwrap();
+    history.push(next.clone());
+    g = next;
+}
+
+let counts: Vec&lt;usize&gt; = history.iter().map(|h| h.node_count()).collect();
+assert_eq!(counts, vec![2, 3, 4, 5, 6]);</code></pre>
+<h2 id="quick-start"><a class="header" href="#quick-start">Quick start</a></h2>
+<p><code>vgraph!</code> is <code>mgraph!</code> with a versioned result — same DSL, same aliases with a
+<code>V</code> in front of them:</p>
+<pre><code class="language-rust">let g: VUndir0 = vgraph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))].unwrap();
+assert_eq!(g.node_count(), 3);
+assert_eq!(g.edge_count(), 3);
+assert_eq!(g.version(), 0);</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>mutable</th><th>versioned</th></tr>
+</thead>
+<tbody>
+<tr><td><code>MUndir0</code>, <code>MUndir&lt;NV, EV&gt;</code></td><td><code>VUndir0</code>, <code>VUndir&lt;NV, EV&gt;</code></td></tr>
+<tr><td><code>MDir0</code>, <code>MDir&lt;NV, EV&gt;</code></td><td><code>VDir0</code>, <code>VDir&lt;NV, EV&gt;</code></td></tr>
+<tr><td><code>MAnydir0</code>, <code>MAnydir&lt;NV, EV&gt;</code></td><td><code>VAnydir0</code>, <code>VAnydir&lt;NV, EV&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><code>VGraph::new()</code> gives an empty graph at version <code>0</code>.</p>
+<h2 id="modifying-self-in-a-new-graph-out"><a class="header" href="#modifying-self-in-a-new-graph-out">Modifying: <code>&amp;self</code> in, a new graph out</a></h2>
+<p><code>modify</code> takes <code>&amp;self</code> and returns <code>(next_graph, Modification)</code> — the same
+<a href="#modification-result"><code>Modification</code></a> record the mutable side
+returns, reporting new ids, added edges, removed nodes and swapped values.</p>
+<pre><code class="language-rust">let (g2, m) = g1.modify(modify![X(0).val(99u32)]).unwrap();
+assert_eq!(m.swapped_node_vals.len(), 1);
+assert_eq!(g1.version(), 0);
+assert_eq!(g2.version(), 1);</code></pre>
+<p>Freshly added nodes report their real ids exactly as they do for <code>MGraph</code>:</p>
+<pre><code class="language-rust">let (g1, m) = g0.modify(modify![N(7)]).unwrap();
+assert_eq!(*m.new_node_ids[&amp;modify::LocalId(7)], 0);</code></pre>
+<p>The whole <code>modify!</code> DSL carries over unchanged — <code>N</code>/<code>X</code>/<code>!X</code>, <code>E</code>/<code>e</code>/<code>!e</code>,
+<code>.val(..)</code>, back-references, all three edge kinds. The only difference is
+where the result lands.</p>
+<h2 id="versions-are-yours-to-choose"><a class="header" href="#versions-are-yours-to-choose">Versions are yours to choose</a></h2>
+<p><code>version()</code> reads the graph’s current version. Plain <code>modify</code> advances it by
+one. When the version number means something in <em>your</em> system — a transaction
+id, a logical clock, a commit counter — <code>modify_versioned</code> lets you stamp it
+directly:</p>
+<pre><code class="language-rust">let (g7, _) = g1.modify_versioned(modify![N(2) ^ x(0)], 7).unwrap();
+assert_eq!(g7.version(), 7);
+assert_eq!(g7.node_gen(id::N(2)), Some(7));   // born at 7
+assert_eq!(g7.node_gen(id::N(0)), Some(1));   // untouched since 1</code></pre>
+<p>Versions only ever go <strong>up</strong>. A requested version that does not strictly
+advance the current one is refused, and no graph is produced:</p>
+<pre><code class="language-rust">let Err(err) = g5.modify_versioned(modify![N(2)], 4) else {
+    panic!("a version that does not advance must be refused")
+};
+assert!(matches!(
+    err,
+    error::Modify::Version(error::Version::NotMonotonic { current: 5, requested: 4 })
+));
+assert_eq!(g5.version(), 5);</code></pre>
+<p>Monotonicity is what makes generations mean anything: a version stamped on a
+node is a point on a line, not a label that might come round again.</p>
+<h2 id="stable-identity-slot--generation"><a class="header" href="#stable-identity-slot--generation">Stable identity: slot + generation</a></h2>
+<p>Node ids are <strong>slots</strong>, and slots are recycled — remove a node and the next
+insertion may land on the same id. That is fine for a graph you hold once, and
+a trap for anything that remembers ids across edits: a stale <code>id::N(1)</code> will
+happily resolve to a stranger.</p>
+<p><code>stable_id</code> closes it. It returns <code>(slot, generation)</code>, where the generation is
+the version at which the occupant of that slot was <strong>born</strong>:</p>
+<pre><code class="language-rust">let before = g1.stable_id(id::N(1)).unwrap();
+let (g2, _) = g1.modify(modify![!X(1)]).unwrap();
+let (g3, _) = g2.modify(modify![N(9)]).unwrap();
+let after = g3.stable_id(id::N(1)).unwrap();
+
+assert_eq!(before.0, after.0);   // same slot, recycled
+assert_ne!(before.1, after.1);   // different birth version
+assert_eq!(after.1, 3);</code></pre>
+<svg viewbox="0 0 460 170" style="max-width:460px;display:block;margin:1em auto" role="img" aria-label="Slot 1 emptied then refilled; the generation stamp separates the two occupants">
+  <text x="70" y="28" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">v1</text>
+  <text x="230" y="28" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">v2 — !X(1)</text>
+  <text x="390" y="28" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">v3 — N(9)</text>
+  <circle cx="70" cy="76" r="21" fill="#f0a63f26" /><circle cx="70" cy="76" r="15" fill="#f0a63f" />
+  <text x="70" y="81" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">1</text>
+  <circle cx="230" cy="76" r="19" fill="#e2596e1f" />
+  <circle cx="230" cy="76" r="15" fill="none" stroke="#e2596e" stroke-width="2.2" stroke-dasharray="4 4" />
+  <circle cx="390" cy="76" r="21" fill="#f0a63f26" /><circle cx="390" cy="76" r="15" fill="#f0a63f" />
+  <text x="390" y="81" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#0d0a03">1</text>
+  <path d="M96 76 L206 76" stroke="#8b95a9" stroke-width="1.6" stroke-dasharray="4 4" />
+  <path d="M254 76 L364 76" stroke="#8b95a9" stroke-width="1.6" stroke-dasharray="4 4" />
+  <text x="70" y="120" text-anchor="middle" font-family="monospace" font-size="12" fill="#46c6d6">(1, gen 1)</text>
+  <text x="230" y="120" text-anchor="middle" font-family="monospace" font-size="12" fill="#e2596e">slot free</text>
+  <text x="390" y="120" text-anchor="middle" font-family="monospace" font-size="12" fill="#46c6d6">(1, gen 3)</text>
+  <text x="230" y="152" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b95a9">same slot, different node — the generation says so</text>
+</svg>
+<p>Hold <code>(slot, generation)</code> rather than a bare id and a recycled slot can never
+impersonate the node you meant. <code>node_gen</code> and <code>edge_gen</code> read the stamp on
+its own when you already know the id is live.</p>
+<h2 id="atomicity-an-err-produces-no-version-at-all"><a class="header" href="#atomicity-an-err-produces-no-version-at-all">Atomicity: an <code>Err</code> produces no version at all</a></h2>
+<p>A rejected batch is not a partial edit and not an empty one — it is <em>no</em>
+edit. There is no new graph to look at, the original is untouched, and the
+id space is not disturbed: a slot the failed batch would have consumed is
+still there for the next one.</p>
+<pre><code class="language-rust">assert!(v.modify(modify![N(9) ^ x(0), x(0) ^ x(1)]).is_err());
+
+let (next, m) = v.modify(modify![N(7)]).unwrap();
+assert_eq!(*m.new_node_ids[&amp;modify::LocalId(7)], 2);   // slot 2, not 3
+assert_eq!(next.version(), 1);
+assert_eq!(v.version(), 0);</code></pre>
+<p>This falls out of the shape of the API rather than being defended by
+bookkeeping. <code>modify</code> builds the next graph off to the side and only hands it
+back on success; on failure the value it was building is simply dropped, and
+<code>v</code> — which was never borrowed mutably — is trivially intact.</p>
+<h2 id="the-two-way-door"><a class="header" href="#the-two-way-door">The two-way door</a></h2>
+<p><code>VGraph</code> and <code>MGraph</code> are two representations of one graph model, and you can
+cross between them at will. Convert when the workload changes: batch-build in
+<code>MGraph</code> where in-place mutation is cheapest, then freeze into a <code>VGraph</code> for
+snapshotting and sharing.</p>
+<pre><code class="language-rust">let m = v.to_mgraph();
+assert_eq!(m.node_count(), v.node_count());
+
+let back = VGraph::from_mgraph(&amp;m);
+assert_eq!(back.version(), 0);   // conversion is not an edit</code></pre>
+<p>Node ids survive a round trip, tombstones and all — a graph with a hole at
+slot 1 still has that hole afterwards, and the next insertion still fills it.
+Edge ids are reassigned, exactly as they are by <code>MGraph::from_graph</code>.</p>
+<p>Persistence crosses the same door. There is one <code>.grw</code> format, not two: a file
+written by either side loads into either side.</p>
+<pre><code class="language-rust">v.save(&amp;path).unwrap();
+
+let m: graph::MUndir0 = MGraph::load(&amp;path).unwrap();
+let v2: VUndir0 = VUndir0::load(&amp;path).unwrap();
+assert_eq!(v2.version(), 0);</code></pre>
+<p>Versions and generations are <em>runtime</em> identity, not file content — a loaded
+graph starts again at version <code>0</code>. If your version numbers must outlive the
+file, they belong in your own data, and <code>modify_versioned</code> will restamp the
+graph to match.</p>
+<h2 id="search-is-unchanged"><a class="header" href="#search-is-unchanged">Search is unchanged</a></h2>
+<p>The engine never learned about versioning. It reads targets through the
+<code>Graph</code> trait, and <code>VGraph</code> implements that trait, so indexing and searching a
+versioned graph is the same call on the same tiers with the same results:</p>
+<pre><code class="language-rust">let m_hits = Seq::search(query, &amp;m.index(RevCsr)).count();
+let v_hits = Seq::search(query, &amp;v.index(RevCsr)).count();
+assert_eq!(v_hits, m_hits);</code></pre>
+<p>Every pattern in this book — clusters, morphisms, variable-length paths,
+negation, watchers — applies verbatim. An index is built from a <em>particular</em>
+version; keep the version alive alongside its index and both stay valid while
+newer versions come and go.</p>
+<h2 id="what-v1-deliberately-leaves-out"><a class="header" href="#what-v1-deliberately-leaves-out">What v1 deliberately leaves out</a></h2>
+<ul>
+<li><strong>No branch merge.</strong> Versions form a chain, and forks are ordinary values
+you keep around. Reconciling two divergent forks is your policy to write,
+not the library’s to guess.</li>
+<li><strong>The engine reads through the trait, and only through it.</strong> No
+version-aware search, no “match against v3 as of v5”. Searching a version
+means searching the graph you kept.</li>
+<li><strong>No garbage collection of history.</strong> A version lives exactly as long as
+something holds it; drop the binding and its unshared trie nodes go with it.</li>
+</ul>
+<h2 id="what-versioning-costs"><a class="header" href="#what-versioning-costs">What versioning costs</a></h2>
+<p>Measured against <code>MGraph</code> on the same 1M-node / 2M-edge random graph
+(avg degree 4, median of 3 runs; <code>cargo run --release --example graph_perf -- 1000000 3 42</code> reproduces it):</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th style="text-align: left">measurement</th><th style="text-align: right">MGraph</th><th style="text-align: right">VGraph</th><th style="text-align: right">V / M</th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: left">bulk build (1M nodes + 2M edges)</td><td style="text-align: right">602 ms</td><td style="text-align: right">10.49 s</td><td style="text-align: right">17.4×</td></tr>
+<tr><td style="text-align: left">1000 small modifies</td><td style="text-align: right">1.7 ms</td><td style="text-align: right">23.2 ms</td><td style="text-align: right">13.5×</td></tr>
+<tr><td style="text-align: left">full edge scan (<code>iter_edges</code>)</td><td style="text-align: right">1.9 ms</td><td style="text-align: right">25.0 ms</td><td style="text-align: right">13.2×</td></tr>
+<tr><td style="text-align: left">index build (RevCsr)</td><td style="text-align: right">208 ms</td><td style="text-align: right">777 ms</td><td style="text-align: right">3.7×</td></tr>
+<tr><td style="text-align: left">search (triangle, Mono)</td><td style="text-align: right">1.41 s</td><td style="text-align: right">1.45 s</td><td style="text-align: right">1.03×</td></tr>
+<tr><td style="text-align: left">snapshot / keep a version</td><td style="text-align: right">29.8 ms</td><td style="text-align: right">20 ns</td><td style="text-align: right">~0</td></tr>
+</tbody>
+</table>
+</div>
+<p>The pattern holds at 10k and 100k nodes too. Writes and raw trait scans pay
+the trie’s pointer-chasing tax — roughly an order of magnitude. Build an
+index and the tax vanishes: search times are within a few percent either
+way, because the engine runs against the index, not the store. And the row
+that motivates the whole design: retaining a version is four <code>Arc</code> bumps —
+20 ns flat at any size — where snapshotting <code>MGraph</code> is a deep copy that
+grows linearly (213 µs at 10k, 3.1 ms at 100k, 29.8 ms at 1M).</p>
+<p><code>VGraph</code> has no bulk constructor by design — bulk load is one <code>modify</code>
+carrying all the ops, which still path-copies per element. If you are
+assembling a large graph from scratch, build it as <code>MGraph</code> and convert;
+the two-way door (<code>VGraph::from_mgraph</code> / <code>to_mgraph</code>) preserves slots and ids.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="morphisms"><a class="header" href="#morphisms">Morphisms</a></h1>
 <p>A <strong>morphism</strong> is a mapping from pattern nodes to target nodes that preserves edges — if two nodes are connected in the pattern, their mapped counterparts must be connected in the target.</p>
@@ -1157,7 +1398,7 @@ let count2 = Seq::search(&amp;r.query, &amp;indexed).count();</code></pre>
 g.save(Path::new("my_graph.grw")).unwrap();
 
 // load
-let g2: graph::Undir0 = Graph::load(Path::new("my_graph.grw")).unwrap();</code></pre>
+let g2: graph::MUndir0 = MGraph::load(Path::new("my_graph.grw")).unwrap();</code></pre>
 <h2 id="binary-format"><a class="header" href="#binary-format">Binary Format</a></h2>
 <p>The <code>.grw</code> file format (version 2) consists of:</p>
 <ol>
@@ -1177,7 +1418,7 @@ let g2: graph::Undir0 = Graph::load(Path::new("my_graph.grw")).unwrap();</code><
 <li><strong>Layout hash</strong> for edge values must match</li>
 </ul>
 <pre><code class="language-rust">// this will fail: type mismatch
-let result = Graph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw"));
+let result = MGraph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw"));
 // Error: "node value layout mismatch: file has type `u32`, expected `i64`"</code></pre>
 <p>The layout hash is computed from the type’s field names, types, and structure using FNV hashing. This catches:</p>
 <ul>

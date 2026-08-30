@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a2eafe82.js";
+            window.path_to_searchindex_js = "searchindex-b31d37da.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-29ac6ec0.js"></script>
+        <script src="toc-e2d77381.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -187,7 +187,7 @@
 g.save(Path::new("my_graph.grw")).unwrap();
 
 // load
-let g2: graph::Undir0 = Graph::load(Path::new("my_graph.grw")).unwrap();</code></pre>
+let g2: graph::MUndir0 = MGraph::load(Path::new("my_graph.grw")).unwrap();</code></pre>
 <h2 id="binary-format"><a class="header" href="#binary-format">Binary Format</a></h2>
 <p>The <code>.grw</code> file format (version 2) consists of:</p>
 <ol>
@@ -207,7 +207,7 @@ let g2: graph::Undir0 = Graph::load(Path::new("my_graph.grw")).unwrap();</code><
 <li><strong>Layout hash</strong> for edge values must match</li>
 </ul>
 <pre><code class="language-rust">// this will fail: type mismatch
-let result = Graph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw"));
+let result = MGraph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw"));
 // Error: "node value layout mismatch: file has type `u32`, expected `i64`"</code></pre>
 <p>The layout hash is computed from the type’s field names, types, and structure using FNV hashing. This catches:</p>
 <ul>
