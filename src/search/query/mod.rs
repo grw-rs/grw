@@ -2,10 +2,69 @@ mod compile;
 
 use crate::graph;
 use crate::graph::dsl::LocalId;
+use crate::graph::index::{IndexName, KeyBytes, KeyTag};
 use crate::search::{Morphism, Decision};
 use crate::{Id, id};
 
 pub use compile::compile;
+
+/// A node constraint in structured form. `Custom` is the opaque closure the
+/// engine evaluates per candidate; `Key`/`KeyIn` name a graph index and are
+/// resolved to a candidate pool once per search instead of being evaluated at
+/// all. `And` is the conjunction `.test` builds on top of `.key`.
+pub enum NodePred<NV> {
+    Custom(Box<dyn Fn(&NV) -> bool + Send + Sync>),
+    Key { index: IndexName, tag: KeyTag, key: KeyBytes },
+    KeyIn { index: IndexName, tag: KeyTag, keys: Vec<KeyBytes> },
+    And(Vec<NodePred<NV>>),
+}
+
+impl<NV> NodePred<NV> {
+    pub fn and(self, other: NodePred<NV>) -> Self {
+        match self {
+            NodePred::And(mut parts) => {
+                parts.push(other);
+                NodePred::And(parts)
+            }
+            first => NodePred::And(vec![first, other]),
+        }
+    }
+
+    /// Evaluates only the closure part. `Key`/`KeyIn` answer `true` here
+    /// because they are not decidable from a node value alone — the pool a
+    /// key resolves to carries that half of the constraint, and every
+    /// candidate site that does not already iterate the pool checks
+    /// membership in it separately.
+    pub(crate) fn eval_custom(&self, v: &NV) -> bool {
+        match self {
+            NodePred::Custom(f) => f(v),
+            NodePred::Key { .. } | NodePred::KeyIn { .. } => true,
+            NodePred::And(parts) => parts.iter().all(|p| p.eval_custom(v)),
+        }
+    }
+
+    pub(crate) fn has_key(&self) -> bool {
+        match self {
+            NodePred::Custom(_) => false,
+            NodePred::Key { .. } | NodePred::KeyIn { .. } => true,
+            NodePred::And(parts) => parts.iter().any(|p| p.has_key()),
+        }
+    }
+
+    fn collect_indices(&self, out: &mut Vec<(IndexName, KeyTag)>) {
+        match self {
+            NodePred::Custom(_) => {}
+            NodePred::Key { index, tag, .. } | NodePred::KeyIn { index, tag, .. } => {
+                out.push((*index, *tag));
+            }
+            NodePred::And(parts) => {
+                for p in parts {
+                    p.collect_indices(out);
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NodeKind {
@@ -58,7 +117,8 @@ pub struct Query<NV, ER: graph::Edge> {
     pub(crate) exist_indices: Vec<usize>,
     pub(crate) translated_indices: Vec<usize>,
     pub(crate) node_morphism: Vec<Morphism>,
-    pub(crate) node_preds: Vec<Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>>,
+    pub(crate) node_preds: Vec<Option<NodePred<NV>>>,
+    pub(crate) node_has_key: Vec<bool>,
     pub(crate) edge_preds: Vec<Option<Box<dyn Fn(&ER::Val) -> bool + Send + Sync>>>,
     pub(crate) ban_clusters: Vec<BanCluster>,
     pub(crate) search_order: Vec<usize>,
@@ -94,6 +154,24 @@ impl<NV, ER: graph::Edge> Query<NV, ER> {
         self.nodes[index].local_id
     }
 
+    pub(crate) fn node_index(&self, lid: LocalId) -> Option<usize> {
+        self.nodes.iter().position(|n| n.local_id == lid)
+    }
+
+    /// Every (index name, key tag) pair this query resolves through a graph
+    /// index, deduplicated and ordered by index name. An entry point checks
+    /// this against `Graph::catalogue` before a search starts: a key predicate
+    /// against an absent index is an error, never a scan.
+    pub fn required_indices(&self) -> Vec<(IndexName, KeyTag)> {
+        let mut out = Vec::new();
+        for pred in self.node_preds.iter().flatten() {
+            pred.collect_indices(&mut out);
+        }
+        out.sort_by(|a, b| a.0.0.cmp(b.0.0).then(a.1.0.cmp(&b.1.0)));
+        out.dedup();
+        out
+    }
+
     pub fn has_exist_nodes(&self) -> bool {
         !self.exist_indices.is_empty()
     }
@@ -114,6 +192,30 @@ impl<NV, ER: graph::Edge> Query<NV, ER> {
         self.node_morphism[pattern_idx].is_induced()
             || (self.has_mixed_induced && self.is_injective[pattern_idx])
     }
+}
+
+pub(crate) fn check_injective<NV, ER: graph::Edge>(
+    query: &Query<NV, ER>,
+    bindings: &[Option<id::N>],
+) -> Result<(), BindError> {
+    let pinned: Vec<(usize, id::N)> = bindings
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| query.node_morphism[i].is_injective())
+        .filter_map(|(i, b)| b.map(|target| (i, target)))
+        .collect();
+    for (k, &(ci, target_i)) in pinned.iter().enumerate() {
+        for &(cj, target_j) in &pinned[(k + 1)..] {
+            if target_i == target_j {
+                return Err(BindError::Collision {
+                    n1: query.nodes[ci].local_id.0,
+                    n2: query.nodes[cj].local_id.0,
+                    target: *target_i,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 pub struct Resolved<NV, ER: graph::Edge> {
@@ -165,26 +267,7 @@ impl<NV, ER: graph::Edge> Unresolved<NV, ER> {
             return Err(BindError::Missing(missing));
         }
 
-        let all_pinned: Vec<usize> = self.query.exist_indices.iter()
-            .chain(self.translated_indices.iter())
-            .copied().collect();
-        for (i, &ci) in all_pinned.iter().enumerate() {
-            let morphism_i = self.query.node_morphism[ci];
-            if !morphism_i.is_injective() { continue; }
-            let target_i = bindings[ci].expect("validated above");
-            for &cj in &all_pinned[(i + 1)..] {
-                let morphism_j = self.query.node_morphism[cj];
-                if !morphism_j.is_injective() { continue; }
-                let target_j = bindings[cj].expect("validated above");
-                if target_i == target_j {
-                    return Err(BindError::Collision {
-                        n1: self.query.nodes[ci].local_id.0,
-                        n2: self.query.nodes[cj].local_id.0,
-                        target: *target_i,
-                    });
-                }
-            }
-        }
+        check_injective(&self.query, &bindings)?;
 
         Ok(Bound { query: &self.query, bindings })
     }

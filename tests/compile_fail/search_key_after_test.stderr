@@ -1,0 +1,7 @@
+error[E0599]: no method named `key` found for struct `grw::search::dsl::node::Free<u32, HasPred, _>` in the current scope
+ --> tests/compile_fail/search_key_after_test.rs:9:49
+  |
+9 |         get(Mono) { N(0).test(|v: &u32| *v > 1).key(BY_VAL, 2u32) ^ N(1) }
+  |                                                 ^^^ method not found in `grw::search::dsl::node::Free<u32, HasPred, _>`
+  |
+  = note: the method was found for `grw::search::dsl::node::Free<NV, (), ER>`

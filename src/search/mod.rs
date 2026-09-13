@@ -2,9 +2,11 @@ pub mod dsl;
 pub mod engine;
 pub mod error;
 pub mod path;
+pub mod pattern;
 #[doc(hidden)]
 pub mod query;
 
+pub use pattern::{Names, Pattern};
 pub use query::compile;
 pub use query::Query;
 pub use query::Search;
@@ -83,46 +85,10 @@ macro_rules! __search_clusters {
     };
 }
 
-#[macro_export]
-macro_rules! search {
-    [<$nv:ty, $er:ty>; $($body:tt)*] => {{
-        #[allow(unused_imports)]
-        use $crate::search::dsl::*;
-        let clusters: Vec<$crate::search::dsl::ClusterOps<$nv, $er>> =
-            $crate::__search_clusters!(@acc [] $($body)*);
-        $crate::search::query::compile(clusters)
-    }};
-    [mgraph ! [$($g:tt)*], $($body:tt)*] => {{
-        #[allow(unused_imports)]
-        use $crate::search::dsl::*;
-        $crate::mgraph![$($g)*]
-            .map_err(|e| $crate::search::error::Search::GraphBuild(Box::new(e)))
-            .and_then(|__g| {
-                let clusters = $crate::__search_clusters!(@acc [] $($body)*);
-                $crate::search::query::compile(clusters).and_then(|compiled| {
-                    $crate::search::engine::seq::OwnedIter::from_graph_and_search(__g, compiled)
-                })
-            })
-    }};
-    [$graph:expr, $($body:tt)*] => {{
-        #[allow(unused_imports)]
-        use $crate::search::dsl::*;
-        let clusters = $crate::__search_clusters!(@acc [] $($body)*);
-        $crate::search::query::compile(clusters).and_then(|compiled| {
-            $crate::search::Session::from_search(compiled, $graph)
-        })
-    }};
-    [$($body:tt)*] => {{
-        #[allow(unused_imports)]
-        use $crate::search::dsl::*;
-        let clusters = $crate::__search_clusters!(@acc [] $($body)*);
-        $crate::search::query::compile(clusters)
-    }};
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::search;
     use crate::edge;
     use crate::graph::Graph as _;
     use crate::id;
@@ -288,7 +254,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        Seq::search(&query, &target).count()
+        Seq::search(&query, &target).unwrap().count()
     }
 
     #[test]
@@ -433,7 +399,7 @@ mod tests {
         let Search::Resolved(r) = mono_pattern.unwrap()
         else { panic!("unexpected context nodes") };
         let query = r.query;
-        let mono_matches: Vec<_> = Seq::search(&query, &target).collect();
+        let mono_matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         assert_eq!(mono_matches.len(), 6);
 
         let sub_iso_pattern = search![<(), ER>;
@@ -445,7 +411,7 @@ mod tests {
         let Search::Resolved(r) = sub_iso_pattern.unwrap()
         else { panic!("unexpected context nodes") };
         let query = r.query;
-        let sub_iso_matches: Vec<_> = Seq::search(&query, &target).collect();
+        let sub_iso_matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         assert_eq!(sub_iso_matches.len(), 0);
     }
 
@@ -493,7 +459,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        Seq::search(&query, &target).count()
+        Seq::search(&query, &target).unwrap().count()
     }
 
     #[test]
@@ -599,7 +565,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        let matches: Vec<_> = Seq::search(&query, &target).collect();
+        let matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         for m in &matches {
             let mapped_0 = *m[0];
             assert_ne!(mapped_0, 0);
@@ -636,7 +602,7 @@ mod tests {
         let ctx: &[(Id, Id)] = &[(0, 0)];
         let bindings = u.bind(ctx).unwrap().bindings;
         let query = u.query;
-        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).unwrap().collect();
         assert_eq!(matches.len(), 0);
     }
 
@@ -669,7 +635,7 @@ mod tests {
         let ctx: &[(Id, Id)] = &[(0, 0)];
         let bindings = u.bind(ctx).unwrap().bindings;
         let query = u.query;
-        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).unwrap().collect();
         for m in &matches {
             let mapped = *m[0];
             let val = target.graph.nodes.get(id::N(mapped)).unwrap();
@@ -706,7 +672,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        let matches: Vec<_> = Seq::search(&query, &target).collect();
+        let matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         assert_eq!(matches.len(), 1);
         assert_eq!(*matches[0][0], 1);
     }
@@ -790,7 +756,7 @@ mod tests {
         let ctx: &[(Id, Id)] = &[(1, 1)];
         let bindings = u.bind(ctx).unwrap().bindings;
         let query = u.query;
-        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).unwrap().collect();
         assert_eq!(matches.len(), 1);
         assert_eq!(*matches[0][0], 1);
     }
@@ -811,7 +777,7 @@ mod tests {
         let ctx: &[(Id, Id)] = &[(0, 1), (1, 1)];
         let bindings = u.bind(ctx).unwrap().bindings;
         let query = u.query;
-        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).unwrap().collect();
         assert_eq!(matches.len(), 0);
     }
 
@@ -829,7 +795,7 @@ mod tests {
         let ctx: &[(Id, Id)] = &[(0, 0)];
         let bindings = u.bind(ctx).unwrap().bindings;
         let query = u.query;
-        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(&query, &target, bindings).unwrap().collect();
         assert_eq!(matches.len(), 0);
     }
 
@@ -913,7 +879,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        let matches: Vec<_> = Seq::search(&query, &target).collect();
+        let matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         for m in &matches {
             let n10 = *m[10];
             let n11 = *m[11];
@@ -1004,7 +970,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        Seq::search(&query, &target).count()
+        Seq::search(&query, &target).unwrap().count()
     }
 
     fn dir_graph(nodes: &[u32], edges: &[(u32, u32)]) -> crate::graph::MDir0 {
@@ -1034,7 +1000,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        let matches: Vec<_> = Seq::search(&query, &target).collect();
+        let matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         assert_eq!(matches.len(), 1);
         assert_eq!(*matches[0][0], 1);
         assert_eq!(*matches[0][1], 0);
@@ -1097,7 +1063,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        Seq::search(&query, &target).count()
+        Seq::search(&query, &target).unwrap().count()
     }
 
     fn anydir_graph(
@@ -1393,7 +1359,7 @@ mod tests {
         let Search::Resolved(r) = pattern.unwrap()
         else { panic!("unexpected context nodes") };
         let query = r.query;
-        let matches: Vec<_> = Seq::search(&query, &target).collect();
+        let matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         for m in &matches {
             let n0 = *m[0];
             let n2 = *m[2];
@@ -1417,7 +1383,7 @@ mod tests {
         let Search::Resolved(r) = pattern.unwrap()
         else { panic!("unexpected context nodes") };
         let query = r.query;
-        let matches: Vec<_> = Seq::search(&query, &target).collect();
+        let matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         assert!(!matches.is_empty());
     }
 
@@ -1451,7 +1417,7 @@ mod tests {
             query.adj[1].len(),
         );
 
-        let matches: Vec<_> = Seq::search_bound(query, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(query, &target, bindings).unwrap().collect();
         assert!(!matches.is_empty(), "bound path edge should find multihop path 0→1→2→3");
         let p = matches[0].path(0);
         assert_eq!(p.len(), 4, "path should be [0,1,2,3]");
@@ -1484,7 +1450,7 @@ mod tests {
             q.has_predicates,
         );
         let bindings = bound.bindings().to_vec();
-        let matches: Vec<_> = Seq::search_bound(q, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(q, &target, bindings).unwrap().collect();
         assert!(!matches.is_empty(), "should find path 0→1→2 via label-1 edges");
         let p = matches[0].path(0);
         assert_eq!(p.len(), 3, "path [0,1,2]");
@@ -1507,7 +1473,7 @@ mod tests {
         let Search::Resolved(r) = pattern.unwrap()
             else { panic!("unexpected") };
 
-        let matches: Vec<_> = Seq::search(&r.query, &target).collect();
+        let matches: Vec<_> = Seq::search(&r.query, &target).unwrap().collect();
         let same_node: Vec<_> = matches.iter()
             .filter(|m| m.get(crate::graph::dsl::LocalId(0)) == m.get(crate::graph::dsl::LocalId(1)))
             .collect();
@@ -1537,7 +1503,7 @@ mod tests {
         let bound = u.bind(&[(0, 0), (1, 3)]).unwrap();
         let bindings = bound.bindings().to_vec();
         let query = bound.query();
-        let matches: Vec<_> = Seq::search_bound(query, &target, bindings).collect();
+        let matches: Vec<_> = Seq::search_bound(query, &target, bindings).unwrap().collect();
         assert!(!matches.is_empty(), "should find a connecting path");
         let p = matches[0].path(0);
         assert_eq!(p, &[id::N(0), id::N(1), id::N(3)],
@@ -1572,7 +1538,7 @@ mod tests {
         else { panic!("unexpected context nodes") };
         let query = r.query;
         let target = target.index(RevCsr);
-        let matches: Vec<_> = Seq::search(&query, &target).collect();
+        let matches: Vec<_> = Seq::search(&query, &target).unwrap().collect();
         assert_eq!(matches.len(), 1);
         assert_eq!(*matches[0][0], 0);
         assert_eq!(*matches[0][1], 1);

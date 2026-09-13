@@ -57,7 +57,7 @@ pub enum Op<NV, ER: graph::Edge> {
     Free {
         id: Option<LocalId>,
         val: Option<NV>,
-        node_pred: Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>,
+        node_pred: Option<crate::search::query::NodePred<NV>>,
         negated: bool,
         edges: Vec<EdgeOp<NV, ER>>,
     },
@@ -67,7 +67,7 @@ pub enum Op<NV, ER: graph::Edge> {
     },
     Exist {
         id: id::N,
-        node_pred: Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>,
+        node_pred: Option<crate::search::query::NodePred<NV>>,
         negated: bool,
         edges: Vec<EdgeOp<NV, ER>>,
     },
@@ -77,7 +77,7 @@ pub enum Op<NV, ER: graph::Edge> {
     },
     Context {
         id: LocalId,
-        node_pred: Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>,
+        node_pred: Option<crate::search::query::NodePred<NV>>,
         negated: bool,
         edges: Vec<EdgeOp<NV, ER>>,
     },

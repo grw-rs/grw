@@ -1,0 +1,5 @@
+error: expected at least one `X(<name> = <expr>)` after `with`
+ --> tests/compile_fail/search_with_dangling.rs:7:27
+  |
+7 |     let _ = search![&g, p with];
+  |                           ^^^^

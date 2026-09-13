@@ -90,4 +90,18 @@ pub enum Search {
     TargetMissing(Id),
     #[error("graph build: {0}")]
     GraphBuild(Box<dyn std::error::Error + Send + Sync>),
+    #[error("pattern!: context nodes are not allowed: {0:?}")]
+    ContextInPattern(Vec<crate::graph::dsl::LocalId>),
+    #[error("unknown pattern node name {0:?}")]
+    UnknownName(String),
+    #[error("pattern node {0:?} pinned twice")]
+    DuplicatePin(String),
+    #[error("pins require an unresolved search; this search has no context nodes to pin")]
+    PinsOnResolvedPattern,
+    #[error("pattern node name {0:?} has no node in the compiled query")]
+    NameNotInQuery(String),
+    #[error("query needs index {index} which this graph does not declare")]
+    IndexMissing { index: crate::graph::index::IndexName },
+    #[error("index {index} is declared over a different key type than the query's key")]
+    KeyTagMismatch { index: crate::graph::index::IndexName },
 }

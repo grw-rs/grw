@@ -174,7 +174,7 @@ fn mono_path_rejects_reusing_bound_node() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(!matches.is_empty(), "Mono path 0→0 should find cycle through non-excluded nodes");
     let p = matches[0].path(0);
@@ -198,7 +198,7 @@ fn subiso_path_rejects_branched_intermediates() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     // Path 0→1→2→3: node 1 has outside edge to 4 → SubIso rejects
     assert!(matches.is_empty() || matches[0].path(0).is_empty(),
@@ -219,7 +219,7 @@ fn subiso_path_accepts_clean_intermediates() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(!matches.is_empty());
     assert_eq!(matches[0].path(0).len(), 4);
@@ -259,7 +259,7 @@ fn subiso_endpoints_and_path_rejects_branches() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(matches.is_empty() || matches[0].path(0).is_empty(),
         "SubIso path should reject: node 1 has branch to 4");
@@ -281,7 +281,7 @@ fn cross_cluster_mono_endpoints_subiso_path_rejects_branches() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     // Path 0→1→2→3: node 1 has outside edge to 4. SubIso path cluster rejects.
     assert!(matches.is_empty() || matches[0].path(0).is_empty(),
@@ -419,7 +419,7 @@ fn typed_edge_pred_filters_path_in_subiso() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     // Path 0→1→2 via label-1: node 1 has no outside edges in label-1 subgraph
     assert!(!matches.is_empty(), "SubIso path through clean label-1 chain should work");
@@ -448,7 +448,7 @@ fn anyedge_path_traverses_reverse_directed() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(!matches.is_empty(), "% should traverse directed edge in reverse");
     assert_eq!(matches[0].path(0), &[grw::id::N(0), grw::id::N(1)]);
@@ -473,7 +473,7 @@ fn anyedge_path_traverses_mixed_directions() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(!matches.is_empty(), "% path should traverse directed+undirected edges");
     assert_eq!(matches[0].path(0).len(), 4, "path 0→1-2→3");

@@ -1,0 +1,5 @@
+error: key predicates apply to node definitions
+ --> tests/compile_fail/key_on_edge.rs:9:50
+  |
+9 |     let _ = search![&g, get(Mono) { N(0) & E(key(BY_VAL, 1u32)) >> N(1) }];
+  |                                                  ^^^^^^

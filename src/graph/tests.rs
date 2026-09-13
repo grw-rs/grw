@@ -800,8 +800,8 @@ fn silent_matches_normal_count() {
     let query = r.query;
     let sg = g.index(RevCsr);
 
-    let normal_count = Seq::search(&query, &sg).count();
-    let watched_count = Seq::search_watched(&query, &sg, Silent).count();
+    let normal_count = Seq::search(&query, &sg).unwrap().count();
+    let watched_count = Seq::search_watched(&query, &sg, Silent).unwrap().count();
     assert_eq!(normal_count, watched_count);
 }
 
@@ -824,7 +824,7 @@ fn watcher_receives_bind_unbind_events() {
     let sg = g.index(RevCsr);
 
     let recorder = Recorder::new();
-    let watched = Seq::search_watched(&query, &sg, recorder);
+    let watched = Seq::search_watched(&query, &sg, recorder).unwrap();
     let matches: Vec<_> = watched.collect();
     assert_eq!(matches.len(), 4);
 }
@@ -848,7 +848,7 @@ fn watcher_receives_events_and_returns_via_into_watcher() {
     let sg = g.index(RevCsr);
 
     let recorder = Recorder::new();
-    let mut watched = Seq::search_watched(&query, &sg, recorder);
+    let mut watched = Seq::search_watched(&query, &sg, recorder).unwrap();
     while watched.next().is_some() {}
     let recorder = watched.into_watcher();
 
@@ -882,12 +882,12 @@ fn stop_terminates_early() {
     let query = r.query;
     let sg = g.index(RevCsr);
 
-    let normal_count = Seq::search(&query, &sg).count();
+    let normal_count = Seq::search(&query, &sg).unwrap().count();
     assert!(normal_count > 2);
 
     let mut recorder = Recorder::new();
     recorder.stop_after = Some(2);
-    let mut watched = Seq::search_watched(&query, &sg, recorder);
+    let mut watched = Seq::search_watched(&query, &sg, recorder).unwrap();
     let mut count = 0;
     while watched.next().is_some() {
         count += 1;

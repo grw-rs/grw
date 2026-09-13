@@ -1,0 +1,5 @@
+error: expected `<NV, ER>;` before the clusters
+ --> tests/compile_fail/pattern_empty_type_header.rs:4:77
+  |
+4 |     let _p: Result<Pattern<i32, grw::graph::edge::Undir<()>>, _> = pattern![<; get(Mono) { N(a) ^ N(b) }];
+  |                                                                             ^

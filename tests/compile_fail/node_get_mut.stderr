@@ -1,0 +1,30 @@
+error[E0277]: the trait bound `grw::id::N: GetMutKey<u32, grw::edge::Undir<()>>` is not satisfied
+ --> tests/compile_fail/node_get_mut.rs:7:16
+  |
+7 |     *g.get_mut(id::N(0)).unwrap() = 777u32;
+  |        ------- ^^^^^^^^ the trait `GetMutKey<u32, grw::edge::Undir<()>>` is not implemented for `grw::id::N`
+  |        |
+  |        required by a bound introduced by this call
+  |
+help: the following other types implement trait `GetMutKey<NV, E>`
+ --> src/graph/mod.rs
+  |
+  |         impl<NV, EV> GetMutKey<NV, edge::$name<EV>> for edge::$mod::E<Id> {
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |         |
+  |         `grw::edge::dir::E<u32>` implements `GetMutKey<NV, grw::edge::Dir<EV>>`
+  |         `grw::edge::undir::E<u32>` implements `GetMutKey<NV, grw::edge::Undir<EV>>`
+...
+  | impl_edge_key!(Undir, undir);
+  | ---------------------------- in this macro invocation
+  | impl_edge_key!(Dir, dir);
+  | ------------------------ in this macro invocation
+...
+  | impl<NV, EV> GetMutKey<NV, edge::Anydir<EV>> for edge::anydir::E<Id> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `grw::edge::anydir::E<u32>` implements `GetMutKey<NV, Anydir<EV>>`
+note: required by a bound in `MGraph::<NV, E>::get_mut`
+ --> src/graph/mutable.rs
+  |
+  |     pub fn get_mut<K: GetMutKey<NV, E>>(&mut self, key: K) -> Option<&mut K::Val> {
+  |                       ^^^^^^^^^^^^^^^^ required by this bound in `MGraph::<NV, E>::get_mut`
+  = note: this error originates in the macro `impl_edge_key` (in Nightly builds, run with -Z macro-backtrace for more info)

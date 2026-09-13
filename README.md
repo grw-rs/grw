@@ -384,6 +384,126 @@ The returned `Modification` contains:
 
 ---
 
+<h2>Indices</h2>
+
+A graph can maintain keyed node indices — tables that map a value-derived key straight to the node(s) that hold it, instead of scanning. `MGraph` and `VGraph` share the same API.
+
+<details open><summary><b>Declare</b></summary>
+
+```rust
+use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph<u32, edge::Undir<()>> = grw::mgraph![
+    N(0).val(10u32) ^ N(1).val(20u32)
+].unwrap();
+
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &u32| Some(*v)),
+]).unwrap();
+assert_eq!(g.catalogue().len(), 1);
+```
+
+`IndexDecl::new(name, cardinality, extractor)` takes any `Fn(&NV) -> Option<K>` — returning `None` excludes a node from the index. `Cardinality::Unique` refuses a graph (or a batch) that would give two nodes the same key; `Cardinality::Multi` groups them under it. `with_indices` builds every table by one scan of the graph.
+
+</details>
+
+<details open><summary><b>Maintain</b></summary>
+
+```rust
+use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+use grw::modify;
+
+const BY_VAL: IndexName = IndexName("by_val");
+const BY_MOD: IndexName = IndexName("by_mod");
+
+let g: MGraph<u32, edge::Undir<()>> = grw::mgraph![
+    N(0).val(10u32) ^ N(1).val(20u32)
+].unwrap();
+let mut g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &u32| Some(*v)),
+]).unwrap();
+
+g.add_index(IndexDecl::new(BY_MOD, Cardinality::Multi, |v: &u32| Some(*v % 5))).unwrap();
+let _ = g.drop_index(BY_MOD).unwrap();
+
+let Err(err) = modify!(g, [N(2).val(10u32)]) else { panic!("expected Err") };
+assert!(matches!(
+    err,
+    grw::modify::error::Modify::Apply(grw::modify::error::Apply::Index(
+        grw::modify::error::apply::Index::DuplicateKey { .. }
+    ))
+));
+```
+
+`modify!` keeps every declared index in sync as part of the same transaction: a batch that would collide on a `Unique` index is refused whole, before anything is written, with `modify::error::apply::Index::DuplicateKey { index, existing }`.
+
+</details>
+
+<details open><summary><b>Hit</b></summary>
+
+```rust
+use grw::Graph as _;
+use grw::graph::index::{Cardinality, IndexDecl, IndexHit, IndexName, KeyBytes, KeyTag};
+use grw::graph::{MGraph, edge};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph<u32, edge::Undir<()>> = grw::mgraph![
+    N(0).val(10u32) ^ N(1).val(20u32)
+].unwrap();
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &u32| Some(*v)),
+]).unwrap();
+
+let hit = g.index_hit(BY_VAL, &KeyBytes::of(&10u32), KeyTag::of::<u32>()).unwrap();
+assert!(matches!(hit, IndexHit::One(n) if n == grw::id::N(0)));
+```
+
+`index_hit` and `catalogue` are also `Graph` trait methods (`index_decls` too — the owned declarations behind a graph's current catalogue), so they work identically on `MGraph` and `VGraph`.
+
+</details>
+
+<details open><summary><b>Key predicates</b></summary>
+
+`search!`/`pattern!` reach the same tables through `.key(index, value)` / `.key_in(index, [values])` on a node — see [Key Predicates](doc/site/src/search.md#key-predicates) in the book. Naming an index the graph doesn't carry is `error::Search::IndexMissing`, never a silent scan.
+
+</details>
+
+<details open><summary><b>Persistence</b></summary>
+
+The `.grw` snapshot format (v3) carries the whole catalogue and every table alongside the graph, so `save`/`load` round-trip indices for free. `load_with(path, decls)` checks the file's catalogue against the declarations you pass — by name, order-independent — before restoring the tables directly from the file, with no rescan:
+
+```rust
+use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph<u32, edge::Undir<()>> = grw::mgraph![
+    N(0).val(10u32) ^ N(1).val(20u32)
+].unwrap();
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &u32| Some(*v)),
+]).unwrap();
+
+let path = std::env::temp_dir().join("grw_readme_indices.grw");
+g.save(&path).unwrap();
+let g2: MGraph<u32, edge::Undir<()>> = MGraph::load_with(&path, vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &u32| Some(*v)),
+]).unwrap();
+assert_eq!(g2.catalogue().len(), 1);
+```
+
+`load` refuses a file whose catalogue is non-empty, naming the indices that need declarations; `load_with(path, decls)` verifies and restores them. A plain `MGraph`/`VGraph` file has no catalogue, so `load` reads it directly.
+
+</details>
+
+---
+
 <h2><code>search!</code> — pattern matching</h2>
 
 `search!` compiles a pattern into a query and iterates over all morphism-valid mappings from pattern nodes to target graph nodes. Patterns are organized into **clusters** — `get` (required) and `ban` (forbidden substructures).
@@ -418,6 +538,12 @@ The returned `Modification` contains:
 | `N(id).test(\|v\| ...)` | Node value predicate |
 | `E().val(v)` | Edge value — exact match |
 | `X(id)` | Context node — pinned to a specific graph node |
+| `N(name)` / `n(name)` | Named pattern node / reference — names lower to ids; `pattern.lid("name")` |
+| `N(id: pattern)` | Node value must match a Rust pattern (`Some(1)`, `Kind::A { .. }`, `1..=5`, `A \| B`) |
+| `E(pattern)` | Edge value must match a Rust pattern |
+| `X(name = node_id)` / `X(name = node_id : pattern)` | Context node pinned to a graph node, optionally checked |
+| `pattern![..]` | Graph-free pattern; rejects `X`; returns a `Pattern` (query + names, via `.query()`/`.lid()`) |
+| `search![&g, p]` / `search![&g, p with X(a = id), ..]` | Run a stored pattern, optionally pinning named nodes |
 
 </details>
 
@@ -506,6 +632,8 @@ let session = search![&g,
 ].unwrap();
 ```
 
+`!E()` bans a single edge; `!X(name = id)` bans a node together with every edge attached to it as one unit, so several independent `!E`s add up ("none of these may exist") while a single `!X` — or an explicit `ban { }` block — bans its whole configuration at once ("not all of these together"). A pin on a banned position, `!X(name = id)`, aims the ban at that one graph node instead of the whole graph. See [Negation, Bans And Pins](doc/site/src/search.md#negation-bans-and-pins) in the book for the worked examples.
+
 </details>
 
 <details open><summary><b>Sequential vs parallel iteration</b></summary>
@@ -544,11 +672,84 @@ let Search::Resolved(r) = search![<(), edge::Undir<()>>;
 let indexed = g.index(RevCsr);
 
 // low-level sequential
-let matches: Vec<_> = Seq::search(&r.query, &indexed).collect();
+let matches: Vec<_> = Seq::search(r.query(), &indexed).unwrap().collect();
 
 // low-level parallel
-let matches: Vec<_> = Par::search(&r.query, &indexed);
+let matches: Vec<_> = Par::search(r.query(), &indexed).unwrap();
 ```
+
+</details>
+
+<details open><summary><b>Named nodes</b></summary>
+
+`N(name)` defines a pattern node by name instead of by integer id; `n(name)` refers back to it. Names lower to integer local ids at macro expansion: indices are assigned starting one past the largest integer id used anywhere in the pattern (or from `0` if no integer ids are used). Every stored `Pattern` carries a `Names` table pairing each name with its `LocalId`; look one up with `pattern.lid("name")`.
+
+```rust
+use grw::graph::{edge, Graph, MGraph};
+use grw::search::{Pattern, RevCsr, Seq};
+use grw::{mgraph, pattern};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Role { Signer, Provider }
+
+let g: MGraph<Role, edge::Dir<()>> = mgraph![N(0).val(Role::Signer) >> N(1).val(Role::Provider)].unwrap();
+let p: Pattern<Role, edge::Dir<()>> = pattern![get(Mono) { N(s: Role::Signer) >> N(p: Role::Provider) }].unwrap();
+let indexed = g.index(RevCsr);
+let matches: Vec<_> = Seq::search(p.query(), &indexed).unwrap().collect();
+assert_eq!(matches.len(), 1);
+for m in &matches {
+    assert_eq!(m[p.lid("s").unwrap()], grw::id::N(0));
+    assert_eq!(m[p.lid("p").unwrap()], grw::id::N(1));
+}
+```
+
+A duplicate definition in a cluster, an undefined reference, or `X(..)` used inside `pattern!` are all compile errors — caught while expanding the macro, before the pattern ever runs. Looking up a name that isn't in the pattern (`pattern.lid("nope")`) is a runtime error instead: `error::Search::UnknownName`.
+
+</details>
+
+<details open><summary><b>Value patterns</b></summary>
+
+`N(id: pattern)` and `N(name: pattern)` require the node's value to match a Rust pattern — anything valid on the right of a `match` arm: `Some(1)`, `Kind::A { .. }`, `1..=5`, `A | B`. `E(pattern)` does the same for an edge's value.
+
+```rust
+use grw::graph::{edge, Graph, MGraph};
+use grw::search::{Pattern, RevCsr, Seq};
+use grw::{mgraph, pattern};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Shape { Circle(u8), Square(u8) }
+
+let g: MGraph<Shape, edge::Undir<u8>> =
+    mgraph![N(0).val(Shape::Circle(1)) & E().val(7u8) ^ N(1).val(Shape::Square(2))].unwrap();
+let nodes: Pattern<Shape, edge::Undir<u8>> =
+    pattern![get(Mono) { N(c: Shape::Circle(_)) ^ N(s: Shape::Square(2)) }].unwrap();
+let edges: Pattern<Shape, edge::Undir<u8>> = pattern![get(Mono) { N(a) & E(7) ^ N(b) }].unwrap();
+let indexed = g.index(RevCsr);
+assert_eq!(Seq::search(nodes.query(), &indexed).unwrap().count(), 1);
+assert_eq!(Seq::search(edges.query(), &indexed).unwrap().count(), 2);
+```
+
+`pattern![..]` builds a `Pattern<NV, ER>` without a graph: it rejects `X(..)` context nodes at compile time (`pattern!: context nodes X(..) are not allowed; use search![&g, ...]`) and returns `Result<Pattern<NV, ER>, error::Search>`, giving you `query()`, `names()`, and `lid()`.
+
+</details>
+
+<details open><summary><b>Stored patterns and pinning</b></summary>
+
+A `Pattern` from `pattern![..]` is consumed by the search it is handed to: `search![&g, p]` runs it as written, and `search![&g, p with X(a = id), X(b = id), ..]` pins named nodes to concrete graph ids first. A `Pattern` holds boxed predicates, so it is not `Clone`; to run the same shape more than once, build it in a constructor function and call that per search — `search![&g, cif_incident()]`.
+
+```rust
+use grw::graph::{edge, MGraph};
+use grw::search::Pattern;
+use grw::{mgraph, pattern, search};
+
+let g: MGraph<u8, edge::Undir<()>> = mgraph![N(0).val(1u8) ^ (N(1).val(2u8) ^ N(2).val(3u8))].unwrap();
+let p: Pattern<u8, edge::Undir<()>> = pattern![get(Mono) { N(a) ^ N(b) }].unwrap();
+let middle = grw::id::N(1);
+let s = search![&g, p with X(a = middle)].unwrap();
+assert_eq!(s.iter().count(), 2);
+```
+
+Pinning the same name twice, literally, in one `with` clause is a compile error (``node `a` pinned twice``). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is `error::Search::UnknownName`, pinning the same name twice through the manual `Session::from_pattern` API is `error::Search::DuplicatePin`, pinning to a graph node that doesn't exist is `error::Search::TargetMissing`, and two different pins landing on the same target node under an injective morphism is `error::Search::Bind` (`BindError::Collision`).
 
 </details>
 

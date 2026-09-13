@@ -48,7 +48,7 @@ struct Flattener<NV, ER: graph::Edge> {
     nodes: Vec<PatternNode>,
     edge_map: BTreeMap<(usize, usize, bool, EdgeSlot<ER::Slot>), usize>,
     edges: Vec<PatternEdge<ER>>,
-    node_preds: Vec<Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>>,
+    node_preds: Vec<Option<super::NodePred<NV>>>,
     edge_preds: Vec<Option<Box<dyn Fn(&ER::Val) -> bool + Send + Sync>>>,
     exist_bindings: FxHashMap<usize, crate::id::N>,
     id_space: IdSpace,
@@ -701,6 +701,9 @@ pub fn compile<NV, ER: graph::Edge>(
         .map(|m| m.is_injective())
         .collect();
     let has_predicates = flat.edge_preds.iter().any(|p| p.is_some());
+    let node_has_key: Vec<bool> = flat.node_preds.iter()
+        .map(|p| p.as_ref().is_some_and(|p| p.has_key()))
+        .collect();
 
     let mut node_has_predicates = vec![false; node_count];
     for (ni, _node) in flat.nodes.iter().enumerate() {
@@ -770,6 +773,7 @@ pub fn compile<NV, ER: graph::Edge>(
         exist_indices,
         translated_indices,
         node_morphism,
+        node_has_key,
         node_preds: flat.node_preds,
         edge_preds: flat.edge_preds,
         ban_clusters,

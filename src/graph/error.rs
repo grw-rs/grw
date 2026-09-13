@@ -32,3 +32,15 @@ impl<S: Debug + Eq> From<Edge<S>> for Build<S> {
         Build::Edge(e)
     }
 }
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum Index {
+    #[error("duplicate index name {0}")]
+    DuplicateName(super::index::IndexName),
+    #[error("no such index {0}")]
+    NoSuchIndex(super::index::IndexName),
+    #[error("index {index} key tag mismatch: expected {expected:?}, got {got:?}")]
+    KeyTagMismatch { index: super::index::IndexName, expected: super::index::KeyTag, got: super::index::KeyTag },
+    #[error("index {index} is not unique across nodes {nodes:?}")]
+    NotUnique { index: super::index::IndexName, nodes: Vec<id::N> },
+}

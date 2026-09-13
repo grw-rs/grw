@@ -170,7 +170,7 @@ fn build_and_run(case: &Case) -> Option<(BTreeSet<Vec<u32>>, usize, usize, usize
     let query = r.query();
 
     let mut engine_set = BTreeSet::new();
-    for m in Seq::search(&query, &t) {
+    for m in Seq::search(&query, &t).unwrap() {
         let mut v = vec![u32::MAX; case.pattern_n];
         for i in 0..case.pattern_n {
             let n = m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound");
@@ -178,9 +178,9 @@ fn build_and_run(case: &Case) -> Option<(BTreeSet<Vec<u32>>, usize, usize, usize
         }
         engine_set.insert(v);
     }
-    let seq_count = Seq::search(&query, &t).count();
-    let par_enum: usize = Par::search(&query, &t).map(|_m| 1usize).sum();
-    let par_count = Par::search(&query, &t).count();
+    let seq_count = Seq::search(&query, &t).unwrap().count();
+    let par_enum: usize = Par::search(&query, &t).unwrap().map(|_m| 1usize).sum();
+    let par_count = Par::search(&query, &t).unwrap().count();
     Some((engine_set, seq_count, par_enum, par_count))
 }
 

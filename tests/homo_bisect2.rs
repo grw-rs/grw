@@ -5,7 +5,7 @@ type ER = grw::edge::Undir<()>;
 fn count(p: grw::Search<(), ER>, g: &grw::MGraph<(), ER>) -> usize {
     let t = g.index(RevCsr);
     let Search::Resolved(r) = p else { panic!() };
-    Seq::search(&r.query(), &t).count()
+    Seq::search(&r.query(), &t).unwrap().count()
 }
 
 #[test]

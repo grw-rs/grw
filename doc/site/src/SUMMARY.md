@@ -12,6 +12,7 @@
 - [Variable-Length Paths](./paths.md)
 - [Mixing Clusters & Morphisms](./mixed-morphisms.md)
 - [Versioned Graphs](./versioned-graph.md)
+- [Indices](./indices.md)
 - [Morphisms](./morphisms.md)
 
 # Reference

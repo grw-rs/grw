@@ -84,3 +84,12 @@ fn search_macro_paths_annotation_free() {
     ];
     assert!(search.is_ok());
 }
+
+// ── named nodes ─────────────────────────────────────────────────────
+
+#[test]
+fn named_nodes_infer_like_ints() {
+    let g = grw::mgraph![<u8, grw::graph::edge::Undir<()>>; N(0).val(1u8) ^ N(1).val(2u8)].unwrap();
+    let s = grw::search![&g, get(Mono) { N(a: 1u8) ^ N(b) }].unwrap();
+    assert_eq!(s.iter().count(), 1);
+}

@@ -4,7 +4,9 @@ use super::{HasConstraint, HasPred};
 use crate::graph::dsl::{HasRawVal, HasVal, IntoOptional, IntoVal, LocalId};
 use crate::graph;
 use crate::graph::edge::{DirSlot, SlotVal, Src, Tgt, Und, UndirSlot};
+use crate::graph::index::{IndexName, KeyBytes, KeyTag};
 use crate::search::path;
+use crate::search::query::NodePred;
 use std::ops::{BitAnd, BitXor, Not, Rem, Shl, Shr};
 
 /// Converts a search DSL node into a path-aware target.
@@ -54,7 +56,7 @@ impl<NV, V, ER: graph::Edge> super::sealed::Sealed for NegContext<NV, V, ER> {}
 pub struct Free<NV, V, ER: graph::Edge> {
     pub(crate) id: Option<LocalId>,
     pub(crate) v: V,
-    pub(crate) pred: Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>,
+    pub(crate) pred: Option<NodePred<NV>>,
     pub(crate) edges: Vec<EdgeOp<NV, ER>>,
 }
 
@@ -66,7 +68,7 @@ pub struct FreeRef<NV, ER: graph::Edge> {
 pub struct Context<NV, V, ER: graph::Edge> {
     pub(crate) id: LocalId,
     pub(crate) v: V,
-    pub(crate) pred: Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>,
+    pub(crate) pred: Option<NodePred<NV>>,
     pub(crate) edges: Vec<EdgeOp<NV, ER>>,
 }
 
@@ -78,7 +80,7 @@ pub struct ContextRef<NV, ER: graph::Edge> {
 pub struct NegFree<NV, V, ER: graph::Edge> {
     pub(crate) id: Option<LocalId>,
     pub(crate) v: V,
-    pub(crate) pred: Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>,
+    pub(crate) pred: Option<NodePred<NV>>,
     pub(crate) edges: Vec<EdgeOp<NV, ER>>,
 }
 
@@ -86,7 +88,7 @@ pub struct NegFree<NV, V, ER: graph::Edge> {
 pub struct NegContext<NV, V, ER: graph::Edge> {
     pub(crate) id: LocalId,
     pub(crate) v: V,
-    pub(crate) pred: Option<Box<dyn Fn(&NV) -> bool + Send + Sync>>,
+    pub(crate) pred: Option<NodePred<NV>>,
     pub(crate) edges: Vec<EdgeOp<NV, ER>>,
 }
 
@@ -97,7 +99,7 @@ impl<NV: PartialEq + Copy + Send + Sync + 'static, ER: graph::Edge> Free<NV, (),
         Free {
             id: self.id,
             v: HasVal(v),
-            pred: Some(Box::new(move |x| *x == v)),
+            pred: Some(NodePred::Custom(Box::new(move |x| *x == v))),
             edges: self.edges,
         }
     }
@@ -108,7 +110,53 @@ impl<NV, ER: graph::Edge> Free<NV, (), ER> {
         Free {
             id: self.id,
             v: HasPred,
-            pred: Some(Box::new(f)),
+            pred: Some(NodePred::Custom(Box::new(f))),
+            edges: self.edges,
+        }
+    }
+
+    /// Restricts this node to the single graph node `index` holds under `key`.
+    /// Only available before any other constraint: one key per node.
+    pub fn key<K: serde::Serialize + 'static>(self, index: IndexName, key: K) -> Free<NV, HasPred, ER> {
+        Free {
+            id: self.id,
+            v: HasPred,
+            pred: Some(NodePred::Key { index, tag: KeyTag::of::<K>(), key: KeyBytes::of(&key) }),
+            edges: self.edges,
+        }
+    }
+
+    /// Restricts this node to the union of the hits `index` holds for `keys`.
+    pub fn key_in<K: serde::Serialize + 'static>(
+        self,
+        index: IndexName,
+        keys: impl IntoIterator<Item = K>,
+    ) -> Free<NV, HasPred, ER> {
+        Free {
+            id: self.id,
+            v: HasPred,
+            pred: Some(NodePred::KeyIn {
+                index,
+                tag: KeyTag::of::<K>(),
+                keys: keys.into_iter().map(|k| KeyBytes::of(&k)).collect(),
+            }),
+            edges: self.edges,
+        }
+    }
+}
+
+impl<NV, ER: graph::Edge> Free<NV, HasPred, ER> {
+    /// Conjoins another closure onto the constraint already on this node —
+    /// how `.test` after `.key` becomes `NodePred::And`.
+    pub fn test(self, f: impl Fn(&NV) -> bool + Send + Sync + 'static) -> Free<NV, HasPred, ER> {
+        let pred = match self.pred {
+            Some(existing) => existing.and(NodePred::Custom(Box::new(f))),
+            None => NodePred::Custom(Box::new(f)),
+        };
+        Free {
+            id: self.id,
+            v: HasPred,
+            pred: Some(pred),
             edges: self.edges,
         }
     }
@@ -121,7 +169,7 @@ impl<NV: PartialEq + Copy + Send + Sync + 'static, ER: graph::Edge> Context<NV, 
         Context {
             id: self.id,
             v: HasVal(v),
-            pred: Some(Box::new(move |x| *x == v)),
+            pred: Some(NodePred::Custom(Box::new(move |x| *x == v))),
             edges: self.edges,
         }
     }
@@ -132,7 +180,53 @@ impl<NV, ER: graph::Edge> Context<NV, (), ER> {
         Context {
             id: self.id,
             v: HasPred,
-            pred: Some(Box::new(f)),
+            pred: Some(NodePred::Custom(Box::new(f))),
+            edges: self.edges,
+        }
+    }
+
+    /// Restricts this node to the single graph node `index` holds under `key`.
+    /// Only available before any other constraint: one key per node.
+    pub fn key<K: serde::Serialize + 'static>(self, index: IndexName, key: K) -> Context<NV, HasPred, ER> {
+        Context {
+            id: self.id,
+            v: HasPred,
+            pred: Some(NodePred::Key { index, tag: KeyTag::of::<K>(), key: KeyBytes::of(&key) }),
+            edges: self.edges,
+        }
+    }
+
+    /// Restricts this node to the union of the hits `index` holds for `keys`.
+    pub fn key_in<K: serde::Serialize + 'static>(
+        self,
+        index: IndexName,
+        keys: impl IntoIterator<Item = K>,
+    ) -> Context<NV, HasPred, ER> {
+        Context {
+            id: self.id,
+            v: HasPred,
+            pred: Some(NodePred::KeyIn {
+                index,
+                tag: KeyTag::of::<K>(),
+                keys: keys.into_iter().map(|k| KeyBytes::of(&k)).collect(),
+            }),
+            edges: self.edges,
+        }
+    }
+}
+
+impl<NV, ER: graph::Edge> Context<NV, HasPred, ER> {
+    /// Conjoins another closure onto the constraint already on this node —
+    /// how `.test` after `.key` becomes `NodePred::And`.
+    pub fn test(self, f: impl Fn(&NV) -> bool + Send + Sync + 'static) -> Context<NV, HasPred, ER> {
+        let pred = match self.pred {
+            Some(existing) => existing.and(NodePred::Custom(Box::new(f))),
+            None => NodePred::Custom(Box::new(f)),
+        };
+        Context {
+            id: self.id,
+            v: HasPred,
+            pred: Some(pred),
             edges: self.edges,
         }
     }
@@ -145,7 +239,7 @@ impl<NV: PartialEq + Copy + Send + Sync + 'static, ER: graph::Edge> NegContext<N
         NegContext {
             id: self.id,
             v: HasVal(v),
-            pred: Some(Box::new(move |x| *x == v)),
+            pred: Some(NodePred::Custom(Box::new(move |x| *x == v))),
             edges: self.edges,
         }
     }
@@ -156,7 +250,53 @@ impl<NV, ER: graph::Edge> NegContext<NV, (), ER> {
         NegContext {
             id: self.id,
             v: HasPred,
-            pred: Some(Box::new(f)),
+            pred: Some(NodePred::Custom(Box::new(f))),
+            edges: self.edges,
+        }
+    }
+
+    /// Restricts this node to the single graph node `index` holds under `key`.
+    /// Only available before any other constraint: one key per node.
+    pub fn key<K: serde::Serialize + 'static>(self, index: IndexName, key: K) -> NegContext<NV, HasPred, ER> {
+        NegContext {
+            id: self.id,
+            v: HasPred,
+            pred: Some(NodePred::Key { index, tag: KeyTag::of::<K>(), key: KeyBytes::of(&key) }),
+            edges: self.edges,
+        }
+    }
+
+    /// Restricts this node to the union of the hits `index` holds for `keys`.
+    pub fn key_in<K: serde::Serialize + 'static>(
+        self,
+        index: IndexName,
+        keys: impl IntoIterator<Item = K>,
+    ) -> NegContext<NV, HasPred, ER> {
+        NegContext {
+            id: self.id,
+            v: HasPred,
+            pred: Some(NodePred::KeyIn {
+                index,
+                tag: KeyTag::of::<K>(),
+                keys: keys.into_iter().map(|k| KeyBytes::of(&k)).collect(),
+            }),
+            edges: self.edges,
+        }
+    }
+}
+
+impl<NV, ER: graph::Edge> NegContext<NV, HasPred, ER> {
+    /// Conjoins another closure onto the constraint already on this node —
+    /// how `.test` after `.key` becomes `NodePred::And`.
+    pub fn test(self, f: impl Fn(&NV) -> bool + Send + Sync + 'static) -> NegContext<NV, HasPred, ER> {
+        let pred = match self.pred {
+            Some(existing) => existing.and(NodePred::Custom(Box::new(f))),
+            None => NodePred::Custom(Box::new(f)),
+        };
+        NegContext {
+            id: self.id,
+            v: HasPred,
+            pred: Some(pred),
             edges: self.edges,
         }
     }

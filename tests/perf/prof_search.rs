@@ -74,7 +74,7 @@ fn main() {
 
     for i in 0..iters {
         let t = Instant::now();
-        let matches: Vec<_> = Seq::search(&query, &search_graph).collect();
+        let matches: Vec<_> = Seq::search(&query, &search_graph).unwrap().collect();
         let ms = t.elapsed().as_secs_f64() * 1000.0;
         eprintln!("iter {}: matches={} time={:.2}ms", i, matches.len(), ms);
     }

@@ -1,0 +1,5 @@
+error: node `a` defined twice in one cluster
+ --> tests/compile_fail/pattern_dup_name.rs:5:84
+  |
+5 |     let _p: Result<Pattern<i32, edge::Undir<()>>, _> = pattern![get(Mono) { N(a) ^ N(a) }];
+  |                                                                                    ^

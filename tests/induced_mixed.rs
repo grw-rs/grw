@@ -44,7 +44,7 @@ fn run(
     let query = r.query();
 
     let mut out = Vec::new();
-    for m in Seq::search(&query, &t) {
+    for m in Seq::search(&query, &t).unwrap() {
         let mut v = vec![u32::MAX; pattern_n];
         for i in 0..pattern_n {
             v[i] = *m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound") as u32;
@@ -53,9 +53,9 @@ fn run(
     }
     out.sort();
 
-    let seq_count = Seq::search(&query, &t).count();
-    let par_enum: usize = Par::search(&query, &t).map(|_| 1usize).sum();
-    let par_count = Par::search(&query, &t).count();
+    let seq_count = Seq::search(&query, &t).unwrap().count();
+    let par_enum: usize = Par::search(&query, &t).unwrap().map(|_| 1usize).sum();
+    let par_count = Par::search(&query, &t).unwrap().count();
     assert_eq!(seq_count, out.len(), "Seq count path disagrees with Seq enumeration");
     assert_eq!(par_enum, out.len(), "Par enumeration disagrees with Seq enumeration");
     assert_eq!(par_count, out.len(), "Par count path disagrees with Seq enumeration");
@@ -203,7 +203,7 @@ fn run_dir(
     let query = r.query();
 
     let mut out = Vec::new();
-    for m in Seq::search(&query, &t) {
+    for m in Seq::search(&query, &t).unwrap() {
         let mut v = vec![u32::MAX; pattern_n];
         for i in 0..pattern_n {
             v[i] = *m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound") as u32;
@@ -212,9 +212,9 @@ fn run_dir(
     }
     out.sort();
 
-    assert_eq!(Seq::search(&query, &t).count(), out.len());
-    assert_eq!(Par::search(&query, &t).map(|_| 1usize).sum::<usize>(), out.len());
-    assert_eq!(Par::search(&query, &t).count(), out.len());
+    assert_eq!(Seq::search(&query, &t).unwrap().count(), out.len());
+    assert_eq!(Par::search(&query, &t).unwrap().map(|_| 1usize).sum::<usize>(), out.len());
+    assert_eq!(Par::search(&query, &t).unwrap().count(), out.len());
 
     out
 }

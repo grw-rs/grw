@@ -39,8 +39,8 @@ fn main() {
     };
     let query = resolved.into_query();
 
-    let m_count = Seq::search(&query, &mgraph.index(RevCsr)).count();
-    let v_count = Seq::search(&query, &vgraph.index(RevCsr)).count();
+    let m_count = Seq::search(&query, &mgraph.index(RevCsr)).unwrap().count();
+    let v_count = Seq::search(&query, &vgraph.index(RevCsr)).unwrap().count();
     assert_eq!(m_count, v_count, "triangle search count mismatch: mgraph={m_count} vgraph={v_count}");
 
     let plan = gen_incremental_plan(&edges, size, seed.wrapping_add(1), INCREMENTAL_STEPS);
@@ -70,8 +70,8 @@ fn main() {
     let m_idx = mgraph.index(RevCsr);
     let v_idx = vgraph.index(RevCsr);
 
-    let search_m = timed_median(iters, 1, || (), |_| Seq::search(&query, &m_idx).count());
-    let search_v = timed_median(iters, 1, || (), |_| Seq::search(&query, &v_idx).count());
+    let search_m = timed_median(iters, 1, || (), |_| Seq::search(&query, &m_idx).unwrap().count());
+    let search_v = timed_median(iters, 1, || (), |_| Seq::search(&query, &v_idx).unwrap().count());
 
     // Clone row is batched (CLONE_BATCH clones per timed sample, elapsed / CLONE_BATCH):
     // a single-shot Instant pair around one O(1) VGraph clone is dominated by

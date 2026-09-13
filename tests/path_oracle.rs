@@ -917,7 +917,7 @@ fn bound_path_mono_allows_branched_intermediates() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(!matches.is_empty(), "Mono should find path 0→4 despite branches");
     let p = matches[0].path(0);
@@ -945,7 +945,7 @@ fn bound_path_subiso_rejects_branched_intermediates() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(matches.is_empty() || matches[0].path(0).is_empty(),
         "SubIso should reject path 0→4: intermediates have outside edges");
@@ -969,7 +969,7 @@ fn bound_path_subiso_accepts_clean_chain() {
     let indexed = g.index(grw::search::engine::RevCsr);
     let matches: Vec<_> = grw::search::engine::Seq::search_bound(
         bound.query(), &indexed, bound.bindings().to_vec()
-    ).collect();
+    ).unwrap().collect();
 
     assert!(!matches.is_empty(), "SubIso should accept clean chain path 0→4");
     assert_eq!(matches[0].path(0).len(), 5);

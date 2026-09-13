@@ -1,6 +1,7 @@
 pub(crate) mod collections;
 pub mod dsl;
 pub mod edge;
+pub mod index;
 pub mod layout;
 pub mod mutable;
 pub(crate) mod node;
@@ -172,6 +173,20 @@ pub trait Graph<NV, E: Edge> {
     where
         E: HasRel;
 
+    fn index_hit(
+        &self,
+        index: index::IndexName,
+        key: &index::KeyBytes,
+        tag: index::KeyTag,
+    ) -> Result<index::IndexHit<'_>, error::Index>;
+
+    fn catalogue(&self) -> index::Catalogue;
+
+    /// Owned declarations (name, cardinality, and extraction closure) behind
+    /// this graph's current catalogue — the seam `MGraph::from_graph` uses to
+    /// rebuild a source's indices by scan rather than by cloning tables.
+    fn index_decls(&self) -> Vec<index::IndexDecl<NV>>;
+
     fn index<T>(&self, _tier: T) -> crate::search::engine::Indexed<'_, NV, E, Self, T::Data>
     where
         T: crate::search::engine::Tier<NV, E>,
@@ -218,6 +233,16 @@ pub trait HasKey<NV, E: Edge> {
 pub trait GetKey<NV, E: Edge> {
     type Val;
     fn get_from(self, graph: &MGraph<NV, E>) -> Option<&Self::Val>;
+}
+
+/// Keys whose value may be mutated in place through `MGraph::get_mut`.
+///
+/// Only edge keys implement this. A node value is not reachable through
+/// `get_mut`: it participates in the index tables, which a `&mut NV` handed
+/// out here would silently invalidate. Node values change only through
+/// `modify!`, which releases the old keys and claims the new ones in the
+/// same transaction.
+pub trait GetMutKey<NV, E: Edge>: GetKey<NV, E> {
     fn get_mut_from(self, graph: &mut MGraph<NV, E>) -> Option<&mut Self::Val>;
 }
 
@@ -232,9 +257,6 @@ impl<NV, E: Edge> GetKey<NV, E> for id::N {
     fn get_from(self, graph: &MGraph<NV, E>) -> Option<&NV> {
         graph.nodes.get(self)
     }
-    fn get_mut_from(self, graph: &mut MGraph<NV, E>) -> Option<&mut NV> {
-        graph.nodes.get_node_mut(self).map(|n| &mut n.val)
-    }
 }
 
 impl<NV, E: Edge> HasKey<NV, E> for Id {
@@ -247,9 +269,6 @@ impl<NV, E: Edge> GetKey<NV, E> for Id {
     type Val = NV;
     fn get_from(self, graph: &MGraph<NV, E>) -> Option<&NV> {
         id::N(self).get_from(graph)
-    }
-    fn get_mut_from(self, graph: &mut MGraph<NV, E>) -> Option<&mut NV> {
-        id::N(self).get_mut_from(graph)
     }
 }
 
@@ -271,6 +290,9 @@ macro_rules! impl_edge_key {
                     .find(|(s, _)| *s == slot)
                     .map(|(_, v)| v)
             }
+        }
+
+        impl<NV, EV> GetMutKey<NV, edge::$name<EV>> for edge::$mod::E<Id> {
             fn get_mut_from(self, graph: &mut MGraph<NV, edge::$name<EV>>) -> Option<&mut EV> {
                 let (nr, slot) = self.into();
                 let n1 = *nr.n1();
@@ -310,6 +332,9 @@ impl<NV, EV> GetKey<NV, edge::Anydir<EV>> for edge::anydir::E<Id> {
             .find(|(s, _)| *s == slot)
             .map(|(_, v)| v)
     }
+}
+
+impl<NV, EV> GetMutKey<NV, edge::Anydir<EV>> for edge::anydir::E<Id> {
     fn get_mut_from(self, graph: &mut MGraph<NV, edge::Anydir<EV>>) -> Option<&mut edge::AnyVal<EV>> {
         let (nr, slot) = self.into();
         let n1 = *nr.n1();
@@ -347,7 +372,7 @@ pub(crate) fn from_edges<E: Edge>(
 ) -> Result<MGraph<(), E>, error::Edge<E::Slot>> {
     let edge::Batch(evs) = edges.into();
     let (nodes, edges) = batch::collect_derived_nodes_from_edges::<E>(&mut evs.into_iter())?;
-    let mut g = MGraph { nodes, edges, degrees: Vec::new() };
+    let mut g = MGraph { nodes, edges, degrees: Vec::new(), indices: index::Indices::empty() };
     g.build_degrees();
     Ok(g)
 }
@@ -359,7 +384,7 @@ pub(crate) fn from_nodes_edges<NV, E: Edge>(
     let mut nodes = nodes.into().0?;
     let edge::Batch(evs) = edges.into();
     let edges = batch::collect_edges::<NV, E>(&mut nodes, &mut evs.into_iter())?;
-    let mut g = MGraph { nodes, edges, degrees: Vec::new() };
+    let mut g = MGraph { nodes, edges, degrees: Vec::new(), indices: index::Indices::empty() };
     g.build_degrees();
     Ok(g)
 }

@@ -41,6 +41,12 @@ pub mod apply {
         #[error("swap conflict on edge {0:?}-{1:?}")]
         SwapConflict(id::N, id::N),
     }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum Index {
+        #[error("duplicate key on index {index}: existing node {existing:?}")]
+        DuplicateKey { index: crate::graph::index::IndexName, existing: id::N },
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +61,8 @@ pub enum Apply {
     Node(#[from] apply::Node),
     #[error(transparent)]
     Edge(#[from] apply::Edge),
+    #[error(transparent)]
+    Index(#[from] apply::Index),
 }
 
 #[derive(Debug, thiserror::Error)]

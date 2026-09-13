@@ -117,19 +117,30 @@ fn two_way_door() {
     assert_eq!(back.version(), 0); // conversion is not an edit
 }
 
-/// § The two-way door — one `.grw` file, either representation.
+/// § The two-way door — one `.grw` file, either representation, and the
+/// v3 persistence paragraph (generations and version round-trip V-as-V,
+/// and are dropped only crossing into `MGraph`).
 #[test]
 fn save_load_across_representations() {
     let v: VUndir0 = vgraph![N(0) ^ N(1), n(1) ^ N(2)].unwrap();
     let path = std::env::temp_dir().join(format!("grw_book_versioned_{}.grw", std::process::id()));
+
+    let (v, _) = v.modify(modify![N(9) ^ x(0)]).unwrap();
     v.save(&path).unwrap();
 
-    let m: graph::MUndir0 = MGraph::load(&path).unwrap();
-    assert_eq!(m.node_count(), 3);
-
     let v2: VUndir0 = VUndir0::load(&path).unwrap();
-    assert_eq!(v2.node_count(), 3);
-    assert_eq!(v2.version(), 0);
+    assert_eq!(v2.version(), v.version());
+    assert_eq!(v2.node_gen(id::N(9)), v.node_gen(id::N(9)));
+
+    let m: graph::MUndir0 = MGraph::load(&path).unwrap();
+    assert_eq!(m.node_count(), v.node_count());
+
+    m.save(&path).unwrap();
+    let v3: VUndir0 = VUndir0::load(&path).unwrap();
+    assert_eq!(v3.version(), 0);
+    for n in v3.iter_node_ids() {
+        assert_eq!(v3.node_gen(n), Some(0));
+    }
 
     std::fs::remove_file(&path).unwrap();
 }
@@ -153,8 +164,8 @@ fn search_reads_a_vgraph_through_the_same_trait() {
     let m: graph::MUndir0 = mgraph![N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
     let v: VUndir0 = vgraph![N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap();
 
-    let m_hits = Seq::search(query, &m.index(RevCsr)).count();
-    let v_hits = Seq::search(query, &v.index(RevCsr)).count();
+    let m_hits = Seq::search(query, &m.index(RevCsr)).unwrap().count();
+    let v_hits = Seq::search(query, &v.index(RevCsr)).unwrap().count();
     assert_eq!(m_hits, 6); // the triangle, once per Mono labelling
     assert_eq!(v_hits, m_hits);
 }

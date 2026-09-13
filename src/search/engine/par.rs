@@ -12,24 +12,44 @@ impl Par {
     pub fn search<'g, NV: Sync + Send + Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER> + Sync>(
         query: &'g Query<NV, ER>,
         target: &'g super::Graph<'g, NV, ER, G>,
-    ) -> ParIter<'g, NV, ER, G>
+    ) -> Result<ParIter<'g, NV, ER, G>, crate::search::error::Search>
     where
         ER::Val: Send + Sync + Clone,
         ER::Slot: Send + Sync,
         ER::CsrStore: Send + Sync,
     {
-        ParIter { query, indexed: target }
+        super::require_indices(query, target.graph)?;
+        Ok(ParIter { query, indexed: target, bindings: vec![None; query.node_count()] })
+    }
+
+    pub fn search_bound<'g, NV: Sync + Send + Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER> + Sync>(
+        query: &'g Query<NV, ER>,
+        target: &'g super::Graph<'g, NV, ER, G>,
+        bindings: Vec<Option<crate::id::N>>,
+    ) -> Result<ParIter<'g, NV, ER, G>, crate::search::error::Search>
+    where
+        ER::Val: Send + Sync + Clone,
+        ER::Slot: Send + Sync,
+        ER::CsrStore: Send + Sync,
+    {
+        super::require_indices(query, target.graph)?;
+        Ok(ParIter { query, indexed: target, bindings })
     }
 }
 
 pub struct ParIter<'g, NV, ER: graph::Edge, G> {
     query: &'g Query<NV, ER>,
     indexed: &'g super::Graph<'g, NV, ER, G>,
+    bindings: Vec<Option<crate::id::N>>,
 }
 
 impl<'g, NV, ER: graph::Edge, G> ParIter<'g, NV, ER, G> {
-    pub(crate) fn new(query: &'g Query<NV, ER>, indexed: &'g super::Graph<'g, NV, ER, G>) -> Self {
-        ParIter { query, indexed }
+    pub(crate) fn new(
+        query: &'g Query<NV, ER>,
+        indexed: &'g super::Graph<'g, NV, ER, G>,
+        bindings: Vec<Option<crate::id::N>>,
+    ) -> Self {
+        ParIter { query, indexed, bindings }
     }
 }
 
@@ -85,7 +105,6 @@ where
         }
 
         let depth0_idx = self.shared.search_order[0];
-        let node_count = self.query.nodes.len();
         let ctx = Ctx { query: self.query, index: self.indexed, target: self.indexed.graph };
         let mut folder = folder;
 
@@ -95,7 +114,7 @@ where
         let mut state: Option<State<_>> = None;
         for &root in &self.candidates {
             if folder.full() { break; }
-            let mut bindings = vec![None; node_count];
+            let mut bindings = self.shared.bindings.clone();
             bindings[depth0_idx] = Some(root);
             let st = match state.as_mut() {
                 None => {
@@ -134,7 +153,7 @@ where
     /// engine's `feature::Count` path (no `build_match`, fused leaf counting),
     /// with one reused `State` per chunk.
     fn count(self) -> usize {
-        let shared = Arc::new(Shared::precompute(self.query, self.indexed.graph, self.indexed));
+        let shared = Arc::new(Shared::precompute(self.query, self.indexed.graph, self.indexed, self.bindings.clone()));
         if shared.exhausted {
             return 0;
         }
@@ -146,13 +165,12 @@ where
         }
 
         let ctx = Ctx { query: self.query, index: self.indexed, target: self.indexed.graph };
-        let probe = State::new_from_shared(self.query, self.indexed.graph, self.indexed, &shared, Vec::new());
+        let probe = State::new_from_shared(self.query, self.indexed.graph, self.indexed, &shared, shared.bindings.clone());
         let initial = probe.initial_candidates(&ctx);
 
         let threads = rayon::current_num_threads().max(1);
         let chunk = (initial.len() / (threads * 4)).max(256).max(1);
         let depth0_idx = shared.search_order[0];
-        let node_count = self.query.nodes.len();
 
         initial
             .par_chunks(chunk)
@@ -161,7 +179,7 @@ where
                 let mut state: Option<State<_>> = None;
                 let mut sum = 0usize;
                 for &root in roots {
-                    let mut bindings = vec![None; node_count];
+                    let mut bindings = shared.bindings.clone();
                     bindings[depth0_idx] = Some(root);
                     let st = match state.as_mut() {
                         None => {
@@ -184,7 +202,7 @@ where
     }
 
     fn drive_unindexed<C: UnindexedConsumer<Self::Item>>(self, consumer: C) -> C::Result {
-        let shared = Arc::new(Shared::precompute(self.query, self.indexed.graph, self.indexed));
+        let shared = Arc::new(Shared::precompute(self.query, self.indexed.graph, self.indexed, self.bindings.clone()));
 
         if shared.exhausted {
             let producer = SearchProducer {
@@ -212,7 +230,7 @@ where
         }
 
         let ctx = Ctx { query: self.query, index: self.indexed, target: self.indexed.graph };
-        let probe = State::new_from_shared(self.query, self.indexed.graph, self.indexed, &shared, Vec::new());
+        let probe = State::new_from_shared(self.query, self.indexed.graph, self.indexed, &shared, shared.bindings.clone());
         let initial = probe.initial_candidates(&ctx);
 
         let threads = rayon::current_num_threads().max(1);

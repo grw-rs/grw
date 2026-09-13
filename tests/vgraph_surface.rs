@@ -110,7 +110,9 @@ fn vgraph_save_loads_into_both_representations() {
 
     let v2: VUndir<u32, u32> = VUndir::load(&path).unwrap();
     assert_same_view(&v, &v2);
-    assert_eq!(v2.version(), 0);
+    // v3 is V-as-V here (both save and load see a VGraph): version round-trips
+    // rather than resetting to 0 the way the old single-format dump did.
+    assert_eq!(v2.version(), v.version());
 
     std::fs::remove_file(&path).unwrap();
 }
@@ -157,7 +159,7 @@ fn to_mgraph_free_list_reuses_vacant_slot() {
 }
 
 #[test]
-fn vgraph_save_matches_mgraph_save_of_conversion() {
+fn vgraph_save_matches_mgraph_save_of_conversion_structurally() {
     let v = tombstoned_vgraph();
     let dir = std::env::temp_dir().join(format!("grw_vsave_cmp_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -167,7 +169,14 @@ fn vgraph_save_matches_mgraph_save_of_conversion() {
     v.save(&from_v).unwrap();
     v.to_mgraph().save(&from_m).unwrap();
 
-    // Real byte-level proof (gap-free gap-free behavior) verified in persist_golden.rs::generic_write_byte_identical_when_gap_free.
-    assert_eq!(std::fs::read(&from_v).unwrap(), std::fs::read(&from_m).unwrap());
+    // v3 keeps `v`'s real generations and version, which `to_mgraph` cannot
+    // represent (`MGraph` has no generation/version concept), so the two
+    // files are no longer byte-identical the way the old single-format v2
+    // dump made them for a gap-free graph. Structural content still matches.
+    let v2: VUndir<u32, u32> = VUndir::load(&from_v).unwrap();
+    let m2: graph::MUndir<u32, u32> = MGraph::load(&from_m).unwrap();
+    assert_same_view(&v2, &m2);
+    assert_eq!(v2.version(), v.version());
+
     std::fs::remove_dir_all(&dir).unwrap();
 }

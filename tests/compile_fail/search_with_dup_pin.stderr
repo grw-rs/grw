@@ -1,0 +1,5 @@
+error: node `a` pinned twice
+ --> tests/compile_fail/search_with_dup_pin.rs:8:43
+  |
+8 |     let _ = search![&g, p with X(a = z), X(a = z)];
+  |                                           ^^^^^^^

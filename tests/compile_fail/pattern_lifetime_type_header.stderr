@@ -1,0 +1,5 @@
+error: expected exactly `<NV, ER>` (two types)
+ --> tests/compile_fail/pattern_lifetime_type_header.rs:4:77
+  |
+4 |     let _p: Result<Pattern<i32, grw::graph::edge::Undir<()>>, _> = pattern![<'a, i32>; get(Mono) { N(a) ^ N(b) }];
+  |                                                                             ^

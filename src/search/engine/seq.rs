@@ -11,21 +11,34 @@ impl Seq {
     pub fn search<'g, NV: 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>>(
         query: &'g Query<NV, ER>,
         target: &'g super::Graph<'g, NV, ER, G>,
-    ) -> Iter<'g, NV, ER, G> {
-        Iter::new(query, target)
+    ) -> Result<Iter<'g, NV, ER, G>, crate::search::error::Search> {
+        super::require_indices(query, target.graph)?;
+        Ok(Iter::new(query, target))
     }
 
     pub fn search_watched<'g, NV: 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>, W: crate::watch::Watcher<NV, ER>>(
         query: &'g Query<NV, ER>,
         target: &'g super::Graph<'g, NV, ER, G>,
         watcher: W,
-    ) -> WatchedIter<'g, NV, ER, G, W> {
+    ) -> Result<WatchedIter<'g, NV, ER, G, W>, crate::search::error::Search> {
+        super::require_indices(query, target.graph)?;
         let ctx = Ctx { query, index: target, target: target.graph };
         let state = State::new(query, target.graph, target, Vec::new());
-        WatchedIter { ctx, state, watcher }
+        Ok(WatchedIter { ctx, state, watcher })
     }
 
     pub fn search_bound<'g, NV: 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>>(
+        query: &'g Query<NV, ER>,
+        target: &'g super::Graph<'g, NV, ER, G>,
+        bindings: Vec<Option<id::N>>,
+    ) -> Result<Iter<'g, NV, ER, G>, crate::search::error::Search> {
+        super::require_indices(query, target.graph)?;
+        Ok(Iter::new_bound(query, target, bindings))
+    }
+
+    /// The session path: `Session` validated the query's indices against the
+    /// graph when it was built, so its iterators cannot fail here.
+    pub(crate) fn search_session<'g, NV: 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>>(
         query: &'g Query<NV, ER>,
         target: &'g super::Graph<'g, NV, ER, G>,
         bindings: Vec<Option<id::N>>,
@@ -96,6 +109,7 @@ where
     ) -> Result<Self, crate::search::error::Search> {
         match search {
             crate::search::query::Search::Resolved(r) => {
+                super::require_indices(&r.query, &source_graph)?;
                 let csr = CsrAdj::build(&source_graph);
                 let state = State::new(&r.query, &source_graph, &csr, r.bindings);
                 Ok(OwnedIter { source_graph, query: r.query, csr, state, watcher: crate::watch::Silent })
@@ -118,6 +132,26 @@ impl<'g, NV, ER: graph::Edge, G, W: crate::watch::Watcher<NV, ER>> WatchedIter<'
 }
 
 impl<R: ReverseLookup> State<R> {
+    /// Membership in the key-resolved pool of `pattern_idx`. Nodes without a
+    /// key predicate are admitted unconditionally — their whole constraint is
+    /// the closure the caller evaluates separately. A key-predicated node with
+    /// no pool resolved admits nothing.
+    #[inline(always)]
+    fn key_pool_admits<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
+        &self,
+        ctx: &Ctx<'_, NV, ER, G, I>,
+        pattern_idx: usize,
+        n: id::N,
+    ) -> bool {
+        if !ctx.query.node_has_key[pattern_idx] {
+            return true;
+        }
+        match &self.val_filtered[pattern_idx] {
+            Some(pool) => pool.binary_search(&n).is_ok(),
+            None => false,
+        }
+    }
+
     pub(crate) fn initial_candidates<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>) -> Vec<id::N> {
         let depth0_idx = self.search_order[0];
         let morphism = ctx.query.node_morphism[depth0_idx];
@@ -133,15 +167,17 @@ impl<R: ReverseLookup> State<R> {
                 Morphism::SubIso | Morphism::EpiMono | Morphism::Mono => target_degree >= pattern_degree,
                 Morphism::Epi | Morphism::Homo => true,
             };
-            if degree_ok {
-                if !(is_injective && self.reverse.get(*target_n) != super::UNMAPPED) {
-                    if let Some(pred) = &ctx.query.node_preds[depth0_idx] {
-                        if pred(ctx.index.node_val(*target_n)) {
+            if degree_ok
+                && !(is_injective && self.reverse.get(*target_n) != super::UNMAPPED)
+                && self.key_pool_admits(ctx, depth0_idx, target_n)
+            {
+                match &ctx.query.node_preds[depth0_idx] {
+                    Some(pred) => {
+                        if pred.eval_custom(ctx.index.node_val(*target_n)) {
                             result.push(target_n);
                         }
-                    } else {
-                        result.push(target_n);
                     }
+                    None => result.push(target_n),
                 }
             }
             return result;
@@ -164,7 +200,7 @@ impl<R: ReverseLookup> State<R> {
             }
             if is_injective && self.reverse.get(*n) != super::UNMAPPED { continue; }
             if let Some(pred) = &ctx.query.node_preds[depth0_idx] {
-                if !pred(ctx.index.node_val(*n)) { continue; }
+                if !pred.eval_custom(ctx.index.node_val(*n)) { continue; }
             }
             if check_profile {
                 nbr_degs.clear();
@@ -201,8 +237,11 @@ impl<R: ReverseLookup> State<R> {
             if ctx.query.is_injective[pattern_idx] && self.reverse.get(*target_n) != super::UNMAPPED {
                 return;
             }
+            if !self.key_pool_admits(ctx, pattern_idx, target_n) {
+                return;
+            }
             if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                if !pred(ctx.index.node_val(*target_n)) {
+                if !pred.eval_custom(ctx.index.node_val(*target_n)) {
                     return;
                 }
             }
@@ -250,8 +289,9 @@ impl<R: ReverseLookup> State<R> {
                         }
                         Morphism::Epi | Morphism::Homo => {}
                     }
+                    if !self.key_pool_admits(ctx, pattern_idx, id::N(raw as Id)) { return false; }
                     if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                        if !pred(ctx.index.node_val(raw)) { return false; }
+                        if !pred.eval_custom(ctx.index.node_val(raw)) { return false; }
                     }
                     if can_fast_verify {
                         for i in 0..other_count {
@@ -332,7 +372,7 @@ impl<R: ReverseLookup> State<R> {
                 }
                 if is_injective && self.reverse.get(*n) != super::UNMAPPED { return false; }
                 if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                    if !pred(ctx.index.node_val(*n)) { return false; }
+                    if !pred.eval_custom(ctx.index.node_val(*n)) { return false; }
                 }
                 true
             }));
@@ -379,7 +419,14 @@ impl<R: ReverseLookup> State<R> {
         }
 
         let pattern_idx = ban.ban_only_nodes[depth];
-        let candidates: Vec<id::N> = ctx.index.all_node_ids().to_vec();
+        let candidates: Vec<id::N> = if let Some(&Some(target_n)) = self.bindings.get(pattern_idx) {
+            vec![target_n]
+        } else {
+            match &self.val_filtered[pattern_idx] {
+                Some(pool) => pool.clone(),
+                None => ctx.index.all_node_ids().to_vec(),
+            }
+        };
 
         for n in candidates {
             match ban.morphism {
@@ -394,8 +441,12 @@ impl<R: ReverseLookup> State<R> {
                 Morphism::Epi | Morphism::Homo => {}
             }
 
+            if !self.key_pool_admits(ctx, pattern_idx, n) {
+                continue;
+            }
+
             if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                if !pred(ctx.index.node_val(*n)) {
+                if !pred.eval_custom(ctx.index.node_val(*n)) {
                     continue;
                 }
             }
@@ -466,8 +517,9 @@ impl<R: ReverseLookup> State<R> {
                 Morphism::Epi | Morphism::Homo => {}
             }
 
+            if !self.key_pool_admits(ctx, leaf_pi, id::N(raw as Id)) { continue; }
             if let Some(pred) = &ctx.query.node_preds[leaf_pi] {
-                if !pred(ctx.index.node_val(raw)) { continue; }
+                if !pred.eval_custom(ctx.index.node_val(raw)) { continue; }
             }
 
             if can_fast {

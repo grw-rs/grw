@@ -83,6 +83,13 @@ pub trait Edge {
     fn edge(slot: Self::Slot, ns: (Id, Id)) -> Self::Def;
     fn reverse_slot(slot: Self::Slot) -> Self::Slot;
 
+    /// Canonical single-byte encoding of a slot, `0..SLOT_COUNT`. The
+    /// persistence format's fixed-width edge rows need a byte-sized slot
+    /// discriminant that works for every `Edge` impl, not just the three
+    /// defined in this file.
+    fn slot_to_byte(slot: Self::Slot) -> u8;
+    fn slot_from_byte(byte: u8) -> Self::Slot;
+
     fn build_csr_store(
         edges: impl Iterator<Item = (Self::Slot, Self::Val)>,
     ) -> Self::CsrStore;
@@ -205,6 +212,17 @@ pub mod undir {
 
         fn reverse_slot(_slot: Self::Slot) -> Self::Slot {
             Slot
+        }
+
+        fn slot_to_byte(_slot: Self::Slot) -> u8 {
+            0
+        }
+
+        fn slot_from_byte(byte: u8) -> Self::Slot {
+            match byte {
+                0 => UND,
+                _ => unreachable!("undir slot byte out of range: {byte}"),
+            }
         }
 
         fn build_csr_store(
@@ -353,6 +371,21 @@ pub mod dir {
             match slot {
                 Slot(End::Src) => TGT,
                 Slot(End::Tgt) => SRC,
+            }
+        }
+
+        fn slot_to_byte(slot: Self::Slot) -> u8 {
+            match slot {
+                Slot(End::Tgt) => 0,
+                Slot(End::Src) => 1,
+            }
+        }
+
+        fn slot_from_byte(byte: u8) -> Self::Slot {
+            match byte {
+                0 => TGT,
+                1 => SRC,
+                _ => unreachable!("dir slot byte out of range: {byte}"),
             }
         }
 
@@ -567,6 +600,23 @@ pub mod anydir {
                 Slot::Dir(End::Src) => TGT,
                 Slot::Dir(End::Tgt) => SRC,
                 Slot::Undir => UND,
+            }
+        }
+
+        fn slot_to_byte(slot: Self::Slot) -> u8 {
+            match slot {
+                Slot::Dir(End::Tgt) => 0,
+                Slot::Dir(End::Src) => 1,
+                Slot::Undir => 2,
+            }
+        }
+
+        fn slot_from_byte(byte: u8) -> Self::Slot {
+            match byte {
+                0 => TGT,
+                1 => SRC,
+                2 => UND,
+                _ => unreachable!("anydir slot byte out of range: {byte}"),
             }
         }
 

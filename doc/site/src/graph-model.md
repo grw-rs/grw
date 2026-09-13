@@ -59,7 +59,7 @@ g.has((0, 1))         // edge between nodes
 
 // get values
 g.get(0)              // Option<&NV>
-g.get_mut(0)          // Option<&mut NV>
+g.get_mut(edge::undir::E::U(0, 1))  // Option<&mut EV> — edge values only
 
 // iterate
 for (nid, val) in g.node_iter() { /* ... */ }
@@ -71,3 +71,8 @@ g.is_adjacent(0, 1)
 // edge relation (typed access to all edges between a pair)
 let rel = g.rel((0, 1));   // returns Rel with typed slot access
 ```
+
+`get_mut` takes edge keys only. A node value cannot be mutated in place —
+it feeds the index tables, so it changes only through
+[`modify!`](./modify.md), which releases the old keys and claims the new
+ones in the same transaction.

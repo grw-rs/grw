@@ -9,7 +9,7 @@ Before the search engine can match patterns, it needs a data structure for fast 
 | `Raw` | Sorted node id list | Minimal | Baseline | Tiny graphs, memory constrained |
 | `Rev` | Reverse adjacency map | Low | Good | Small graphs |
 | `RevCsr` | CSR-compressed reverse adjacency | Medium | Fast | **Default choice** — good balance |
-| `RevCsrVal` | CSR + cached edge values | Higher | Fastest for valued | Graphs with edge predicates |
+| `RevCsrVal` | CSR + node values grouped by value | Higher | Fastest for valued | Graphs with node value predicates (`.val`/`.test`) |
 
 ## Automatic Indexing
 
@@ -37,16 +37,20 @@ let Search::Resolved(r) = search![<(), edge::Undir<()>>;
 let indexed = g.index(RevCsr);
 
 // search many times
-let count1 = Seq::search(&r.query, &indexed).count();
-let count2 = Seq::search(&r.query, &indexed).count();
+let count1 = Seq::search(r.query(), &indexed).unwrap().count();
+let count2 = Seq::search(r.query(), &indexed).unwrap().count();
 ```
 
-## RevCsrVal for Edge Predicates
+## RevCsrVal for Node Value Predicates
 
-When your search pattern uses edge value predicates, `RevCsrVal` pre-caches edge values in the CSR structure for faster lookups:
+When your search pattern uses node value predicates (`.val(..)`, `.test(..)`), `RevCsrVal` pre-groups nodes by their value in the CSR structure (`value_groups: NV -> [id::N]`), so evaluating a predicate only visits the value groups that actually pass it instead of every node:
 
 ```rust
 let indexed = g.index(RevCsrVal);
 ```
 
-This trades more memory for faster edge predicate evaluation during search.
+This trades more memory for faster node-predicate evaluation during search.
+
+## Key Predicates Bypass The Scan
+
+A [`.key`/`.key_in`](./search.md#key-predicates) predicate never touches `value_groups` at all, on any tier: it resolves straight through the graph's own [index](./indices.md) tables (`Graph::index_hit`), producing a candidate pool directly instead of scanning node values.

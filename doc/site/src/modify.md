@@ -105,6 +105,10 @@ assert_eq!(g.edge_count(), 0);
 
 ## Updating Values
 
+A node value changes only through `modify!` — there is no `get_mut` for one —
+because the swap must release the value's old index keys and claim its new
+ones, and adjust the degree tables, in the same transaction.
+
 ```rust
 let mut g: MGraph<&str, edge::Undir<()>> = MGraph::default();
 modify!(g, [N(1).val("old")]).unwrap();

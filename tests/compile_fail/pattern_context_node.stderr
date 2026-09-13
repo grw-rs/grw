@@ -1,0 +1,5 @@
+error: pattern!: context nodes X(..) are not allowed; use search![&g, ...]
+ --> tests/compile_fail/pattern_context_node.rs:5:77
+  |
+5 |     let _p: Result<Pattern<i32, edge::Undir<()>>, _> = pattern![get(Mono) { X(a) ^ N(b) }];
+  |                                                                             ^

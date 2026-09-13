@@ -70,3 +70,12 @@ A two-node pattern on a three-node target. Node 2 is left uncovered.
 | Homo | NP-complete | Generalizes graph coloring |
 
 In practice, real-world graphs have structure (bounded degree, sparsity, value predicates) that makes these tractable with backtracking and pruning. Small patterns on large graphs are fast.
+
+## Pattern Syntax Quick Reference
+
+- `N(name)` / `n(name)` — named pattern node / reference, alongside integer `N(id)` / `n(id)`
+- `N(id: pattern)` / `N(name: pattern)` — node value must match a Rust pattern
+- `E(pattern)` — edge value must match a Rust pattern
+- `X(name = node_id)` / `X(name = node_id : pattern)` — context node pinned to a graph node, optionally value-checked
+- `pattern![..]` — graph-free `Pattern`; rejects `X(..)`
+- `search![&g, p]` / `search![&g, p with X(a = id), X(b = id), ..]` — run a stored pattern, optionally pinning named nodes

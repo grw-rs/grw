@@ -9,7 +9,7 @@ use crate::graph::dsl::LocalId;
 use crate::id;
 use crate::Id;
 use crate::search::Morphism;
-use crate::search::query::{Query, BanCluster};
+use crate::search::query::{Query, BanCluster, NodePred};
 
 pub(crate) trait Index<NV, ER: graph::Edge> {
     type Neighbors<'a>: ExactSizeIterator<Item = u32> + 'a where Self: 'a;
@@ -240,9 +240,9 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     fn compute_val_filtered(&self, query: &Query<NV, ER>) -> Vec<Option<Vec<id::N>>> {
         query.node_preds.iter()
             .map(|pred_opt| {
-                pred_opt.as_ref().map(|pred| {
+                pred_opt.as_ref().filter(|pred| !pred.has_key()).map(|pred| {
                     self.data.all_node_ids.iter().copied()
-                        .filter(|&n| pred(self.graph.node_val(n).unwrap()))
+                        .filter(|&n| pred.eval_custom(self.graph.node_val(n).unwrap()))
                         .collect()
                 })
             })
@@ -358,9 +358,9 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     fn compute_val_filtered(&self, query: &Query<NV, ER>) -> Vec<Option<Vec<id::N>>> {
         query.node_preds.iter()
             .map(|pred_opt| {
-                pred_opt.as_ref().map(|pred| {
+                pred_opt.as_ref().filter(|pred| !pred.has_key()).map(|pred| {
                     self.data.all_node_ids.iter().copied()
-                        .filter(|&n| pred(self.graph.node_val(n).unwrap()))
+                        .filter(|&n| pred.eval_custom(self.graph.node_val(n).unwrap()))
                         .collect()
                 })
             })
@@ -449,9 +449,9 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     fn compute_val_filtered(&self, query: &Query<NV, ER>) -> Vec<Option<Vec<id::N>>> {
         query.node_preds.iter()
             .map(|pred_opt| {
-                pred_opt.as_ref().map(|pred| {
+                pred_opt.as_ref().filter(|pred| !pred.has_key()).map(|pred| {
                     self.data.all_node_ids().iter().copied()
-                        .filter(|&n| pred(self.data.node_val(*n)))
+                        .filter(|&n| pred.eval_custom(self.data.node_val(*n)))
                         .collect()
                 })
             })
@@ -582,7 +582,7 @@ where
             let mut count = 0usize;
             if let Some(p) = pred {
                 for (val, group) in &self.data.value_groups {
-                    if !p(val) { continue; }
+                    if !p.eval_custom(val) { continue; }
                     for &n in group {
                         let target_degree = self.data.csr.degree(*n) as usize;
                         let degree_ok = match morphism {
@@ -646,10 +646,10 @@ where
     fn compute_val_filtered(&self, query: &Query<NV, ER>) -> Vec<Option<Vec<id::N>>> {
         query.node_preds.iter()
             .map(|pred_opt| {
-                pred_opt.as_ref().map(|pred| {
+                pred_opt.as_ref().filter(|pred| !pred.has_key()).map(|pred| {
                     let mut result = Vec::new();
                     for (val, group) in &self.data.value_groups {
-                        if pred(val) {
+                        if pred.eval_custom(val) {
                             result.extend_from_slice(group);
                         }
                     }
@@ -1201,9 +1201,9 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for CsrAdj<NV, ER> {
     fn compute_val_filtered(&self, query: &Query<NV, ER>) -> Vec<Option<Vec<id::N>>> {
         query.node_preds.iter()
             .map(|pred_opt| {
-                pred_opt.as_ref().map(|pred| {
+                pred_opt.as_ref().filter(|pred| !pred.has_key()).map(|pred| {
                     self.all_node_ids.iter().copied()
-                        .filter(|&n| pred(CsrAdj::node_val(self, *n)))
+                        .filter(|&n| pred.eval_custom(CsrAdj::node_val(self, *n)))
                         .collect()
                 })
             })
@@ -1223,6 +1223,7 @@ pub struct Session<'g, NV, ER: graph::Edge, G> {
     query: Query<NV, ER>,
     indexed: Graph<'g, NV, ER, G>,
     bindings: Vec<Option<id::N>>,
+    pools: std::sync::OnceLock<Vec<Option<Vec<id::N>>>>,
 }
 
 impl<'g, NV: Clone + 'g, ER: graph::Edge + 'g, G: graph::Graph<NV, ER>> Session<'g, NV, ER, G>
@@ -1242,12 +1243,59 @@ where
                         }
                     }
                 }
+                require_indices(&r.query, graph)?;
                 let bindings = r.bindings;
                 let indexed = Indexed::new(graph, <RevCsr as Tier<NV, ER>>::build(graph));
-                Ok(Session { query: r.query, indexed, bindings })
+                Ok(Session { query: r.query, indexed, bindings, pools: std::sync::OnceLock::new() })
             }
             super::query::Search::Unresolved(_) => Err(super::error::Search::BoundPatternInSession),
         }
+    }
+
+    pub fn from_search_pinned(
+        search: super::query::Search<NV, ER>,
+        graph: &'g G,
+        pins: Vec<(LocalId, id::N)>,
+    ) -> Result<Self, super::error::Search> {
+        let unresolved = match search {
+            super::query::Search::Unresolved(u) => u,
+            super::query::Search::Resolved(_) => return Err(super::error::Search::PinsOnResolvedPattern),
+        };
+        for (_, target) in &pins {
+            if !graph.has_node(*target) {
+                return Err(super::error::Search::TargetMissing(**target));
+            }
+        }
+        let table: Vec<(Id, Id)> = pins.iter().map(|(lid, target)| (lid.0, **target)).collect();
+        let bindings = unresolved.bind(&table)?.bindings().to_vec();
+        let query = unresolved.into_query();
+        require_indices(&query, graph)?;
+        let indexed = Indexed::new(graph, <RevCsr as Tier<NV, ER>>::build(graph));
+        Ok(Session { query, indexed, bindings, pools: std::sync::OnceLock::new() })
+    }
+
+    pub fn from_pattern(
+        pattern: super::pattern::Pattern<NV, ER>,
+        graph: &'g G,
+        pins: &[(&str, id::N)],
+    ) -> Result<Self, super::error::Search> {
+        let (query, names) = pattern.into_parts();
+        require_indices(&query, graph)?;
+        let mut bindings: Vec<Option<id::N>> = vec![None; query.node_count()];
+        for (name, target) in pins {
+            let lid = names.lid(name).ok_or_else(|| super::error::Search::UnknownName((*name).to_string()))?;
+            let idx = query.node_index(lid).ok_or_else(|| super::error::Search::NameNotInQuery((*name).to_string()))?;
+            if bindings[idx].is_some() {
+                return Err(super::error::Search::DuplicatePin((*name).to_string()));
+            }
+            if !graph.has_node(*target) {
+                return Err(super::error::Search::TargetMissing(**target));
+            }
+            bindings[idx] = Some(*target);
+        }
+        super::query::check_injective(&query, &bindings)?;
+        let indexed = Indexed::new(graph, <RevCsr as Tier<NV, ER>>::build(graph));
+        Ok(Session { query, indexed, bindings, pools: std::sync::OnceLock::new() })
     }
 }
 
@@ -1256,11 +1304,11 @@ where
     ER::Val: Clone,
 {
     pub fn iter(&self) -> seq::Iter<'_, NV, ER, G> {
-        Seq::search_bound(&self.query, &self.indexed, self.bindings.clone())
+        Seq::search_session(&self.query, &self.indexed, self.bindings.clone())
     }
 
     pub fn par_iter(&self) -> par::ParIter<'_, NV, ER, G> {
-        par::ParIter::new(&self.query, &self.indexed)
+        par::ParIter::new(&self.query, &self.indexed, self.bindings.clone())
     }
 
     pub fn query(&self) -> &Query<NV, ER> {
@@ -1282,6 +1330,18 @@ where
     pub fn graph(&self) -> &G {
         self.indexed.graph
     }
+
+    /// Diagnostic accessor: the resolved candidate pool of pattern node
+    /// `idx` — the ids a key predicate narrowed that node to, or the ids a
+    /// closure predicate admits. `None` when the node carries no predicate,
+    /// or when `idx` is not a pattern node of this session's query. Computed
+    /// on first call and cached; the search paths build their own.
+    pub fn candidate_pool(&self, idx: usize) -> Option<&[id::N]> {
+        self.pools
+            .get_or_init(|| plan(&self.query, self.indexed.graph, &self.indexed).1)
+            .get(idx)?
+            .as_deref()
+    }
 }
 
 impl<'a, 'g: 'a, NV: Clone + 'a, ER: graph::Edge + 'a, G: graph::Graph<NV, ER>> IntoIterator for &'a Session<'g, NV, ER, G>
@@ -1292,7 +1352,7 @@ where
     type IntoIter = seq::Iter<'a, NV, ER, G>;
 
     fn into_iter(self) -> seq::Iter<'a, NV, ER, G> {
-        Seq::search_bound(&self.query, &self.indexed, self.bindings.clone())
+        Seq::search_session(&self.query, &self.indexed, self.bindings.clone())
     }
 }
 
@@ -1308,10 +1368,168 @@ where
     }
 }
 
+/// Checks a query's key predicates against a graph's catalogue. Every entry
+/// point runs this before it starts iterating: an index the graph does not
+/// declare, or one declared over a different key type, is an error here — the
+/// engine never falls back to a scan for a key predicate.
+pub(crate) fn require_indices<NV, ER: graph::Edge, G: graph::Graph<NV, ER>>(
+    query: &Query<NV, ER>,
+    graph: &G,
+) -> Result<(), super::error::Search> {
+    let required = query.required_indices();
+    if required.is_empty() {
+        return Ok(());
+    }
+    let catalogue = graph.catalogue();
+    for (name, tag) in required {
+        match catalogue.iter().find(|&(declared, _, _)| declared == name) {
+            None => return Err(super::error::Search::IndexMissing { index: name }),
+            Some((_, _, declared_tag)) if declared_tag != tag => {
+                return Err(super::error::Search::KeyTagMismatch { index: name });
+            }
+            Some(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn intersect_sorted(a: &[id::N], b: &[id::N]) -> Vec<id::N> {
+    let mut out = Vec::new();
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < a.len() && j < b.len() {
+        match a[i].cmp(&b[j]) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+            std::cmp::Ordering::Equal => {
+                out.push(a[i]);
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Resolves the key half of one node predicate into a sorted id pool.
+/// `None` means the predicate names no index. An index miss resolves to an
+/// empty pool — the search is exhausted for that node, which is the only
+/// answer a missing key admits. An `index_hit` *error* cannot happen here:
+/// every search entry point runs `Query::required_indices` against the
+/// target first, so an unknown index or a key-tag mismatch has already been
+/// reported as `error::Search::IndexMissing`/`KeyTagMismatch`.
+fn key_pool<NV, ER: graph::Edge, G: graph::Graph<NV, ER>>(
+    pred: &NodePred<NV>,
+    target: &G,
+) -> Option<Vec<id::N>> {
+    match pred {
+        NodePred::Custom(_) => None,
+        NodePred::Key { index, tag, key } => {
+            let mut pool = match target.index_hit(*index, key, *tag) {
+                Ok(crate::graph::index::IndexHit::One(n)) => vec![n],
+                Ok(crate::graph::index::IndexHit::Many(set)) => set.iter().collect(),
+                Ok(crate::graph::index::IndexHit::None) => Vec::new(),
+                Err(e) => unreachable!("required_indices was checked by the entry point: {e}"),
+            };
+            pool.sort_unstable();
+            pool.dedup();
+            Some(pool)
+        }
+        NodePred::KeyIn { index, tag, keys } => {
+            let mut pool = Vec::new();
+            for key in keys {
+                match target.index_hit(*index, key, *tag) {
+                    Ok(crate::graph::index::IndexHit::One(n)) => pool.push(n),
+                    Ok(crate::graph::index::IndexHit::Many(set)) => pool.extend(set.iter()),
+                    Ok(crate::graph::index::IndexHit::None) => {}
+                    Err(e) => unreachable!("required_indices was checked by the entry point: {e}"),
+                }
+            }
+            pool.sort_unstable();
+            pool.dedup();
+            Some(pool)
+        }
+        NodePred::And(parts) => {
+            let mut acc: Option<Vec<id::N>> = None;
+            for part in parts {
+                let Some(pool) = key_pool(part, target) else { continue };
+                acc = Some(match acc {
+                    Some(prev) => intersect_sorted(&prev, &pool),
+                    None => pool,
+                });
+            }
+            acc
+        }
+    }
+}
+
+/// Puts key-pooled nodes at the front, smallest exact pool first, then fills
+/// the rest preferring nodes already adjacent to something ordered so the
+/// engine keeps anchoring on neighbours.
+fn key_first_order<NV, ER: graph::Edge>(
+    query: &Query<NV, ER>,
+    base: Vec<usize>,
+    val_filtered: &[Option<Vec<id::N>>],
+) -> Vec<usize> {
+    let mut order: Vec<usize> = base.iter().copied().filter(|&i| query.node_has_key[i]).collect();
+    if order.is_empty() {
+        return base;
+    }
+    order.sort_by_key(|&i| val_filtered[i].as_ref().map_or(usize::MAX, |pool| pool.len()));
+
+    let mut placed = vec![false; query.nodes.len()];
+    for &i in &order {
+        placed[i] = true;
+    }
+    let mut rest: Vec<usize> = base.iter().copied().filter(|&i| !placed[i]).collect();
+    while !rest.is_empty() {
+        let pick = rest
+            .iter()
+            .position(|&ni| {
+                query.adj[ni].iter().any(|&(neighbor, _, negated, ei)| {
+                    !negated && !query.edges[ei].ban_only && placed[neighbor]
+                })
+            })
+            .unwrap_or(0);
+        let ni = rest.remove(pick);
+        placed[ni] = true;
+        order.push(ni);
+    }
+    order
+}
+
+/// The once-per-search plan: the candidate pool of every predicated node and
+/// the depth order the engine walks them in.
+pub(crate) fn plan<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(
+    query: &Query<NV, ER>,
+    target: &G,
+    index: &I,
+) -> (Vec<usize>, Vec<Option<Vec<id::N>>>) {
+    let mut val_filtered = index.compute_val_filtered(query);
+    let mut any_key = false;
+    for (i, pred) in query.node_preds.iter().enumerate() {
+        let Some(pred) = pred else { continue };
+        if !query.node_has_key[i] {
+            continue;
+        }
+        let Some(mut pool) = key_pool(pred, target) else { continue };
+        pool.retain(|&n| target.node_val(n).is_some_and(|v| pred.eval_custom(v)));
+        val_filtered[i] = Some(pool);
+        any_key = true;
+    }
+    let search_order = index.compute_search_order(query);
+    let search_order = if any_key {
+        key_first_order(query, search_order, &val_filtered)
+    } else {
+        search_order
+    };
+    (search_order, val_filtered)
+}
+
 pub(crate) struct Shared {
     pub(crate) search_order: Vec<usize>,
     pub(crate) val_filtered: Arc<Vec<Option<Vec<id::N>>>>,
     pub(crate) exhausted: bool,
+    pub(crate) bindings: Vec<Option<id::N>>,
 }
 
 impl Shared {
@@ -1319,8 +1537,9 @@ impl Shared {
         query: &Query<NV, ER>,
         target: &G,
         index: &I,
+        bindings: Vec<Option<id::N>>,
     ) -> Self {
-        let search_order = index.compute_search_order(query);
+        let (search_order, val_filtered) = plan(query, target, index);
 
         let positive_count = search_order.len();
         let all_iso = search_order.iter()
@@ -1337,9 +1556,7 @@ impl Shared {
             target.node_count() < injective_count
         };
 
-        let val_filtered = index.compute_val_filtered(query);
-
-        Shared { search_order, val_filtered: Arc::new(val_filtered), exhausted }
+        Shared { search_order, val_filtered: Arc::new(val_filtered), exhausted, bindings }
     }
 }
 
@@ -1388,7 +1605,7 @@ fn compute_search_order<NV, ER: graph::Edge>(
             };
             if !degree_ok { continue; }
             if let Some(p) = pred {
-                if !p(csr.node_val(*n)) { continue; }
+                if !p.eval_custom(csr.node_val(*n)) { continue; }
             }
             count += 1;
         }
@@ -1439,7 +1656,7 @@ impl<R: ReverseLookup> State<R> {
         bindings: Vec<Option<id::N>>,
     ) -> Self {
         let pattern_count = query.nodes.len();
-        let search_order = index.compute_search_order(query);
+        let (search_order, val_filtered) = plan(query, target, index);
 
         let positive_count = search_order.len();
         let all_iso = search_order.iter()
@@ -1460,8 +1677,6 @@ impl<R: ReverseLookup> State<R> {
         } || (query.has_surjective && positive_count < target.node_count());
 
 
-        let val_filtered: Arc<Vec<Option<Vec<id::N>>>> = Arc::new(index.compute_val_filtered(query));
-
         State {
             bindings,
             mapping: vec![UNMAPPED; pattern_count],
@@ -1471,7 +1686,7 @@ impl<R: ReverseLookup> State<R> {
             exhausted,
             candidate_pool: Vec::with_capacity(positive_count),
             forward_verified_depths: 0,
-            val_filtered,
+            val_filtered: Arc::new(val_filtered),
         }
     }
 

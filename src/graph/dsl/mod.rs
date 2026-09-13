@@ -284,6 +284,7 @@ pub fn from_fragment<NV, ER: graph::Edge>(
         nodes,
         edges,
         degrees: Vec::new(),
+        indices: graph::index::Indices::empty(),
     };
     g.build_degrees();
     Ok(g)

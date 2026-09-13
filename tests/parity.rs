@@ -160,7 +160,7 @@ fn grw_matches_with(
     else { panic!("unexpected context nodes") };
     let query = r.into_query();
     let indexed = target.index(search::RevCsr);
-    search::Seq::search(&query, &indexed)
+    search::Seq::search(&query, &indexed).unwrap()
         .map(|m| normalize_grw(&m, pattern_local_ids))
         .collect()
 }
@@ -555,7 +555,7 @@ fn grw_neg_matches_with(
     else { panic!("unexpected context nodes") };
     let query = r.into_query();
     let indexed = target.index(search::RevCsr);
-    search::Seq::search(&query, &indexed)
+    search::Seq::search(&query, &indexed).unwrap()
         .map(|m| normalize_grw(&m, pattern_local_ids))
         .collect()
 }
@@ -1350,7 +1350,7 @@ fn grw_neg_node_matches_with(
     else { panic!("unexpected context nodes") };
     let query = r.into_query();
     let indexed = target.index(search::RevCsr);
-    search::Seq::search(&query, &indexed)
+    search::Seq::search(&query, &indexed).unwrap()
         .map(|m| normalize_grw(&m, positive_node_ids))
         .collect()
 }
@@ -1716,7 +1716,7 @@ fn neg_node_freestanding_bare_bail() {
     else { panic!("unexpected context nodes") };
     let query = r.into_query();
     let indexed = target.index(search::RevCsr);
-    let matches: Vec<_> = search::Seq::search(&query, &indexed).collect();
+    let matches: Vec<_> = search::Seq::search(&query, &indexed).unwrap().collect();
     assert_eq!(matches.len(), 0);
 }
 
@@ -1734,7 +1734,7 @@ fn neg_node_freestanding_with_positive() {
     else { panic!("unexpected context nodes") };
     let query = r.into_query();
     let indexed = target.index(search::RevCsr);
-    let matches: Vec<_> = search::Seq::search(&query, &indexed).collect();
+    let matches: Vec<_> = search::Seq::search(&query, &indexed).unwrap().collect();
     assert_eq!(matches.len(), 0);
 }
 
@@ -1880,7 +1880,7 @@ fn grw_dir_matches_with(
     else { panic!("unexpected context nodes") };
     let query = r.into_query();
     let indexed = target.index(search::RevCsr);
-    search::Seq::search(&query, &indexed)
+    search::Seq::search(&query, &indexed).unwrap()
         .map(|m| normalize_grw(&m, pattern_local_ids))
         .collect()
 }

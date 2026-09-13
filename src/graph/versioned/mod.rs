@@ -1,3 +1,4 @@
+mod pmap;
 mod trie;
 mod vgraph;
 pub use trie::PVec;

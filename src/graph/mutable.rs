@@ -1,19 +1,27 @@
 use super::*;
 
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(bound(
-    serialize = "NV: serde::Serialize, E::Slot: serde::Serialize, E::Val: serde::Serialize",
-    deserialize = "NV: serde::de::DeserializeOwned, E::Slot: serde::de::DeserializeOwned, E::Val: serde::de::DeserializeOwned",
-))]
+/// The mutable graph representation.
+///
+/// Deliberately not `serde`-derivable: `indices` holds extraction closures,
+/// which are code and cannot round-trip through a data format, and a derive
+/// that skipped them would answer "no indices" where `load` answers with a
+/// named error. `save`/`load`/`load_with` in `graph::persist` are the
+/// persistence surface; the legacy v2 record is read by `persist::convert`.
 pub struct MGraph<NV, E: Edge> {
     pub(crate) nodes: Nodes<NV>,
     pub(crate) edges: Edges<E>,
     pub(crate) degrees: Vec<(Id, IdSet<id::N>)>,
+    pub(crate) indices: super::index::Indices<NV>,
 }
 
 impl<NV: Clone, E: Edge> Clone for MGraph<NV, E> where E::Slot: Clone, E::Val: Clone {
     fn clone(&self) -> Self {
-        MGraph { nodes: self.nodes.clone(), edges: self.edges.clone(), degrees: self.degrees.clone() }
+        MGraph {
+            nodes: self.nodes.clone(),
+            edges: self.edges.clone(),
+            degrees: self.degrees.clone(),
+            indices: self.indices.clone(),
+        }
     }
 }
 
@@ -21,7 +29,11 @@ impl<NV, E: Edge> MGraph<NV, E> {
     pub fn get<K: GetKey<NV, E>>(&self, key: K) -> Option<&K::Val> {
         key.get_from(self)
     }
-    pub fn get_mut<K: GetKey<NV, E>>(&mut self, key: K) -> Option<&mut K::Val> {
+    /// In-place mutation of an **edge** value. Node values are deliberately
+    /// out of reach here — they feed the index tables, so they change only
+    /// through `modify!`, which releases the old keys and claims the new
+    /// ones in the same transaction.
+    pub fn get_mut<K: GetMutKey<NV, E>>(&mut self, key: K) -> Option<&mut K::Val> {
         key.get_mut_from(self)
     }
     pub fn has<K: HasKey<NV, E>>(&self, key: K) -> bool {
@@ -309,6 +321,78 @@ impl<NV, E: Edge> MGraph<NV, E> {
         }
     }
 
+    pub fn catalogue(&self) -> super::index::Catalogue {
+        self.indices.catalogue()
+    }
+
+    fn find_unique_collision(&self, decl: &super::index::IndexDecl<NV>) -> Option<Vec<id::N>> {
+        let mut groups: FxHashMap<super::index::KeyBytes, Vec<id::N>> = FxHashMap::default();
+        for (n, node) in self.nodes.nodes_iter() {
+            if let Some(key) = decl.key_of(&node.val) {
+                groups.entry(key).or_default().push(n);
+            }
+        }
+        let mut colliding: Option<Vec<id::N>> = None;
+        for (_, mut ids) in groups {
+            if ids.len() < 2 {
+                continue;
+            }
+            ids.sort();
+            if colliding.as_ref().is_none_or(|c| ids[0] < c[0]) {
+                colliding = Some(ids);
+            }
+        }
+        colliding
+    }
+
+    pub fn with_indices(mut self, decls: Vec<super::index::IndexDecl<NV>>) -> Result<Self, super::error::Index> {
+        let mut seen = FxHashSet::default();
+        for decl in &decls {
+            if !seen.insert(decl.name()) {
+                return Err(super::error::Index::DuplicateName(decl.name()));
+            }
+        }
+        for decl in &decls {
+            if decl.cardinality() == super::index::Cardinality::Unique
+                && let Some(nodes) = self.find_unique_collision(decl)
+            {
+                return Err(super::error::Index::NotUnique { index: decl.name(), nodes });
+            }
+        }
+
+        let unique_count = decls.iter().filter(|d| d.cardinality() == super::index::Cardinality::Unique).count();
+        let multi_count = decls.len() - unique_count;
+        let mut indices = super::index::Indices::from_parts(
+            decls,
+            vec![FxHashMap::default(); unique_count],
+            vec![FxHashMap::default(); multi_count],
+        );
+        for (n, node) in self.nodes.nodes_iter() {
+            indices.insert_node(n, &node.val);
+        }
+        self.indices = indices;
+        Ok(self)
+    }
+
+    pub fn add_index(&mut self, decl: super::index::IndexDecl<NV>) -> Result<(), super::error::Index> {
+        if decl.cardinality() == super::index::Cardinality::Unique
+            && let Some(nodes) = self.find_unique_collision(&decl)
+        {
+            return Err(super::error::Index::NotUnique { index: decl.name(), nodes });
+        }
+        self.indices.push_decl(decl)?;
+        let last = self.indices.decls().len() - 1;
+        let MGraph { nodes, indices, .. } = self;
+        for (n, node) in nodes.nodes_iter() {
+            indices.insert_key_for(last, n, &node.val);
+        }
+        Ok(())
+    }
+
+    pub fn drop_index(&mut self, name: super::index::IndexName) -> Result<super::index::IndexDecl<NV>, super::error::Index> {
+        self.indices.remove_decl(name)
+    }
+
 }
 
 impl<NV, E: Edge> super::Graph<NV, E> for MGraph<NV, E> {
@@ -405,6 +489,26 @@ impl<NV, E: Edge> super::Graph<NV, E> for MGraph<NV, E> {
     {
         MGraph::rel(self, ns)
     }
+
+    #[inline(always)]
+    fn index_hit(
+        &self,
+        index: super::index::IndexName,
+        key: &super::index::KeyBytes,
+        tag: super::index::KeyTag,
+    ) -> Result<super::index::IndexHit<'_>, super::error::Index> {
+        self.indices.hit(index, key, tag)
+    }
+
+    #[inline(always)]
+    fn catalogue(&self) -> super::index::Catalogue {
+        MGraph::catalogue(self)
+    }
+
+    #[inline(always)]
+    fn index_decls(&self) -> Vec<super::index::IndexDecl<NV>> {
+        self.indices.decls().to_vec()
+    }
 }
 
 impl<NV: Clone, E: Edge> MGraph<NV, E>
@@ -452,9 +556,14 @@ where
         let edge_count = edge_store.len();
         let edges = Edges { store: edge_store, free_ids: edge_free_ids, count: edge_count };
 
-        let mut built = MGraph { nodes, edges, degrees: Vec::new() };
+        let mut built = MGraph { nodes, edges, degrees: Vec::new(), indices: super::index::Indices::empty() };
         built.build_degrees();
-        built
+        let decls = g.index_decls();
+        if decls.is_empty() {
+            built
+        } else {
+            built.with_indices(decls).expect("source graph's own indices are already valid")
+        }
     }
 
     pub fn to_vecs(&self) -> (Vec<(Id, NV)>, Vec<(E::Def, E::Val)>) {
@@ -466,7 +575,7 @@ where
 
 impl<NV, E: Edge> From<MGraph<NV, E>> for (Vec<(Id, NV)>, Vec<(E::Def, E::Val)>) {
     fn from(g: MGraph<NV, E>) -> Self {
-        let MGraph { nodes, edges, degrees: _ } = g;
+        let MGraph { nodes, edges, degrees: _, indices: _ } = g;
         let nodes = nodes.store.into_iter().enumerate()
             .filter_map(|(i, opt)| opt.map(|node| (i as Id, node.val)))
             .collect();
@@ -513,6 +622,7 @@ where
             nodes: Nodes::default(),
             edges: Edges::default(),
             degrees: Vec::new(),
+            indices: super::index::Indices::empty(),
         }
     }
 }

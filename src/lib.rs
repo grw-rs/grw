@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+extern crate self as grw;
+
 #[cfg(all(feature = "id32", feature = "id64"))]
 compile_error!("feature \"id32\" and \"id64\" cannot be enabled at the same time");
 
@@ -128,12 +130,15 @@ pub mod graph;
 pub(crate) use graph::collections::*;
 pub(crate) use graph::{Edge, Edges, Node, Nodes};
 pub use graph::edge;
+pub use graph::index;
 
 pub mod modify;
 pub mod search;
 pub use graph::watcher as watch;
 pub use graph::layout;
 pub use grw_derive::repl;
+pub use grw_derive::pattern;
+pub use grw_derive::search;
 pub use layout::Val;
 #[cfg(test)]
 pub(crate) mod test;

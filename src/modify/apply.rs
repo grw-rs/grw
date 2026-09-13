@@ -3,7 +3,7 @@ use crate::modify::Node;
 use crate::modify::edge::{self, Edge};
 use crate::modify::error::{Apply, apply};
 use crate::modify::node::{Bind, Exist, New};
-use crate::graph::{self, MGraph, EdgeRec};
+use crate::graph::{self, MGraph, EdgeRec, index};
 use crate::{Id, NR, id};
 use std::collections::BTreeSet;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -282,6 +282,79 @@ pub(crate) fn validate_edge_ops<NV, ER: graph::Edge>(
     Ok(())
 }
 
+/// Step 6b: read-only pass over every new node value and every swapped-in
+/// node value, checked against each unique index in catalogue order. A key
+/// already owned by a node that is neither removed nor swapped away in this
+/// batch, or claimed twice within the batch, fails the whole apply before any
+/// store is touched. Candidates are walked in ascending id order so the
+/// reported `existing` id is always the lowest one holding the key.
+pub(crate) fn check_duplicate_keys<NV, ER: graph::Edge>(
+    decls: &[index::IndexDecl<NV>],
+    unique_lookup: impl Fn(usize, &index::KeyBytes) -> Option<id::N>,
+    flat: &FlatOps<NV, ER>,
+    local_map: &FxHashMap<LocalId, id::N>,
+) -> Result<(), Apply> {
+    if decls.is_empty() {
+        return Ok(());
+    }
+
+    let vacating: FxHashSet<id::N> = flat
+        .remove_nodes
+        .iter()
+        .copied()
+        .chain(flat.exist_nodes.iter().filter(|(_, v)| v.is_some()).map(|(nid, _)| *nid))
+        .collect();
+
+    let mut candidates: Vec<(id::N, &NV)> = Vec::new();
+    for (local, val) in &flat.new_named {
+        candidates.push((local_map[local], val));
+    }
+    for (nid, val) in &flat.new_anon {
+        candidates.push((*nid, val));
+    }
+    let mut seen_swap = FxHashSet::default();
+    for (nid, val) in &flat.exist_nodes {
+        if let Some(v) = val
+            && seen_swap.insert(*nid)
+        {
+            candidates.push((*nid, v));
+        }
+    }
+    candidates.sort_by_key(|(nid, _)| *nid);
+
+    // `unique_tables()` is positioned by raw declaration order among unique
+    // decls; the offending index reported below must be the first in
+    // *catalogue* order (sorted by name) instead, so pair each decl with its
+    // table position before sorting the decls themselves by name.
+    let mut unique_decls: Vec<(usize, &index::IndexDecl<NV>)> = Vec::new();
+    let mut unique_pos = 0usize;
+    for decl in decls {
+        if decl.cardinality() == index::Cardinality::Unique {
+            unique_decls.push((unique_pos, decl));
+            unique_pos += 1;
+        }
+    }
+    unique_decls.sort_by_key(|(_, decl)| decl.name().0);
+
+    for (pos, decl) in unique_decls {
+        let mut claimed: FxHashMap<index::KeyBytes, id::N> = FxHashMap::default();
+        for &(nid, val) in &candidates {
+            let Some(key) = decl.key_of(val) else { continue };
+            if let Some(&existing) = claimed.get(&key) {
+                return Err(Apply::Index(apply::Index::DuplicateKey { index: decl.name(), existing }));
+            }
+            if let Some(owner) = unique_lookup(pos, &key)
+                && !vacating.contains(&owner)
+            {
+                return Err(Apply::Index(apply::Index::DuplicateKey { index: decl.name(), existing: owner }));
+            }
+            claimed.insert(key, nid);
+        }
+    }
+
+    Ok(())
+}
+
 impl<NV: Sync, ER: graph::Edge> MGraph<NV, ER> {
     pub(crate) fn apply_ops(
         &mut self,
@@ -377,6 +450,30 @@ impl<NV: Sync, ER: graph::Edge> MGraph<NV, ER> {
             self.edges_between(n1, n2).filter(|(s, _)| *s == slot).count()
         })?;
 
+        check_duplicate_keys(
+            self.indices.decls(),
+            |pos, key| self.indices.unique_tables()[pos].get(key).copied(),
+            &flat,
+            &local_map,
+        )?;
+
+        // Release every key this batch vacates (swapped-away and removed
+        // node values) before anything claims a key, so a new or swapped-in
+        // node can take over a key a removed/swapped-away node held in the
+        // same batch without the claim being clobbered by a same-batch
+        // release that runs after it — see `check_duplicate_keys`'s
+        // `vacating` set, which this mirrors.
+        for &(nid, ref val) in &flat.exist_nodes {
+            if val.is_some() {
+                let old = &self.nodes.get_node(nid).expect("exist node verified present").val;
+                self.indices.remove_node(nid, old);
+            }
+        }
+        for &nid in &flat.remove_nodes {
+            let old = &self.nodes.get_node(nid).expect("remove node verified present").val;
+            self.indices.remove_node(nid, old);
+        }
+
         let mut result = Modification {
             new_node_ids: local_map.clone(),
             ..Default::default()
@@ -388,11 +485,13 @@ impl<NV: Sync, ER: graph::Edge> MGraph<NV, ER> {
             .filter(|(local, _)| inserted_locals.insert(*local))
             .for_each(|(local, val)| {
                 let real_id = local_map[&local];
+                self.indices.insert_node(real_id, &val);
                 self.nodes.insert(real_id, graph::Node::new(val));
                 self.degrees_insert(real_id, 0);
             });
 
         flat.new_anon.into_iter().for_each(|(anon_id, val)| {
+            self.indices.insert_node(anon_id, &val);
             self.nodes.insert(anon_id, graph::Node::new(val));
             self.degrees_insert(anon_id, 0);
         });
@@ -407,6 +506,7 @@ impl<NV: Sync, ER: graph::Edge> MGraph<NV, ER> {
                     .get_node_mut(nid)
                     .expect("exist node verified present");
                 let old_val = std::mem::replace(&mut node.val, new_val);
+                self.indices.insert_node(nid, &node.val);
                 result.swapped_node_vals.push((nid, old_val));
             }
         }

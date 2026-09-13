@@ -215,21 +215,30 @@ Node ids survive a round trip, tombstones and all — a graph with a hole at
 slot 1 still has that hole afterwards, and the next insertion still fills it.
 Edge ids are reassigned, exactly as they are by `MGraph::from_graph`.
 
-Persistence crosses the same door. There is one `.grw` format, not two: a file
-written by either side loads into either side.
+Persistence crosses the same door. There is one `.grw` format (v3), not two:
+a file written by either side loads into either side.
 
 ```rust
+let (v, _) = v.modify(modify![N(9) ^ x(0)]).unwrap();
 v.save(&path).unwrap();
 
-let m: graph::MUndir0 = MGraph::load(&path).unwrap();
 let v2: VUndir0 = VUndir0::load(&path).unwrap();
-assert_eq!(v2.version(), 0);
+assert_eq!(v2.version(), v.version());              // V-as-V: version round-trips
+assert_eq!(v2.node_gen(id::N(9)), v.node_gen(id::N(9)));
+
+let m: graph::MUndir0 = MGraph::load(&path).unwrap();
+assert_eq!(m.node_count(), v.node_count());
 ```
 
-Versions and generations are *runtime* identity, not file content — a loaded
-graph starts again at version `0`. If your version numbers must outlive the
-file, they belong in your own data, and `modify_versioned` will restamp the
-graph to match.
+Generations and version are real fields in the v3 format, not just runtime
+bookkeeping — loading the same file back into a `VGraph` restores them
+exactly. They are lost only crossing into `MGraph`: `m` above has no
+generation or version fields to hold them, so `MGraph::load` silently drops
+whatever the file carried — the one deliberate loss the format documents
+(`MGraph::load`'s own doc comment calls it out). Save `m` back out and load
+*that* file as a `VGraph` and every node's generation reads `0`: an
+`MGraph`-sourced file has no other generation to report, which is exactly
+`MGraph`'s own concept of history — it doesn't have one.
 
 ## Search is unchanged
 
@@ -238,8 +247,8 @@ The engine never learned about versioning. It reads targets through the
 versioned graph is the same call on the same tiers with the same results:
 
 ```rust
-let m_hits = Seq::search(query, &m.index(RevCsr)).count();
-let v_hits = Seq::search(query, &v.index(RevCsr)).count();
+let m_hits = Seq::search(query, &m.index(RevCsr)).unwrap().count();
+let v_hits = Seq::search(query, &v.index(RevCsr)).unwrap().count();
 assert_eq!(v_hits, m_hits);
 ```
 

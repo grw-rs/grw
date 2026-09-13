@@ -1,0 +1,5 @@
+error: key predicates apply to node definitions
+ --> tests/compile_fail/key_on_ref.rs:9:53
+  |
+9 |     let _ = search![&g, get(Mono) { N(a) ^ n(a: key(BY_VAL, 1u32)) }];
+  |                                                     ^^^^^^
