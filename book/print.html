@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9ace80a2.js";
+            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-d99113f4.js"></script>
@@ -608,7 +608,7 @@ for m in &amp;session {
     }
 }</code></pre>
 <h2 id="ban-clusters"><a class="header" href="#ban-clusters">Ban Clusters</a></h2>
-<p>Ban clusters define <strong>forbidden substructures</strong>. If the ban pattern matches, the overall match is rejected.</p>
+<p>Ban clusters define <strong>forbidden substructures</strong>. If the ban pattern matches, the overall match is rejected. A ban is checked as a whole (“not all of these together”); the difference from banning single edges with <code>!E()</code>, and how a pinned node aims a ban at one specific graph node, is spelled out in <a href="#negation-bans-and-pins">Negation, Bans And Pins</a>.</p>
 <pre><code class="language-rust">// find edges whose endpoints do NOT share a common neighbor
 let session = search![&amp;g,
     get(Mono) {
@@ -817,7 +817,7 @@ to, or the ids a closure predicate admits. It is <code>None</code> when the node
 carries no predicate at all, or when <code>idx</code> is not a pattern node of the
 session’s query — it never panics on an out-of-range index.</p>
 <h2 id="stored-patterns-and-pinning"><a class="header" href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a></h2>
-<p>A <code>Pattern</code> from <code>pattern![..]</code> is consumed by the search it is handed to: <code>search![&amp;g, p]</code> runs it as written, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. A <code>Pattern</code> holds boxed predicates, so it is not <code>Clone</code>; to run the same shape more than once, build it in a constructor function and call that per search — <code>search![&amp;g, cif_incident()]</code>.</p>
+<p>A <code>Pattern</code> from <code>pattern![..]</code> is consumed by the search it is handed to: <code>search![&amp;g, p]</code> runs it as written, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. A <code>Pattern</code> holds boxed predicates, so it is not <code>Clone</code>; to run the same shape more than once, build it in a constructor function and call that per search — <code>search![&amp;g, cif_incident()]</code>. A pin on a node inside a ban cluster restricts the ban to that one node; see <a href="#negation-bans-and-pins">Negation, Bans And Pins</a>.</p>
 <pre><code class="language-rust">use grw::graph::{edge, MGraph};
 use grw::search::Pattern;
 use grw::{mgraph, pattern, search};
