@@ -93,7 +93,7 @@ for m in &session {
 
 ## Ban Clusters
 
-Ban clusters define **forbidden substructures**. If the ban pattern matches, the overall match is rejected.
+Ban clusters define **forbidden substructures**. If the ban pattern matches, the overall match is rejected. A ban is checked as a whole ("not all of these together"); the difference from banning single edges with `!E()`, and how a pinned node aims a ban at one specific graph node, is spelled out in [Negation, Bans And Pins](#negation-bans-and-pins).
 
 ```rust
 // find edges whose endpoints do NOT share a common neighbor
@@ -362,7 +362,7 @@ session's query — it never panics on an out-of-range index.
 
 ## Stored Patterns And Pinning
 
-A `Pattern` from `pattern![..]` is consumed by the search it is handed to: `search![&g, p]` runs it as written, and `search![&g, p with X(a = id), X(b = id), ..]` pins named nodes to concrete graph ids first. A `Pattern` holds boxed predicates, so it is not `Clone`; to run the same shape more than once, build it in a constructor function and call that per search — `search![&g, cif_incident()]`.
+A `Pattern` from `pattern![..]` is consumed by the search it is handed to: `search![&g, p]` runs it as written, and `search![&g, p with X(a = id), X(b = id), ..]` pins named nodes to concrete graph ids first. A `Pattern` holds boxed predicates, so it is not `Clone`; to run the same shape more than once, build it in a constructor function and call that per search — `search![&g, cif_incident()]`. A pin on a node inside a ban cluster restricts the ban to that one node; see [Negation, Bans And Pins](#negation-bans-and-pins).
 
 ```rust
 use grw::graph::{edge, MGraph};
