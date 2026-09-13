@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c6875a37.js";
+            window.path_to_searchindex_js = "searchindex-9ace80a2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-be0e0459.js"></script>
+        <script src="toc-d99113f4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -198,6 +198,12 @@
 <tr><td><code>N(id).test(|v| ...)</code></td><td>Node value predicate</td></tr>
 <tr><td><code>E().val(v)</code></td><td>Edge value — exact match</td></tr>
 <tr><td><code>X(id)</code></td><td>Context node — pinned to a specific graph node</td></tr>
+<tr><td><code>N(name)</code> / <code>n(name)</code></td><td>Named pattern node / reference — names lower to ids; <code>pattern.lid("name")</code></td></tr>
+<tr><td><code>N(id: pattern)</code></td><td>Node value must match a Rust pattern (<code>Some(1)</code>, <code>Kind::A { .. }</code>, <code>1..=5</code>, <code>A | B</code>)</td></tr>
+<tr><td><code>E(pattern)</code></td><td>Edge value must match a Rust pattern</td></tr>
+<tr><td><code>X(name = node_id)</code> / <code>X(name = node_id : pattern)</code></td><td>Context node pinned to a graph node, optionally checked</td></tr>
+<tr><td><code>pattern![..]</code></td><td>Graph-free pattern; rejects <code>X</code>; returns a <code>Pattern</code> (query + names, via <code>.query()</code>/<code>.lid()</code>)</td></tr>
+<tr><td><code>search![&amp;g, p]</code> / <code>search![&amp;g, p with X(a = id), ..]</code></td><td>Run a stored pattern, optionally pinning named nodes</td></tr>
 </tbody>
 </table>
 </div>
@@ -286,14 +292,193 @@ let session = search![&amp;g,
     }
 ].unwrap();</code></pre>
 <h2 id="context-nodes"><a class="header" href="#context-nodes">Context Nodes</a></h2>
-<p>Pin a pattern node to a specific graph node:</p>
-<pre><code class="language-rust">// find all neighbors of graph node 5
+<p><code>X(name = node_id)</code> pins a pattern node to a specific graph node, named on the left and given its target on the right:</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::{mgraph, search};
+
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))].unwrap();
+let hub = grw::id::N(1);
+let session = search![&amp;g, get(Mono) { X(h = hub) ^ N(o) }].unwrap();
+let mut neighbours: Vec&lt;_&gt; = session.iter().map(|m| m.get(1).unwrap()).collect();
+neighbours.sort();
+assert_eq!(neighbours, vec![grw::id::N(0), grw::id::N(2)]);</code></pre>
+<p><code>X(h = hub)</code> is pinned to graph node 1 — the search only looks for nodes connected to it.</p>
+<p>A bare <code>X(5)</code> or <code>X(c)</code> inside <code>search![&amp;g, ..]</code> is a <em>translated</em> node with no target: the macro compiles it to an unresolved search, and building the session fails at runtime with <code>error::Search::BoundPatternInSession</code>. Use the pinned form above, or drop the graph and do the binding by hand — <code>search![&lt;NV, ER&gt;; get(Mono) { X(5) ^ N(0) }]</code> yields a <code>Search::Unresolved</code> whose <code>bind(..)</code> supplies the targets before the search runs.</p>
+<h2 id="negation-bans-and-pins"><a class="header" href="#negation-bans-and-pins">Negation, Bans And Pins</a></h2>
+<p><code>!E()</code> bans one edge: the match is rejected only if that specific edge exists. <code>!X(name = id)</code> bans a node together with every edge attached to it in that term — node and edges are one ban, checked as a unit.</p>
+<p>That grouping is what separates “none of these” from “not all of these together”. Several independent <code>!E</code>s add up: each is checked on its own, so the match survives only when <em>every one</em> of them is absent — “none of these edges may exist”. A single <code>!X</code> (or an explicit <code>ban { }</code> block) instead bans the <em>whole configuration</em> it names: the ban only fires when everything inside it holds at once, so it’s satisfied — and the match survives — as soon as just one piece is missing. Two nodes <code>p</code> and <code>q</code>, both possibly connected to a node pinned to id <code>5</code>, but only <code>p</code> actually is, show the difference:</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::search::{Pattern, Session};
+use grw::{mgraph, pattern};
+
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N(0), N(1), N(2), n(0) ^ n(2)].unwrap();
+let (p_id, q_id, five) = (grw::id::N(0), grw::id::N(1), grw::id::N(2));
+
+// "not all of these together": one ban_only node shared by both edges.
+let and_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
+    get(Mono) { N(p), N(q) },
+    ban(Mono) { n(p) ^ N(c), n(q) ^ n(c) }
+].unwrap();
+let and_session =
+    Session::from_pattern(and_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
+assert_eq!(and_session.iter().count(), 1); // only p—5 holds, so the ban can't fire
+
+// "none of these": two separate bans, each pinned to the same node 5.
+let or_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
+    get(Mono) { N(p), N(q) },
+    ban(Mono) { n(p) ^ N(c1) },
+    ban(Mono) { n(q) ^ N(c2) }
+].unwrap();
+let or_session =
+    Session::from_pattern(or_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
+assert_eq!(or_session.iter().count(), 0); // p—5 alone is enough to fire the first ban</code></pre>
+<p><code>pattern!</code> rejects <code>X(..)</code> outright (see <a href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a>), so a ban-only position pinned by external id — rather than by <code>.val()</code>/<code>.test()</code>/<code>.key()</code> — is spelled with a plain, named <code>N(c)</code> and bound afterwards through <code>Session::from_pattern</code>’s pins, exactly as <code>and_form</code>/<code>or_form</code> do above.</p>
+<p>A pin on a banned position aims the ban at <em>one specific</em> node instead of the whole graph: “<code>p</code> must not be connected like this to Alice” is not the same claim as “<code>p</code> must not be connected like this to anyone”. Say <code>p1</code> blocks Alice, <code>p2</code> blocks only Bob, and <code>p3</code> blocks nobody:</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::{mgraph, search};
+
+let g: MGraph&lt;bool, edge::Dir&lt;()&gt;&gt; = mgraph![
+    N(0).val(true), N(1).val(true), N(2).val(true),
+    N(3).val(false), N(4).val(false),
+    n(0) &gt;&gt; n(3), // p1 -&gt; alice
+    n(1) &gt;&gt; n(4)  // p2 -&gt; bob
+].unwrap();
+let alice = grw::id::N(3);
+
 let session = search![&amp;g,
-    get(Mono) {
-        X(5) ^ N(0)
-    }
-].unwrap();</code></pre>
-<p><code>X(5)</code> is pinned to graph node 5 — the search only looks for nodes connected to it.</p>
+    get(Mono) { N(p).val(true) &gt;&gt; (!X(a = alice)).test(|_: &amp;bool| true) }
+].unwrap();
+let mut survivors: Vec&lt;_&gt; = session.iter().map(|m| m.get(0).unwrap()).collect();
+survivors.sort();
+assert_eq!(survivors, vec![grw::id::N(1), grw::id::N(2)]); // p2 and p3 — only p1 blocks Alice</code></pre>
+<p>Only <code>p1</code> is dropped: the ban is checked against node <code>alice</code> specifically, not against every node <code>p</code> happens to reach. The pinned node itself, <code>a</code>, is never part of the match — it has no place in the <code>get</code> cluster’s mapping, so <code>m.get(..)</code> for it returns nothing; only the surviving <code>p</code> shows up in <code>survivors</code>.</p>
+<h2 id="named-nodes"><a class="header" href="#named-nodes">Named Nodes</a></h2>
+<p><code>N(name)</code> defines a pattern node by name instead of by integer id; <code>n(name)</code> refers back to it. Names lower to integer local ids at macro expansion: indices are assigned starting one past the largest integer id used anywhere in the pattern (or from <code>0</code> if no integer ids are used). Every stored <code>Pattern</code> carries a <code>Names</code> table pairing each name with its <code>LocalId</code>; look one up with <code>pattern.lid("name")</code>.</p>
+<pre><code class="language-rust">use grw::graph::{edge, Graph, MGraph};
+use grw::search::{Pattern, RevCsr, Seq};
+use grw::{mgraph, pattern};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Role { Signer, Provider }
+
+let g: MGraph&lt;Role, edge::Dir&lt;()&gt;&gt; = mgraph![N(0).val(Role::Signer) &gt;&gt; N(1).val(Role::Provider)].unwrap();
+let p: Pattern&lt;Role, edge::Dir&lt;()&gt;&gt; = pattern![get(Mono) { N(s: Role::Signer) &gt;&gt; N(p: Role::Provider) }].unwrap();
+let indexed = g.index(RevCsr);
+let matches: Vec&lt;_&gt; = Seq::search(p.query(), &amp;indexed).unwrap().collect();
+assert_eq!(matches.len(), 1);
+for m in &amp;matches {
+    assert_eq!(m[p.lid("s").unwrap()], grw::id::N(0));
+    assert_eq!(m[p.lid("p").unwrap()], grw::id::N(1));
+}</code></pre>
+<p>A duplicate definition in a cluster, an undefined reference, or <code>X(..)</code> used inside <code>pattern!</code> are all compile errors — caught while expanding the macro, before the pattern ever runs. Looking up a name that isn’t in the pattern (<code>pattern.lid("nope")</code>) is a runtime error instead: <code>error::Search::UnknownName</code>.</p>
+<h2 id="value-patterns"><a class="header" href="#value-patterns">Value Patterns</a></h2>
+<p><code>N(id: pattern)</code> and <code>N(name: pattern)</code> require the node’s value to match a Rust pattern — anything valid on the right of a <code>match</code> arm: <code>Some(1)</code>, <code>Kind::A { .. }</code>, <code>1..=5</code>, <code>A | B</code>. <code>E(pattern)</code> does the same for an edge’s value.</p>
+<pre><code class="language-rust">use grw::graph::{edge, Graph, MGraph};
+use grw::search::{Pattern, RevCsr, Seq};
+use grw::{mgraph, pattern};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Shape { Circle(u8), Square(u8) }
+
+let g: MGraph&lt;Shape, edge::Undir&lt;u8&gt;&gt; =
+    mgraph![N(0).val(Shape::Circle(1)) &amp; E().val(7u8) ^ N(1).val(Shape::Square(2))].unwrap();
+let nodes: Pattern&lt;Shape, edge::Undir&lt;u8&gt;&gt; =
+    pattern![get(Mono) { N(c: Shape::Circle(_)) ^ N(s: Shape::Square(2)) }].unwrap();
+let edges: Pattern&lt;Shape, edge::Undir&lt;u8&gt;&gt; = pattern![get(Mono) { N(a) &amp; E(7) ^ N(b) }].unwrap();
+let indexed = g.index(RevCsr);
+assert_eq!(Seq::search(nodes.query(), &amp;indexed).unwrap().count(), 1);
+assert_eq!(Seq::search(edges.query(), &amp;indexed).unwrap().count(), 2);</code></pre>
+<p><code>pattern![..]</code> builds a <code>Pattern&lt;NV, ER&gt;</code> without a graph: it rejects <code>X(..)</code> context nodes at compile time (<code>pattern!: context nodes X(..) are not allowed; use search![&amp;g, ...]</code>) and returns <code>Result&lt;Pattern&lt;NV, ER&gt;, error::Search&gt;</code>, giving you <code>query()</code>, <code>names()</code>, and <code>lid()</code>.</p>
+<h2 id="key-predicates"><a class="header" href="#key-predicates">Key Predicates</a></h2>
+<p>A node with an <a href="./indices.html">index</a> declared on the target graph can be
+matched by key instead of by value predicate: <code>.key(index, value)</code> seeds the
+match with exactly the index’s hit set for that key, <code>.key_in(index, [values])</code>
+unions the hits for several keys. Both exist on <code>N</code>/<code>X</code> (free, context, and
+negated-context nodes) in the same typestate slot as <code>.test</code>, and <code>.test</code>
+after <code>.key</code>/<code>.key_in</code> composes into a conjunction — the closure is
+evaluated only on the nodes the key already selected, not on the whole
+graph. A macro grammar form — <code>N(a: key(INDEX, expr))</code> / <code>N(a: key_in(INDEX, [exprs]))</code>,
+and <code>X(name = id : key(INDEX, expr))</code> on a pinned context node — binds
+identically to the method-call form.</p>
+<pre><code class="language-rust">use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{edge, MGraph};
+use grw::{mgraph, search};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = mgraph![
+    N(0).val(10u32) ^ (N(1).val(20u32) ^ N(2).val(30u32))
+].unwrap();
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+]).unwrap();
+
+// method form and macro form bind identically
+let by_key = search![&amp;g, get(Mono) { N(a).key(BY_VAL, 20u32) ^ N(b) }].unwrap();
+let macro_form = search![&amp;g, get(Mono) { N(a: key(BY_VAL, 20u32)) ^ N(b) }].unwrap();
+assert_eq!(by_key.iter().count(), 2); // 20—10 and 20—30
+assert_eq!(macro_form.iter().count(), 2);
+
+// key_in unions its hits
+let in_set = search![&amp;g, get(Mono) { N(a).key_in(BY_VAL, [10u32, 30u32]) ^ N(b) }].unwrap();
+assert_eq!(in_set.iter().count(), 2); // 10—20 and 30—20
+
+// a pinned context node can carry a key check too, narrowing the pin itself
+let ten = grw::id::N(0);
+let pinned = search![&amp;g, get(Mono) { X(c = ten : key(BY_VAL, 10u32)) ^ N(o) }].unwrap();
+assert_eq!(pinned.iter().count(), 1);</code></pre>
+<h3 id="the-result-change"><a class="header" href="#the-result-change">The <code>Result</code> change</a></h3>
+<p>Because a key predicate is checked against the graph’s catalogue <em>before</em>
+any matching starts, every entry point that can begin a search now returns
+<code>Result&lt;_, error::Search&gt;</code> instead of the bare iterator or output — even for
+a pattern with no key predicate at all, since the check happens at the same
+call: <code>Seq::search</code>, <code>Seq::search_bound</code>, <code>Seq::search_watched</code>, <code>Par::search</code>,
+and <code>Par::search_bound</code>. <code>search![&amp;g, ..]</code> already returned a <code>Result</code> (it
+always could fail to build a <code>Session</code>), so that call site is unchanged;
+only the lower-level, index-explicit calls shown in
+<a href="./index-tiers.html">Index Tiers</a> gained the <code>?</code>/<code>.unwrap()</code>.</p>
+<p>Two errors come out of that check, both naming the offending index:</p>
+<ul>
+<li><code>error::Search::IndexMissing { index }</code> — the pattern names an index the
+graph doesn’t carry at all.</li>
+<li><code>error::Search::KeyTagMismatch { index }</code> — the graph has that index, but
+it was declared over a different key type than the one <code>.key</code>/<code>.key_in</code>
+serialized here.</li>
+</ul>
+<pre><code class="language-rust">use grw::graph::index::IndexName;
+use grw::graph::{edge, MGraph};
+use grw::search::{error, RevCsr, Search, Seq};
+use grw::{mgraph, search, Graph as _};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let plain: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = mgraph![N(0).val(10u32)].unwrap();
+let Search::Resolved(r) = search![&lt;u32, edge::Undir&lt;()&gt;&gt;;
+    get(Mono) { N(a).key(BY_VAL, 10u32) }
+].unwrap() else { panic!() };
+
+let indexed = plain.index(RevCsr);
+let Err(error::Search::IndexMissing { index }) = Seq::search(r.query(), &amp;indexed) else {
+    panic!("expected IndexMissing")
+};
+assert_eq!(index, BY_VAL);</code></pre>
+<p><code>Session::candidate_pool(idx)</code> exposes the resolved pool for pattern node
+<code>idx</code> as a diagnostic accessor: the ids a key predicate narrowed that node
+to, or the ids a closure predicate admits. It is <code>None</code> when the node
+carries no predicate at all, or when <code>idx</code> is not a pattern node of the
+session’s query — it never panics on an out-of-range index.</p>
+<h2 id="stored-patterns-and-pinning"><a class="header" href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a></h2>
+<p>A <code>Pattern</code> from <code>pattern![..]</code> is consumed by the search it is handed to: <code>search![&amp;g, p]</code> runs it as written, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. A <code>Pattern</code> holds boxed predicates, so it is not <code>Clone</code>; to run the same shape more than once, build it in a constructor function and call that per search — <code>search![&amp;g, cif_incident()]</code>.</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::search::Pattern;
+use grw::{mgraph, pattern, search};
+
+let g: MGraph&lt;u8, edge::Undir&lt;()&gt;&gt; = mgraph![N(0).val(1u8) ^ (N(1).val(2u8) ^ N(2).val(3u8))].unwrap();
+let p: Pattern&lt;u8, edge::Undir&lt;()&gt;&gt; = pattern![get(Mono) { N(a) ^ N(b) }].unwrap();
+let middle = grw::id::N(1);
+let s = search![&amp;g, p with X(a = middle)].unwrap();
+assert_eq!(s.iter().count(), 2);</code></pre>
+<p>Pinning the same name twice, literally, in one <code>with</code> clause is a compile error (<code>node `a` pinned twice</code>). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is <code>error::Search::UnknownName</code>, pinning the same name twice through the manual <code>Session::from_pattern</code> API is <code>error::Search::DuplicatePin</code>, pinning to a graph node that doesn’t exist is <code>error::Search::TargetMissing</code>, and two different pins landing on the same target node under an injective morphism is <code>error::Search::Bind</code> (<code>BindError::Collision</code>).</p>
 
                     </main>
 

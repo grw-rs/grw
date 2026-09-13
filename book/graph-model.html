@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c6875a37.js";
+            window.path_to_searchindex_js = "searchindex-9ace80a2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-be0e0459.js"></script>
+        <script src="toc-d99113f4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -235,7 +235,7 @@ g.has((0, 1))         // edge between nodes
 
 // get values
 g.get(0)              // Option&lt;&amp;NV&gt;
-g.get_mut(0)          // Option&lt;&amp;mut NV&gt;
+g.get_mut(edge::undir::E::U(0, 1))  // Option&lt;&amp;mut EV&gt; — edge values only
 
 // iterate
 for (nid, val) in g.node_iter() { /* ... */ }
@@ -246,6 +246,10 @@ g.is_adjacent(0, 1)
 
 // edge relation (typed access to all edges between a pair)
 let rel = g.rel((0, 1));   // returns Rel with typed slot access</code></pre>
+<p><code>get_mut</code> takes edge keys only. A node value cannot be mutated in place —
+it feeds the index tables, so it changes only through
+<a href="./modify.html"><code>modify!</code></a>, which releases the old keys and claims the new
+ones in the same transaction.</p>
 
                     </main>
 

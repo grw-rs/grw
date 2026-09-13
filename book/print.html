@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c6875a37.js";
+            window.path_to_searchindex_js = "searchindex-9ace80a2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-be0e0459.js"></script>
+        <script src="toc-d99113f4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -271,7 +271,7 @@ g.has((0, 1))         // edge between nodes
 
 // get values
 g.get(0)              // Option&lt;&amp;NV&gt;
-g.get_mut(0)          // Option&lt;&amp;mut NV&gt;
+g.get_mut(edge::undir::E::U(0, 1))  // Option&lt;&amp;mut EV&gt; — edge values only
 
 // iterate
 for (nid, val) in g.node_iter() { /* ... */ }
@@ -282,6 +282,10 @@ g.is_adjacent(0, 1)
 
 // edge relation (typed access to all edges between a pair)
 let rel = g.rel((0, 1));   // returns Rel with typed slot access</code></pre>
+<p><code>get_mut</code> takes edge keys only. A node value cannot be mutated in place —
+it feeds the index tables, so it changes only through
+<a href="#modify--mutation"><code>modify!</code></a>, which releases the old keys and claims the new
+ones in the same transaction.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="mgraph--construction"><a class="header" href="#mgraph--construction"><code>mgraph!</code> — Construction</a></h1>
 <p>The <code>mgraph!</code> macro constructs a graph from a declarative description of nodes and edges.</p>
@@ -485,6 +489,9 @@ assert_eq!(g.node_count(), 2);
 assert_eq!(g.edge_count(), 0);</code></pre>
 <p><svg viewbox="0 0 237 132" style="max-width:237px;display:block;margin:0.8em auto" role="img" aria-label="remove edge"><defs><marker id="modify-remove-edge-r" markerwidth="7" markerheight="7" refx="6" refy="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#e2596e" /></marker></defs><line x1="90" y1="58" x2="139" y2="58" stroke="#e2596e" stroke-width="2.4" stroke-dasharray="6 5" marker-end="url(#modify-remove-edge-r)" /><line x1="108" y1="51" x2="122" y2="65" stroke="#e2596e" stroke-width="2.4" /><line x1="108" y1="65" x2="122" y2="51" stroke="#e2596e" stroke-width="2.4" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="167" cy="58" r="21" fill="#f0a63f26" /><circle cx="167" cy="58" r="15" fill="#f0a63f" /><text x="167" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text></svg></p>
 <h2 id="updating-values"><a class="header" href="#updating-values">Updating Values</a></h2>
+<p>A node value changes only through <code>modify!</code> — there is no <code>get_mut</code> for one —
+because the swap must release the value’s old index keys and claim its new
+ones, and adjust the degree tables, in the same transaction.</p>
 <pre><code class="language-rust">let mut g: MGraph&lt;&amp;str, edge::Undir&lt;()&gt;&gt; = MGraph::default();
 modify!(g, [N(1).val("old")]).unwrap();
 assert_eq!(g.get(0), Some(&amp;"old"));
@@ -540,6 +547,12 @@ let real_id = result.new_node_ids[&amp;LocalId(1)];</code></pre>
 <tr><td><code>N(id).test(|v| ...)</code></td><td>Node value predicate</td></tr>
 <tr><td><code>E().val(v)</code></td><td>Edge value — exact match</td></tr>
 <tr><td><code>X(id)</code></td><td>Context node — pinned to a specific graph node</td></tr>
+<tr><td><code>N(name)</code> / <code>n(name)</code></td><td>Named pattern node / reference — names lower to ids; <code>pattern.lid("name")</code></td></tr>
+<tr><td><code>N(id: pattern)</code></td><td>Node value must match a Rust pattern (<code>Some(1)</code>, <code>Kind::A { .. }</code>, <code>1..=5</code>, <code>A | B</code>)</td></tr>
+<tr><td><code>E(pattern)</code></td><td>Edge value must match a Rust pattern</td></tr>
+<tr><td><code>X(name = node_id)</code> / <code>X(name = node_id : pattern)</code></td><td>Context node pinned to a graph node, optionally checked</td></tr>
+<tr><td><code>pattern![..]</code></td><td>Graph-free pattern; rejects <code>X</code>; returns a <code>Pattern</code> (query + names, via <code>.query()</code>/<code>.lid()</code>)</td></tr>
+<tr><td><code>search![&amp;g, p]</code> / <code>search![&amp;g, p with X(a = id), ..]</code></td><td>Run a stored pattern, optionally pinning named nodes</td></tr>
 </tbody>
 </table>
 </div>
@@ -628,14 +641,193 @@ let session = search![&amp;g,
     }
 ].unwrap();</code></pre>
 <h2 id="context-nodes"><a class="header" href="#context-nodes">Context Nodes</a></h2>
-<p>Pin a pattern node to a specific graph node:</p>
-<pre><code class="language-rust">// find all neighbors of graph node 5
+<p><code>X(name = node_id)</code> pins a pattern node to a specific graph node, named on the left and given its target on the right:</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::{mgraph, search};
+
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N(0) ^ (N(1) ^ (N(2) ^ n(0)))].unwrap();
+let hub = grw::id::N(1);
+let session = search![&amp;g, get(Mono) { X(h = hub) ^ N(o) }].unwrap();
+let mut neighbours: Vec&lt;_&gt; = session.iter().map(|m| m.get(1).unwrap()).collect();
+neighbours.sort();
+assert_eq!(neighbours, vec![grw::id::N(0), grw::id::N(2)]);</code></pre>
+<p><code>X(h = hub)</code> is pinned to graph node 1 — the search only looks for nodes connected to it.</p>
+<p>A bare <code>X(5)</code> or <code>X(c)</code> inside <code>search![&amp;g, ..]</code> is a <em>translated</em> node with no target: the macro compiles it to an unresolved search, and building the session fails at runtime with <code>error::Search::BoundPatternInSession</code>. Use the pinned form above, or drop the graph and do the binding by hand — <code>search![&lt;NV, ER&gt;; get(Mono) { X(5) ^ N(0) }]</code> yields a <code>Search::Unresolved</code> whose <code>bind(..)</code> supplies the targets before the search runs.</p>
+<h2 id="negation-bans-and-pins"><a class="header" href="#negation-bans-and-pins">Negation, Bans And Pins</a></h2>
+<p><code>!E()</code> bans one edge: the match is rejected only if that specific edge exists. <code>!X(name = id)</code> bans a node together with every edge attached to it in that term — node and edges are one ban, checked as a unit.</p>
+<p>That grouping is what separates “none of these” from “not all of these together”. Several independent <code>!E</code>s add up: each is checked on its own, so the match survives only when <em>every one</em> of them is absent — “none of these edges may exist”. A single <code>!X</code> (or an explicit <code>ban { }</code> block) instead bans the <em>whole configuration</em> it names: the ban only fires when everything inside it holds at once, so it’s satisfied — and the match survives — as soon as just one piece is missing. Two nodes <code>p</code> and <code>q</code>, both possibly connected to a node pinned to id <code>5</code>, but only <code>p</code> actually is, show the difference:</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::search::{Pattern, Session};
+use grw::{mgraph, pattern};
+
+let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N(0), N(1), N(2), n(0) ^ n(2)].unwrap();
+let (p_id, q_id, five) = (grw::id::N(0), grw::id::N(1), grw::id::N(2));
+
+// "not all of these together": one ban_only node shared by both edges.
+let and_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
+    get(Mono) { N(p), N(q) },
+    ban(Mono) { n(p) ^ N(c), n(q) ^ n(c) }
+].unwrap();
+let and_session =
+    Session::from_pattern(and_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
+assert_eq!(and_session.iter().count(), 1); // only p—5 holds, so the ban can't fire
+
+// "none of these": two separate bans, each pinned to the same node 5.
+let or_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
+    get(Mono) { N(p), N(q) },
+    ban(Mono) { n(p) ^ N(c1) },
+    ban(Mono) { n(q) ^ N(c2) }
+].unwrap();
+let or_session =
+    Session::from_pattern(or_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
+assert_eq!(or_session.iter().count(), 0); // p—5 alone is enough to fire the first ban</code></pre>
+<p><code>pattern!</code> rejects <code>X(..)</code> outright (see <a href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a>), so a ban-only position pinned by external id — rather than by <code>.val()</code>/<code>.test()</code>/<code>.key()</code> — is spelled with a plain, named <code>N(c)</code> and bound afterwards through <code>Session::from_pattern</code>’s pins, exactly as <code>and_form</code>/<code>or_form</code> do above.</p>
+<p>A pin on a banned position aims the ban at <em>one specific</em> node instead of the whole graph: “<code>p</code> must not be connected like this to Alice” is not the same claim as “<code>p</code> must not be connected like this to anyone”. Say <code>p1</code> blocks Alice, <code>p2</code> blocks only Bob, and <code>p3</code> blocks nobody:</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::{mgraph, search};
+
+let g: MGraph&lt;bool, edge::Dir&lt;()&gt;&gt; = mgraph![
+    N(0).val(true), N(1).val(true), N(2).val(true),
+    N(3).val(false), N(4).val(false),
+    n(0) &gt;&gt; n(3), // p1 -&gt; alice
+    n(1) &gt;&gt; n(4)  // p2 -&gt; bob
+].unwrap();
+let alice = grw::id::N(3);
+
 let session = search![&amp;g,
-    get(Mono) {
-        X(5) ^ N(0)
-    }
-].unwrap();</code></pre>
-<p><code>X(5)</code> is pinned to graph node 5 — the search only looks for nodes connected to it.</p>
+    get(Mono) { N(p).val(true) &gt;&gt; (!X(a = alice)).test(|_: &amp;bool| true) }
+].unwrap();
+let mut survivors: Vec&lt;_&gt; = session.iter().map(|m| m.get(0).unwrap()).collect();
+survivors.sort();
+assert_eq!(survivors, vec![grw::id::N(1), grw::id::N(2)]); // p2 and p3 — only p1 blocks Alice</code></pre>
+<p>Only <code>p1</code> is dropped: the ban is checked against node <code>alice</code> specifically, not against every node <code>p</code> happens to reach. The pinned node itself, <code>a</code>, is never part of the match — it has no place in the <code>get</code> cluster’s mapping, so <code>m.get(..)</code> for it returns nothing; only the surviving <code>p</code> shows up in <code>survivors</code>.</p>
+<h2 id="named-nodes"><a class="header" href="#named-nodes">Named Nodes</a></h2>
+<p><code>N(name)</code> defines a pattern node by name instead of by integer id; <code>n(name)</code> refers back to it. Names lower to integer local ids at macro expansion: indices are assigned starting one past the largest integer id used anywhere in the pattern (or from <code>0</code> if no integer ids are used). Every stored <code>Pattern</code> carries a <code>Names</code> table pairing each name with its <code>LocalId</code>; look one up with <code>pattern.lid("name")</code>.</p>
+<pre><code class="language-rust">use grw::graph::{edge, Graph, MGraph};
+use grw::search::{Pattern, RevCsr, Seq};
+use grw::{mgraph, pattern};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Role { Signer, Provider }
+
+let g: MGraph&lt;Role, edge::Dir&lt;()&gt;&gt; = mgraph![N(0).val(Role::Signer) &gt;&gt; N(1).val(Role::Provider)].unwrap();
+let p: Pattern&lt;Role, edge::Dir&lt;()&gt;&gt; = pattern![get(Mono) { N(s: Role::Signer) &gt;&gt; N(p: Role::Provider) }].unwrap();
+let indexed = g.index(RevCsr);
+let matches: Vec&lt;_&gt; = Seq::search(p.query(), &amp;indexed).unwrap().collect();
+assert_eq!(matches.len(), 1);
+for m in &amp;matches {
+    assert_eq!(m[p.lid("s").unwrap()], grw::id::N(0));
+    assert_eq!(m[p.lid("p").unwrap()], grw::id::N(1));
+}</code></pre>
+<p>A duplicate definition in a cluster, an undefined reference, or <code>X(..)</code> used inside <code>pattern!</code> are all compile errors — caught while expanding the macro, before the pattern ever runs. Looking up a name that isn’t in the pattern (<code>pattern.lid("nope")</code>) is a runtime error instead: <code>error::Search::UnknownName</code>.</p>
+<h2 id="value-patterns"><a class="header" href="#value-patterns">Value Patterns</a></h2>
+<p><code>N(id: pattern)</code> and <code>N(name: pattern)</code> require the node’s value to match a Rust pattern — anything valid on the right of a <code>match</code> arm: <code>Some(1)</code>, <code>Kind::A { .. }</code>, <code>1..=5</code>, <code>A | B</code>. <code>E(pattern)</code> does the same for an edge’s value.</p>
+<pre><code class="language-rust">use grw::graph::{edge, Graph, MGraph};
+use grw::search::{Pattern, RevCsr, Seq};
+use grw::{mgraph, pattern};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Shape { Circle(u8), Square(u8) }
+
+let g: MGraph&lt;Shape, edge::Undir&lt;u8&gt;&gt; =
+    mgraph![N(0).val(Shape::Circle(1)) &amp; E().val(7u8) ^ N(1).val(Shape::Square(2))].unwrap();
+let nodes: Pattern&lt;Shape, edge::Undir&lt;u8&gt;&gt; =
+    pattern![get(Mono) { N(c: Shape::Circle(_)) ^ N(s: Shape::Square(2)) }].unwrap();
+let edges: Pattern&lt;Shape, edge::Undir&lt;u8&gt;&gt; = pattern![get(Mono) { N(a) &amp; E(7) ^ N(b) }].unwrap();
+let indexed = g.index(RevCsr);
+assert_eq!(Seq::search(nodes.query(), &amp;indexed).unwrap().count(), 1);
+assert_eq!(Seq::search(edges.query(), &amp;indexed).unwrap().count(), 2);</code></pre>
+<p><code>pattern![..]</code> builds a <code>Pattern&lt;NV, ER&gt;</code> without a graph: it rejects <code>X(..)</code> context nodes at compile time (<code>pattern!: context nodes X(..) are not allowed; use search![&amp;g, ...]</code>) and returns <code>Result&lt;Pattern&lt;NV, ER&gt;, error::Search&gt;</code>, giving you <code>query()</code>, <code>names()</code>, and <code>lid()</code>.</p>
+<h2 id="key-predicates"><a class="header" href="#key-predicates">Key Predicates</a></h2>
+<p>A node with an <a href="#indices">index</a> declared on the target graph can be
+matched by key instead of by value predicate: <code>.key(index, value)</code> seeds the
+match with exactly the index’s hit set for that key, <code>.key_in(index, [values])</code>
+unions the hits for several keys. Both exist on <code>N</code>/<code>X</code> (free, context, and
+negated-context nodes) in the same typestate slot as <code>.test</code>, and <code>.test</code>
+after <code>.key</code>/<code>.key_in</code> composes into a conjunction — the closure is
+evaluated only on the nodes the key already selected, not on the whole
+graph. A macro grammar form — <code>N(a: key(INDEX, expr))</code> / <code>N(a: key_in(INDEX, [exprs]))</code>,
+and <code>X(name = id : key(INDEX, expr))</code> on a pinned context node — binds
+identically to the method-call form.</p>
+<pre><code class="language-rust">use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{edge, MGraph};
+use grw::{mgraph, search};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = mgraph![
+    N(0).val(10u32) ^ (N(1).val(20u32) ^ N(2).val(30u32))
+].unwrap();
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+]).unwrap();
+
+// method form and macro form bind identically
+let by_key = search![&amp;g, get(Mono) { N(a).key(BY_VAL, 20u32) ^ N(b) }].unwrap();
+let macro_form = search![&amp;g, get(Mono) { N(a: key(BY_VAL, 20u32)) ^ N(b) }].unwrap();
+assert_eq!(by_key.iter().count(), 2); // 20—10 and 20—30
+assert_eq!(macro_form.iter().count(), 2);
+
+// key_in unions its hits
+let in_set = search![&amp;g, get(Mono) { N(a).key_in(BY_VAL, [10u32, 30u32]) ^ N(b) }].unwrap();
+assert_eq!(in_set.iter().count(), 2); // 10—20 and 30—20
+
+// a pinned context node can carry a key check too, narrowing the pin itself
+let ten = grw::id::N(0);
+let pinned = search![&amp;g, get(Mono) { X(c = ten : key(BY_VAL, 10u32)) ^ N(o) }].unwrap();
+assert_eq!(pinned.iter().count(), 1);</code></pre>
+<h3 id="the-result-change"><a class="header" href="#the-result-change">The <code>Result</code> change</a></h3>
+<p>Because a key predicate is checked against the graph’s catalogue <em>before</em>
+any matching starts, every entry point that can begin a search now returns
+<code>Result&lt;_, error::Search&gt;</code> instead of the bare iterator or output — even for
+a pattern with no key predicate at all, since the check happens at the same
+call: <code>Seq::search</code>, <code>Seq::search_bound</code>, <code>Seq::search_watched</code>, <code>Par::search</code>,
+and <code>Par::search_bound</code>. <code>search![&amp;g, ..]</code> already returned a <code>Result</code> (it
+always could fail to build a <code>Session</code>), so that call site is unchanged;
+only the lower-level, index-explicit calls shown in
+<a href="#index-tiers">Index Tiers</a> gained the <code>?</code>/<code>.unwrap()</code>.</p>
+<p>Two errors come out of that check, both naming the offending index:</p>
+<ul>
+<li><code>error::Search::IndexMissing { index }</code> — the pattern names an index the
+graph doesn’t carry at all.</li>
+<li><code>error::Search::KeyTagMismatch { index }</code> — the graph has that index, but
+it was declared over a different key type than the one <code>.key</code>/<code>.key_in</code>
+serialized here.</li>
+</ul>
+<pre><code class="language-rust">use grw::graph::index::IndexName;
+use grw::graph::{edge, MGraph};
+use grw::search::{error, RevCsr, Search, Seq};
+use grw::{mgraph, search, Graph as _};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let plain: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = mgraph![N(0).val(10u32)].unwrap();
+let Search::Resolved(r) = search![&lt;u32, edge::Undir&lt;()&gt;&gt;;
+    get(Mono) { N(a).key(BY_VAL, 10u32) }
+].unwrap() else { panic!() };
+
+let indexed = plain.index(RevCsr);
+let Err(error::Search::IndexMissing { index }) = Seq::search(r.query(), &amp;indexed) else {
+    panic!("expected IndexMissing")
+};
+assert_eq!(index, BY_VAL);</code></pre>
+<p><code>Session::candidate_pool(idx)</code> exposes the resolved pool for pattern node
+<code>idx</code> as a diagnostic accessor: the ids a key predicate narrowed that node
+to, or the ids a closure predicate admits. It is <code>None</code> when the node
+carries no predicate at all, or when <code>idx</code> is not a pattern node of the
+session’s query — it never panics on an out-of-range index.</p>
+<h2 id="stored-patterns-and-pinning"><a class="header" href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a></h2>
+<p>A <code>Pattern</code> from <code>pattern![..]</code> is consumed by the search it is handed to: <code>search![&amp;g, p]</code> runs it as written, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. A <code>Pattern</code> holds boxed predicates, so it is not <code>Clone</code>; to run the same shape more than once, build it in a constructor function and call that per search — <code>search![&amp;g, cif_incident()]</code>.</p>
+<pre><code class="language-rust">use grw::graph::{edge, MGraph};
+use grw::search::Pattern;
+use grw::{mgraph, pattern, search};
+
+let g: MGraph&lt;u8, edge::Undir&lt;()&gt;&gt; = mgraph![N(0).val(1u8) ^ (N(1).val(2u8) ^ N(2).val(3u8))].unwrap();
+let p: Pattern&lt;u8, edge::Undir&lt;()&gt;&gt; = pattern![get(Mono) { N(a) ^ N(b) }].unwrap();
+let middle = grw::id::N(1);
+let s = search![&amp;g, p with X(a = middle)].unwrap();
+assert_eq!(s.iter().count(), 2);</code></pre>
+<p>Pinning the same name twice, literally, in one <code>with</code> clause is a compile error (<code>node `a` pinned twice</code>). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is <code>error::Search::UnknownName</code>, pinning the same name twice through the manual <code>Session::from_pattern</code> API is <code>error::Search::DuplicatePin</code>, pinning to a graph node that doesn’t exist is <code>error::Search::TargetMissing</code>, and two different pins landing on the same target node under an injective morphism is <code>error::Search::Bind</code> (<code>BindError::Collision</code>).</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="variable-length-paths"><a class="header" href="#variable-length-paths">Variable-Length Paths</a></h1>
 <p>Prefix a pattern node with <code>..</code> and the edge becomes a <strong>variable-length
@@ -1053,23 +1245,32 @@ assert_eq!(back.version(), 0);   // conversion is not an edit</code></pre>
 <p>Node ids survive a round trip, tombstones and all — a graph with a hole at
 slot 1 still has that hole afterwards, and the next insertion still fills it.
 Edge ids are reassigned, exactly as they are by <code>MGraph::from_graph</code>.</p>
-<p>Persistence crosses the same door. There is one <code>.grw</code> format, not two: a file
-written by either side loads into either side.</p>
-<pre><code class="language-rust">v.save(&amp;path).unwrap();
+<p>Persistence crosses the same door. There is one <code>.grw</code> format (v3), not two:
+a file written by either side loads into either side.</p>
+<pre><code class="language-rust">let (v, _) = v.modify(modify![N(9) ^ x(0)]).unwrap();
+v.save(&amp;path).unwrap();
+
+let v2: VUndir0 = VUndir0::load(&amp;path).unwrap();
+assert_eq!(v2.version(), v.version());              // V-as-V: version round-trips
+assert_eq!(v2.node_gen(id::N(9)), v.node_gen(id::N(9)));
 
 let m: graph::MUndir0 = MGraph::load(&amp;path).unwrap();
-let v2: VUndir0 = VUndir0::load(&amp;path).unwrap();
-assert_eq!(v2.version(), 0);</code></pre>
-<p>Versions and generations are <em>runtime</em> identity, not file content — a loaded
-graph starts again at version <code>0</code>. If your version numbers must outlive the
-file, they belong in your own data, and <code>modify_versioned</code> will restamp the
-graph to match.</p>
+assert_eq!(m.node_count(), v.node_count());</code></pre>
+<p>Generations and version are real fields in the v3 format, not just runtime
+bookkeeping — loading the same file back into a <code>VGraph</code> restores them
+exactly. They are lost only crossing into <code>MGraph</code>: <code>m</code> above has no
+generation or version fields to hold them, so <code>MGraph::load</code> silently drops
+whatever the file carried — the one deliberate loss the format documents
+(<code>MGraph::load</code>’s own doc comment calls it out). Save <code>m</code> back out and load
+<em>that</em> file as a <code>VGraph</code> and every node’s generation reads <code>0</code>: an
+<code>MGraph</code>-sourced file has no other generation to report, which is exactly
+<code>MGraph</code>’s own concept of history — it doesn’t have one.</p>
 <h2 id="search-is-unchanged"><a class="header" href="#search-is-unchanged">Search is unchanged</a></h2>
 <p>The engine never learned about versioning. It reads targets through the
 <code>Graph</code> trait, and <code>VGraph</code> implements that trait, so indexing and searching a
 versioned graph is the same call on the same tiers with the same results:</p>
-<pre><code class="language-rust">let m_hits = Seq::search(query, &amp;m.index(RevCsr)).count();
-let v_hits = Seq::search(query, &amp;v.index(RevCsr)).count();
+<pre><code class="language-rust">let m_hits = Seq::search(query, &amp;m.index(RevCsr)).unwrap().count();
+let v_hits = Seq::search(query, &amp;v.index(RevCsr)).unwrap().count();
 assert_eq!(v_hits, m_hits);</code></pre>
 <p>Every pattern in this book — clusters, morphisms, variable-length paths,
 negation, watchers — applies verbatim. An index is built from a <em>particular</em>
@@ -1115,6 +1316,133 @@ grows linearly (213 µs at 10k, 3.1 ms at 100k, 29.8 ms at 1M).</p>
 carrying all the ops, which still path-copies per element. If you are
 assembling a large graph from scratch, build it as <code>MGraph</code> and convert;
 the two-way door (<code>VGraph::from_mgraph</code> / <code>to_mgraph</code>) preserves slots and ids.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="indices"><a class="header" href="#indices">Indices</a></h1>
+<p>A graph can maintain <strong>keyed node indices</strong> — tables that map a value-derived
+key straight to the node(s) that hold it, instead of scanning every node to
+find them. <code>MGraph</code> and <code>VGraph</code> expose the identical API: <code>with_indices</code>,
+<code>add_index</code>, <code>drop_index</code>, <code>catalogue</code>, plus <code>index_hit</code>/<code>catalogue</code>/
+<code>index_decls</code> from the <code>Graph</code> trait.</p>
+<h2 id="declaring-an-index"><a class="header" href="#declaring-an-index">Declaring an index</a></h2>
+<p>An index is an <code>IndexDecl&lt;NV&gt;</code>: a name, a cardinality, and a key extractor.</p>
+<pre><code class="language-rust">use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+
+const BY_VAL: IndexName = IndexName("by_val");
+const BY_BUCKET: IndexName = IndexName("by_bucket");
+
+let g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = grw::mgraph![
+    N(0).val(10u32) ^ N(1).val(20u32) ^ N(2).val(30u32)
+].unwrap();
+
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+    IndexDecl::new(BY_BUCKET, Cardinality::Multi, |v: &amp;u32| Some(*v % 20)),
+]).unwrap();</code></pre>
+<p><code>IndexDecl::new(name, cardinality, extractor)</code> accepts any
+<code>Fn(&amp;NV) -&gt; Option&lt;K&gt;</code> where <code>K: Serialize + 'static</code>; returning <code>None</code>
+excludes that node from the index entirely. <code>Cardinality::Unique</code> means at
+most one node per key — a value collision refuses the whole call with
+<code>graph::error::Index::NotUnique { index, nodes }</code>. <code>Cardinality::Multi</code> groups
+every node sharing a key under it. <code>with_indices</code> builds every table with one
+scan of the graph; a duplicate name among the declarations is
+<code>graph::error::Index::DuplicateName</code>.</p>
+<h2 id="maintaining-an-index"><a class="header" href="#maintaining-an-index">Maintaining an index</a></h2>
+<p>Add or drop an index on a graph that already has data:</p>
+<pre><code class="language-rust">use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+
+const BY_PARITY: IndexName = IndexName("by_parity");
+
+let mut g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = grw::mgraph![
+    N(0).val(10u32) ^ N(1).val(20u32)
+].unwrap();
+
+g.add_index(IndexDecl::new(BY_PARITY, Cardinality::Multi, |v: &amp;u32| Some(*v % 2))).unwrap();
+let dropped = g.drop_index(BY_PARITY).unwrap();
+assert_eq!(dropped.name(), BY_PARITY);</code></pre>
+<p><code>add_index</code> scans once to build the new table and fails the same way
+<code>with_indices</code> does on a <code>Unique</code> collision. <code>drop_index</code> fails with
+<code>graph::error::Index::NoSuchIndex</code> for a name that isn’t declared.</p>
+<p>From here on, every declared index is maintained <strong>inside</strong> <code>modify!</code> — as
+part of the same atomic transaction as the rest of the batch, not a
+follow-up step:</p>
+<pre><code class="language-rust">use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+use grw::modify;
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = grw::mgraph![N(0).val(10u32)].unwrap();
+let mut g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+]).unwrap();
+
+// a batch that would give two nodes the same unique key is refused whole
+let Err(err) = modify!(g, [N(1).val(10u32), N(2).val(20u32)]) else { panic!("expected Err") };
+assert!(matches!(
+    err,
+    grw::modify::error::Modify::Apply(grw::modify::error::Apply::Index(
+        grw::modify::error::apply::Index::DuplicateKey { index, .. }
+    )) if index == BY_VAL
+));
+assert_eq!(g.node_count(), 1); // nothing was written, not even node 2</code></pre>
+<p><code>DuplicateKey { index, existing }</code> names the offending index and the node
+that already owns the key; when a batch collides on more than one index the
+one reported is whichever comes first in catalogue (alphabetical-by-name)
+order. This is the same all-or-nothing rule every other <code>modify!</code> failure
+follows — see <a href="#modify--mutation"><code>modify!</code> — Mutation</a>.</p>
+<h2 id="hitting-an-index"><a class="header" href="#hitting-an-index">Hitting an index</a></h2>
+<p><code>index_hit(name, key, tag)</code> is a <code>Graph</code> trait method, so it works
+identically on <code>MGraph</code> and <code>VGraph</code>:</p>
+<pre><code class="language-rust">use grw::Graph as _;
+use grw::graph::index::{Cardinality, IndexDecl, IndexHit, IndexName, KeyBytes, KeyTag};
+use grw::graph::{MGraph, edge};
+
+const BY_BUCKET: IndexName = IndexName("by_bucket");
+
+let g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = grw::mgraph![
+    N(0).val(1u32) ^ N(1).val(21u32) ^ N(2).val(2u32)
+].unwrap();
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_BUCKET, Cardinality::Multi, |v: &amp;u32| Some(*v % 20)),
+]).unwrap();
+
+match g.index_hit(BY_BUCKET, &amp;KeyBytes::of(&amp;1u32), KeyTag::of::&lt;u32&gt;()).unwrap() {
+    IndexHit::Many(set) =&gt; assert_eq!(set.len(), 2), // nodes 0 and 1 both key to 1
+    _ =&gt; panic!("expected a Many hit"),
+};</code></pre>
+<p><code>IndexHit</code> is <code>One(id::N)</code> for a <code>Unique</code> hit, <code>Many(IdView&lt;'_&gt;)</code> for a
+<code>Multi</code> hit with at least one member, or <code>None</code> for a key nothing holds.
+<code>IdView</code> is a borrowed read view over the hit set — <code>iter()</code> (yielding
+<code>id::N</code>), <code>len()</code>, <code>is_empty()</code>, and <code>contains(id::N)</code>; the set behind it
+stays crate-private, so grw’s public surface never exposes the bitmap
+representation.
+<code>index_hit</code> fails with <code>graph::error::Index::NoSuchIndex</code> for an unknown name
+and <code>graph::error::Index::KeyTagMismatch { index, expected, got }</code> when the
+key’s type doesn’t match the type the index was declared over — <code>KeyTag</code>
+identifies a Rust type, not just a byte length, so passing a <code>u64</code> key
+against a <code>u32</code>-keyed index is rejected rather than silently comparing the
+wrong bytes.</p>
+<p><code>catalogue()</code> lists every declared index — name, cardinality, and tag — in
+alphabetical-by-name order, regardless of declaration order. <code>index_decls()</code>
+returns the same information as owned <code>IndexDecl&lt;NV&gt;</code> values (extractor
+closures included), which is how <code>MGraph::from_graph</code> and
+<code>VGraph::from_mgraph</code>/<code>to_mgraph</code> carry a source’s indices across a
+representation change without re-declaring them by hand.</p>
+<h2 id="key-predicates-in-search"><a class="header" href="#key-predicates-in-search">Key predicates in search</a></h2>
+<p><code>search!</code>/<code>pattern!</code> reach these same tables directly from a pattern node
+with <code>.key(index, value)</code> / <code>.key_in(index, [values])</code>, seeding the search
+with the index’s hit set instead of scanning every node — see
+<a href="#key-predicates">Key Predicates</a>.</p>
+<h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
+<p>The <code>.grw</code> snapshot format carries the whole catalogue and every table
+alongside the graph — see <a href="#indices-1">Persistence</a>. <code>save</code>
+writes them, <code>load</code> refuses a file whose catalogue is non-empty (naming the
+indices that need declarations — a plain load has nothing to check the file
+against), and <code>load_with(path, decls)</code> verifies the file’s catalogue against
+<code>decls</code> and restores the tables straight from the file, with no rescan of
+node values at all.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="morphisms"><a class="header" href="#morphisms">Morphisms</a></h1>
 <p>A <strong>morphism</strong> is a mapping from pattern nodes to target nodes that preserves edges — if two nodes are connected in the pattern, their mapped counterparts must be connected in the target.</p>
@@ -1188,7 +1516,7 @@ Most relaxed. Multiple pattern nodes can collapse to one target node. Graph colo
 <tr><td><code>Raw</code></td><td>Sorted node id list</td><td>Minimal</td><td>Baseline</td><td>Tiny graphs, memory constrained</td></tr>
 <tr><td><code>Rev</code></td><td>Reverse adjacency map</td><td>Low</td><td>Good</td><td>Small graphs</td></tr>
 <tr><td><code>RevCsr</code></td><td>CSR-compressed reverse adjacency</td><td>Medium</td><td>Fast</td><td><strong>Default choice</strong> — good balance</td></tr>
-<tr><td><code>RevCsrVal</code></td><td>CSR + cached edge values</td><td>Higher</td><td>Fastest for valued</td><td>Graphs with edge predicates</td></tr>
+<tr><td><code>RevCsrVal</code></td><td>CSR + node values grouped by value</td><td>Higher</td><td>Fastest for valued</td><td>Graphs with node value predicates (<code>.val</code>/<code>.test</code>)</td></tr>
 </tbody>
 </table>
 </div>
@@ -1210,15 +1538,19 @@ let Search::Resolved(r) = search![&lt;(), edge::Undir&lt;()&gt;&gt;;
 let indexed = g.index(RevCsr);
 
 // search many times
-let count1 = Seq::search(&amp;r.query, &amp;indexed).count();
-let count2 = Seq::search(&amp;r.query, &amp;indexed).count();</code></pre>
-<h2 id="revcsrval-for-edge-predicates"><a class="header" href="#revcsrval-for-edge-predicates">RevCsrVal for Edge Predicates</a></h2>
-<p>When your search pattern uses edge value predicates, <code>RevCsrVal</code> pre-caches edge values in the CSR structure for faster lookups:</p>
+let count1 = Seq::search(r.query(), &amp;indexed).unwrap().count();
+let count2 = Seq::search(r.query(), &amp;indexed).unwrap().count();</code></pre>
+<h2 id="revcsrval-for-node-value-predicates"><a class="header" href="#revcsrval-for-node-value-predicates">RevCsrVal for Node Value Predicates</a></h2>
+<p>When your search pattern uses node value predicates (<code>.val(..)</code>, <code>.test(..)</code>), <code>RevCsrVal</code> pre-groups nodes by their value in the CSR structure (<code>value_groups: NV -&gt; [id::N]</code>), so evaluating a predicate only visits the value groups that actually pass it instead of every node:</p>
 <pre><code class="language-rust">let indexed = g.index(RevCsrVal);</code></pre>
-<p>This trades more memory for faster edge predicate evaluation during search.</p>
+<p>This trades more memory for faster node-predicate evaluation during search.</p>
+<h2 id="key-predicates-bypass-the-scan"><a class="header" href="#key-predicates-bypass-the-scan">Key Predicates Bypass The Scan</a></h2>
+<p>A <a href="#key-predicates"><code>.key</code>/<code>.key_in</code></a> predicate never touches <code>value_groups</code> at all, on any tier: it resolves straight through the graph’s own <a href="#indices">index</a> tables (<code>Graph::index_hit</code>), producing a candidate pool directly instead of scanning node values.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="persistence"><a class="header" href="#persistence">Persistence</a></h1>
-<p>GRW graphs can be saved to and loaded from binary files with layout validation.</p>
+<h1 id="persistence-1"><a class="header" href="#persistence-1">Persistence</a></h1>
+<p>GRW graphs can be saved to and loaded from binary <code>.grw</code> files (format
+version 3), with layout validation and an integrity check over the whole
+file.</p>
 <h2 id="save-and-load"><a class="header" href="#save-and-load">Save and Load</a></h2>
 <pre><code class="language-rust">use std::path::Path;
 
@@ -1227,17 +1559,83 @@ g.save(Path::new("my_graph.grw")).unwrap();
 
 // load
 let g2: graph::MUndir0 = MGraph::load(Path::new("my_graph.grw")).unwrap();</code></pre>
-<h2 id="binary-format"><a class="header" href="#binary-format">Binary Format</a></h2>
-<p>The <code>.grw</code> file format (version 2) consists of:</p>
+<p><code>VGraph::save</code>/<code>load</code> write and read exactly the same format — there is one
+<code>.grw</code> layout, not two; see <a href="#versioned-graphs">Versioned Graphs</a> for what
+crosses that door and what doesn’t.</p>
+<h2 id="binary-format-v3"><a class="header" href="#binary-format-v3">Binary Format (v3)</a></h2>
+<p>A file is a fixed header, a section table, six content sections, and a
+trailer:</p>
 <ol>
-<li><strong>Magic bytes</strong> — <code>GRW\0</code></li>
-<li><strong>Version</strong> — <code>u16</code> (currently 2)</li>
-<li><strong>Edge kind</strong> — <code>u8</code> (0=undir, 1=dir, 2=anydir)</li>
-<li><strong>Node/edge counts</strong> — <code>u64</code> each</li>
-<li><strong>Layout hashes</strong> — <code>u64</code> for NV and EV types</li>
-<li><strong>Type name strings</strong> — for error messages</li>
-<li><strong>Bincode-serialized graph data</strong></li>
+<li><strong>Header</strong> — magic <code>GRW\0</code>, <code>version: u16</code> (= 3), <code>graph_kind: u8</code> (0 =
+<code>MGraph</code>, 1 = <code>VGraph</code>), <code>edge_kind: u8</code>, node/edge counts, layout hashes
+for <code>NV</code> and <code>EV</code>, then the type name strings (for error messages), then a
+<code>section_count: u16</code> and that many <code>(tag, offset, len)</code> entries — always
+all seven, even when a section is empty.</li>
+<li><strong>Nodes</strong> / <strong>Edges</strong> — fixed-width rows for live nodes/edges only, sorted
+by slot ascending. Every row carries a <code>gen: u64</code> field; it is real for a
+<code>VGraph</code>-sourced file and always <code>0</code> for an <code>MGraph</code>-sourced one — the byte
+layout never branches on <code>graph_kind</code>, only its meaning does.</li>
+<li><strong>Adjacency</strong> — <code>(neighbor, edge)</code> pairs, contiguous per node in node
+order; a node’s row carries a byte offset into this section and a pair
+count.</li>
+<li><strong>Values</strong> — one heap of bincode bytes, node values first (in node
+order) then edge values (in edge order), each addressed by byte offset and
+length from the node/edge rows.</li>
+<li><strong>Free</strong> — one bincode blob: <code>node_free</code>/<code>edge_free</code> (each the <em>holes</em>
+below <code>next_node</code>/<code>next_edge</code>, not the full allocator state),
+<code>next_node: u32</code>, <code>next_edge: u32</code>, and a real <code>version: u64</code> (always <code>0</code>
+for an <code>MGraph</code>-sourced file).</li>
+<li><strong>Indices</strong> — see <a href="#indices-1">below</a>.</li>
+<li><strong>Trailer</strong> — 32 bytes, the SHA-256 of every byte before it (header
+through the indices section, including the section table itself).
+Verified before any <em>section body</em> is parsed, so a flipped byte inside a
+section surfaces as a trailer-mismatch error, never a downstream parse
+error. The fixed header and the section table are read before the check
+runs, so corruption there surfaces first as a structural error —
+“invalid magic”, “unsupported version”, “unknown section tag”, or a
+truncated/out-of-range section range — rather than as a trailer
+mismatch. Every one of those errors names the file it came from.</li>
 </ol>
+<pre><code class="language-rust">use grw::graph::persist;
+
+let header = persist::read_header(Path::new("my_graph.grw")).unwrap();
+assert_eq!(header.version, 3);
+assert_eq!(header.sections.len(), 7);</code></pre>
+<p><code>read_header</code> reads only the header and the section table (and, inside the
+indices section, only the catalogue — never a table body), so it can inspect
+a file’s shape and catalogue without loading the graph at all. Being
+header-only, it does <strong>not</strong> verify the trailer: what it reports is what the
+bytes claim. <code>load</code>/<code>load_with</code> verify the trailer before parsing any
+section body.</p>
+<h2 id="indices-1"><a class="header" href="#indices-1">Indices</a></h2>
+<p>If a graph carries indices, <code>save</code> writes the whole catalogue and every
+table into the indices section: a catalogue header (each declared index’s
+name, cardinality, and key tag) followed, in the same order, by one table
+per index. <code>load</code> refuses such a file, naming every index that needs a
+declaration — a plain load has nothing to check the file against — so use
+<code>load_with</code> to both verify and restore them:</p>
+<pre><code class="language-rust">use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = grw::mgraph![N(0).val(10u32)].unwrap();
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+]).unwrap();
+g.save(Path::new("indexed.grw")).unwrap();
+
+let g2: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = MGraph::load_with(Path::new("indexed.grw"), vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+]).unwrap();
+assert_eq!(g2.catalogue().len(), 1);</code></pre>
+<p><code>load_with</code> checks the file’s catalogue against the declarations you pass —
+by name, order-independent — before restoring the tables directly from the
+parsed bytes, with no rescan of node values: a missing declaration, an extra
+one, or a key-type mismatch (<code>KeyTag</code>) are each a distinct, named error.
+Plain <code>load</code> on such a file is itself an error, naming every index that
+needs a declaration. See
+<a href="#indices">Indices</a> for the declaration API itself.</p>
 <h2 id="layout-validation"><a class="header" href="#layout-validation">Layout Validation</a></h2>
 <p>When loading, GRW validates that the types match:</p>
 <ul>
@@ -1248,16 +1646,33 @@ let g2: graph::MUndir0 = MGraph::load(Path::new("my_graph.grw")).unwrap();</code
 <pre><code class="language-rust">// this will fail: type mismatch
 let result = MGraph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw"));
 // Error: "node value layout mismatch: file has type `u32`, expected `i64`"</code></pre>
-<p>The layout hash is computed from the type’s field names, types, and structure using FNV hashing. This catches:</p>
+<p>The layout hash is computed from the type’s field names, types, and
+structure using FNV hashing. This catches:</p>
 <ul>
 <li>Wrong types (<code>u32</code> vs <code>i64</code>)</li>
 <li>Reordered fields</li>
 <li>Added/removed fields</li>
 </ul>
+<h2 id="loading-an-old-file-convert"><a class="header" href="#loading-an-old-file-convert">Loading an old file: <code>convert</code></a></h2>
+<p>A file written by the pre-v3 format is rejected by <code>load</code>/<code>load_with</code>/
+<code>read_header</code> with a message naming <code>convert</code>:</p>
+<pre><code class="language-rust">use grw::graph::persist;
+
+let report = persist::convert::&lt;(), edge::Dir&lt;()&gt;&gt;(
+    Path::new("old_v2.grw"),
+    Path::new("upgraded_v3.grw"),
+).unwrap();
+let g: graph::MDir0 = MGraph::load(Path::new("upgraded_v3.grw")).unwrap();
+assert_eq!(report.node_count, g.node_count() as u64);</code></pre>
+<p><code>convert</code> reads the old file in full and writes it back out in the current
+format at the destination path; the source is untouched.</p>
 <h2 id="memory-mapped-loading"><a class="header" href="#memory-mapped-loading">Memory-Mapped Loading</a></h2>
-<p><code>load()</code> uses <code>memmap2</code> for memory-mapped file access. The file header is parsed first, then bincode deserializes directly from the mmap.</p>
+<p><code>load()</code> uses <code>memmap2</code> for memory-mapped file access: the header and
+section table are parsed first, then each section is read directly from the
+mmap.</p>
 <h2 id="the-val-trait"><a class="header" href="#the-val-trait">The Val Trait</a></h2>
-<p><code>save()</code> and <code>load()</code> require both <code>NV</code> and <code>EV</code> to implement the <code>Val</code> trait (for layout hash computation). Primitive types (<code>()</code>, <code>bool</code>, <code>u8</code>–<code>u64</code>, <code>i8</code>–<code>i64</code>, <code>f32</code>, <code>f64</code>, <code>String</code>) implement <code>Val</code> automatically. For custom structs, use <code>#[derive(Val)]</code>:</p>
+<p><code>save()</code> and <code>load()</code> require both <code>NV</code> and <code>EV</code> to implement the <code>Val</code>
+trait (for layout hash computation). Primitive types (<code>()</code>, <code>bool</code>, <code>u8</code>–<code>u64</code>, <code>i8</code>–<code>i64</code>, <code>f32</code>, <code>f64</code>, <code>String</code>) implement <code>Val</code> automatically. For custom structs, use <code>#[derive(Val)]</code>:</p>
 <pre><code class="language-rust">use grw::Val;
 
 #[derive(Val, serde::Serialize, serde::Deserialize)]
@@ -1401,6 +1816,15 @@ watched.modify(ops).unwrap();
 </table>
 </div>
 <p>In practice, real-world graphs have structure (bounded degree, sparsity, value predicates) that makes these tractable with backtracking and pruning. Small patterns on large graphs are fast.</p>
+<h2 id="pattern-syntax-quick-reference"><a class="header" href="#pattern-syntax-quick-reference">Pattern Syntax Quick Reference</a></h2>
+<ul>
+<li><code>N(name)</code> / <code>n(name)</code> — named pattern node / reference, alongside integer <code>N(id)</code> / <code>n(id)</code></li>
+<li><code>N(id: pattern)</code> / <code>N(name: pattern)</code> — node value must match a Rust pattern</li>
+<li><code>E(pattern)</code> — edge value must match a Rust pattern</li>
+<li><code>X(name = node_id)</code> / <code>X(name = node_id : pattern)</code> — context node pinned to a graph node, optionally value-checked</li>
+<li><code>pattern![..]</code> — graph-free <code>Pattern</code>; rejects <code>X(..)</code></li>
+<li><code>search![&amp;g, p]</code> / <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> — run a stored pattern, optionally pinning named nodes</li>
+</ul>
 
                     </main>
 

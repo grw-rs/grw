@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c6875a37.js";
+            window.path_to_searchindex_js = "searchindex-9ace80a2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-be0e0459.js"></script>
+        <script src="toc-d99113f4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,7 +179,9 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="persistence"><a class="header" href="#persistence">Persistence</a></h1>
-<p>GRW graphs can be saved to and loaded from binary files with layout validation.</p>
+<p>GRW graphs can be saved to and loaded from binary <code>.grw</code> files (format
+version 3), with layout validation and an integrity check over the whole
+file.</p>
 <h2 id="save-and-load"><a class="header" href="#save-and-load">Save and Load</a></h2>
 <pre><code class="language-rust">use std::path::Path;
 
@@ -188,17 +190,83 @@ g.save(Path::new("my_graph.grw")).unwrap();
 
 // load
 let g2: graph::MUndir0 = MGraph::load(Path::new("my_graph.grw")).unwrap();</code></pre>
-<h2 id="binary-format"><a class="header" href="#binary-format">Binary Format</a></h2>
-<p>The <code>.grw</code> file format (version 2) consists of:</p>
+<p><code>VGraph::save</code>/<code>load</code> write and read exactly the same format — there is one
+<code>.grw</code> layout, not two; see <a href="./versioned-graph.html">Versioned Graphs</a> for what
+crosses that door and what doesn’t.</p>
+<h2 id="binary-format-v3"><a class="header" href="#binary-format-v3">Binary Format (v3)</a></h2>
+<p>A file is a fixed header, a section table, six content sections, and a
+trailer:</p>
 <ol>
-<li><strong>Magic bytes</strong> — <code>GRW\0</code></li>
-<li><strong>Version</strong> — <code>u16</code> (currently 2)</li>
-<li><strong>Edge kind</strong> — <code>u8</code> (0=undir, 1=dir, 2=anydir)</li>
-<li><strong>Node/edge counts</strong> — <code>u64</code> each</li>
-<li><strong>Layout hashes</strong> — <code>u64</code> for NV and EV types</li>
-<li><strong>Type name strings</strong> — for error messages</li>
-<li><strong>Bincode-serialized graph data</strong></li>
+<li><strong>Header</strong> — magic <code>GRW\0</code>, <code>version: u16</code> (= 3), <code>graph_kind: u8</code> (0 =
+<code>MGraph</code>, 1 = <code>VGraph</code>), <code>edge_kind: u8</code>, node/edge counts, layout hashes
+for <code>NV</code> and <code>EV</code>, then the type name strings (for error messages), then a
+<code>section_count: u16</code> and that many <code>(tag, offset, len)</code> entries — always
+all seven, even when a section is empty.</li>
+<li><strong>Nodes</strong> / <strong>Edges</strong> — fixed-width rows for live nodes/edges only, sorted
+by slot ascending. Every row carries a <code>gen: u64</code> field; it is real for a
+<code>VGraph</code>-sourced file and always <code>0</code> for an <code>MGraph</code>-sourced one — the byte
+layout never branches on <code>graph_kind</code>, only its meaning does.</li>
+<li><strong>Adjacency</strong> — <code>(neighbor, edge)</code> pairs, contiguous per node in node
+order; a node’s row carries a byte offset into this section and a pair
+count.</li>
+<li><strong>Values</strong> — one heap of bincode bytes, node values first (in node
+order) then edge values (in edge order), each addressed by byte offset and
+length from the node/edge rows.</li>
+<li><strong>Free</strong> — one bincode blob: <code>node_free</code>/<code>edge_free</code> (each the <em>holes</em>
+below <code>next_node</code>/<code>next_edge</code>, not the full allocator state),
+<code>next_node: u32</code>, <code>next_edge: u32</code>, and a real <code>version: u64</code> (always <code>0</code>
+for an <code>MGraph</code>-sourced file).</li>
+<li><strong>Indices</strong> — see <a href="#indices">below</a>.</li>
+<li><strong>Trailer</strong> — 32 bytes, the SHA-256 of every byte before it (header
+through the indices section, including the section table itself).
+Verified before any <em>section body</em> is parsed, so a flipped byte inside a
+section surfaces as a trailer-mismatch error, never a downstream parse
+error. The fixed header and the section table are read before the check
+runs, so corruption there surfaces first as a structural error —
+“invalid magic”, “unsupported version”, “unknown section tag”, or a
+truncated/out-of-range section range — rather than as a trailer
+mismatch. Every one of those errors names the file it came from.</li>
 </ol>
+<pre><code class="language-rust">use grw::graph::persist;
+
+let header = persist::read_header(Path::new("my_graph.grw")).unwrap();
+assert_eq!(header.version, 3);
+assert_eq!(header.sections.len(), 7);</code></pre>
+<p><code>read_header</code> reads only the header and the section table (and, inside the
+indices section, only the catalogue — never a table body), so it can inspect
+a file’s shape and catalogue without loading the graph at all. Being
+header-only, it does <strong>not</strong> verify the trailer: what it reports is what the
+bytes claim. <code>load</code>/<code>load_with</code> verify the trailer before parsing any
+section body.</p>
+<h2 id="indices"><a class="header" href="#indices">Indices</a></h2>
+<p>If a graph carries indices, <code>save</code> writes the whole catalogue and every
+table into the indices section: a catalogue header (each declared index’s
+name, cardinality, and key tag) followed, in the same order, by one table
+per index. <code>load</code> refuses such a file, naming every index that needs a
+declaration — a plain load has nothing to check the file against — so use
+<code>load_with</code> to both verify and restore them:</p>
+<pre><code class="language-rust">use grw::graph::index::{Cardinality, IndexDecl, IndexName};
+use grw::graph::{MGraph, edge};
+
+const BY_VAL: IndexName = IndexName("by_val");
+
+let g: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = grw::mgraph![N(0).val(10u32)].unwrap();
+let g = g.with_indices(vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+]).unwrap();
+g.save(Path::new("indexed.grw")).unwrap();
+
+let g2: MGraph&lt;u32, edge::Undir&lt;()&gt;&gt; = MGraph::load_with(Path::new("indexed.grw"), vec![
+    IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &amp;u32| Some(*v)),
+]).unwrap();
+assert_eq!(g2.catalogue().len(), 1);</code></pre>
+<p><code>load_with</code> checks the file’s catalogue against the declarations you pass —
+by name, order-independent — before restoring the tables directly from the
+parsed bytes, with no rescan of node values: a missing declaration, an extra
+one, or a key-type mismatch (<code>KeyTag</code>) are each a distinct, named error.
+Plain <code>load</code> on such a file is itself an error, naming every index that
+needs a declaration. See
+<a href="./indices.html">Indices</a> for the declaration API itself.</p>
 <h2 id="layout-validation"><a class="header" href="#layout-validation">Layout Validation</a></h2>
 <p>When loading, GRW validates that the types match:</p>
 <ul>
@@ -209,16 +277,33 @@ let g2: graph::MUndir0 = MGraph::load(Path::new("my_graph.grw")).unwrap();</code
 <pre><code class="language-rust">// this will fail: type mismatch
 let result = MGraph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw"));
 // Error: "node value layout mismatch: file has type `u32`, expected `i64`"</code></pre>
-<p>The layout hash is computed from the type’s field names, types, and structure using FNV hashing. This catches:</p>
+<p>The layout hash is computed from the type’s field names, types, and
+structure using FNV hashing. This catches:</p>
 <ul>
 <li>Wrong types (<code>u32</code> vs <code>i64</code>)</li>
 <li>Reordered fields</li>
 <li>Added/removed fields</li>
 </ul>
+<h2 id="loading-an-old-file-convert"><a class="header" href="#loading-an-old-file-convert">Loading an old file: <code>convert</code></a></h2>
+<p>A file written by the pre-v3 format is rejected by <code>load</code>/<code>load_with</code>/
+<code>read_header</code> with a message naming <code>convert</code>:</p>
+<pre><code class="language-rust">use grw::graph::persist;
+
+let report = persist::convert::&lt;(), edge::Dir&lt;()&gt;&gt;(
+    Path::new("old_v2.grw"),
+    Path::new("upgraded_v3.grw"),
+).unwrap();
+let g: graph::MDir0 = MGraph::load(Path::new("upgraded_v3.grw")).unwrap();
+assert_eq!(report.node_count, g.node_count() as u64);</code></pre>
+<p><code>convert</code> reads the old file in full and writes it back out in the current
+format at the destination path; the source is untouched.</p>
 <h2 id="memory-mapped-loading"><a class="header" href="#memory-mapped-loading">Memory-Mapped Loading</a></h2>
-<p><code>load()</code> uses <code>memmap2</code> for memory-mapped file access. The file header is parsed first, then bincode deserializes directly from the mmap.</p>
+<p><code>load()</code> uses <code>memmap2</code> for memory-mapped file access: the header and
+section table are parsed first, then each section is read directly from the
+mmap.</p>
 <h2 id="the-val-trait"><a class="header" href="#the-val-trait">The Val Trait</a></h2>
-<p><code>save()</code> and <code>load()</code> require both <code>NV</code> and <code>EV</code> to implement the <code>Val</code> trait (for layout hash computation). Primitive types (<code>()</code>, <code>bool</code>, <code>u8</code>–<code>u64</code>, <code>i8</code>–<code>i64</code>, <code>f32</code>, <code>f64</code>, <code>String</code>) implement <code>Val</code> automatically. For custom structs, use <code>#[derive(Val)]</code>:</p>
+<p><code>save()</code> and <code>load()</code> require both <code>NV</code> and <code>EV</code> to implement the <code>Val</code>
+trait (for layout hash computation). Primitive types (<code>()</code>, <code>bool</code>, <code>u8</code>–<code>u64</code>, <code>i8</code>–<code>i64</code>, <code>f32</code>, <code>f64</code>, <code>String</code>) implement <code>Val</code> automatically. For custom structs, use <code>#[derive(Val)]</code>:</p>
 <pre><code class="language-rust">use grw::Val;
 
 #[derive(Val, serde::Serialize, serde::Deserialize)]

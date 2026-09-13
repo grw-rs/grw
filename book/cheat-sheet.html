@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c6875a37.js";
+            window.path_to_searchindex_js = "searchindex-9ace80a2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-be0e0459.js"></script>
+        <script src="toc-d99113f4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -263,6 +263,15 @@
 </table>
 </div>
 <p>In practice, real-world graphs have structure (bounded degree, sparsity, value predicates) that makes these tractable with backtracking and pruning. Small patterns on large graphs are fast.</p>
+<h2 id="pattern-syntax-quick-reference"><a class="header" href="#pattern-syntax-quick-reference">Pattern Syntax Quick Reference</a></h2>
+<ul>
+<li><code>N(name)</code> / <code>n(name)</code> — named pattern node / reference, alongside integer <code>N(id)</code> / <code>n(id)</code></li>
+<li><code>N(id: pattern)</code> / <code>N(name: pattern)</code> — node value must match a Rust pattern</li>
+<li><code>E(pattern)</code> — edge value must match a Rust pattern</li>
+<li><code>X(name = node_id)</code> / <code>X(name = node_id : pattern)</code> — context node pinned to a graph node, optionally value-checked</li>
+<li><code>pattern![..]</code> — graph-free <code>Pattern</code>; rejects <code>X(..)</code></li>
+<li><code>search![&amp;g, p]</code> / <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> — run a stored pattern, optionally pinning named nodes</li>
+</ul>
 
                     </main>
 

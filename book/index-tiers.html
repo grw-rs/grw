@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c6875a37.js";
+            window.path_to_searchindex_js = "searchindex-9ace80a2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-be0e0459.js"></script>
+        <script src="toc-d99113f4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -190,7 +190,7 @@
 <tr><td><code>Raw</code></td><td>Sorted node id list</td><td>Minimal</td><td>Baseline</td><td>Tiny graphs, memory constrained</td></tr>
 <tr><td><code>Rev</code></td><td>Reverse adjacency map</td><td>Low</td><td>Good</td><td>Small graphs</td></tr>
 <tr><td><code>RevCsr</code></td><td>CSR-compressed reverse adjacency</td><td>Medium</td><td>Fast</td><td><strong>Default choice</strong> — good balance</td></tr>
-<tr><td><code>RevCsrVal</code></td><td>CSR + cached edge values</td><td>Higher</td><td>Fastest for valued</td><td>Graphs with edge predicates</td></tr>
+<tr><td><code>RevCsrVal</code></td><td>CSR + node values grouped by value</td><td>Higher</td><td>Fastest for valued</td><td>Graphs with node value predicates (<code>.val</code>/<code>.test</code>)</td></tr>
 </tbody>
 </table>
 </div>
@@ -212,12 +212,14 @@ let Search::Resolved(r) = search![&lt;(), edge::Undir&lt;()&gt;&gt;;
 let indexed = g.index(RevCsr);
 
 // search many times
-let count1 = Seq::search(&amp;r.query, &amp;indexed).count();
-let count2 = Seq::search(&amp;r.query, &amp;indexed).count();</code></pre>
-<h2 id="revcsrval-for-edge-predicates"><a class="header" href="#revcsrval-for-edge-predicates">RevCsrVal for Edge Predicates</a></h2>
-<p>When your search pattern uses edge value predicates, <code>RevCsrVal</code> pre-caches edge values in the CSR structure for faster lookups:</p>
+let count1 = Seq::search(r.query(), &amp;indexed).unwrap().count();
+let count2 = Seq::search(r.query(), &amp;indexed).unwrap().count();</code></pre>
+<h2 id="revcsrval-for-node-value-predicates"><a class="header" href="#revcsrval-for-node-value-predicates">RevCsrVal for Node Value Predicates</a></h2>
+<p>When your search pattern uses node value predicates (<code>.val(..)</code>, <code>.test(..)</code>), <code>RevCsrVal</code> pre-groups nodes by their value in the CSR structure (<code>value_groups: NV -&gt; [id::N]</code>), so evaluating a predicate only visits the value groups that actually pass it instead of every node:</p>
 <pre><code class="language-rust">let indexed = g.index(RevCsrVal);</code></pre>
-<p>This trades more memory for faster edge predicate evaluation during search.</p>
+<p>This trades more memory for faster node-predicate evaluation during search.</p>
+<h2 id="key-predicates-bypass-the-scan"><a class="header" href="#key-predicates-bypass-the-scan">Key Predicates Bypass The Scan</a></h2>
+<p>A <a href="./search.html#key-predicates"><code>.key</code>/<code>.key_in</code></a> predicate never touches <code>value_groups</code> at all, on any tier: it resolves straight through the graph’s own <a href="./indices.html">index</a> tables (<code>Graph::index_hit</code>), producing a candidate pool directly instead of scanning node values.</p>
 
                     </main>
 
