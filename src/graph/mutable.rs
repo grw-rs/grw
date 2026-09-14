@@ -603,12 +603,26 @@ impl<NV, E: HasRel> MGraph<NV, E> {
         let eids: smallvec::SmallVec<[id::E; 4]> = nodes.get_node(n1)
             .map(|node| node.adj.edges_to(n2).collect())
             .unwrap_or_default();
-        E::rel_mut(nr, eids.into_iter().map(|eid| {
+        // `Adj` is kept sorted and deduplicated on `(node, edge)`, so `edges_to`
+        // yields strictly ascending edge ids and the store can be split into
+        // disjoint `&mut`s by walking it once — no raw reborrow of the whole
+        // store per entry, which is what made the old pointer version alias.
+        let mut rest = &mut edges.store[..];
+        let mut consumed = 0usize;
+        let mut picked: smallvec::SmallVec<[(E::Slot, &mut E::Val); 4]> =
+            smallvec::SmallVec::new();
+        for eid in eids {
             let idx = *eid as usize;
-            let rec_ref = unsafe { &mut *edges.store.as_mut_ptr().add(idx) };
-            let rec = rec_ref.as_mut().unwrap();
-            (rec.slot, &mut rec.val)
-        }))
+            let skip = idx.checked_sub(consumed)
+                .expect("adjacency yields edge ids in strictly ascending order");
+            let (_, tail) = std::mem::take(&mut rest).split_at_mut(skip);
+            let (here, tail) = tail.split_at_mut(1);
+            consumed = idx + 1;
+            rest = tail;
+            let rec = here[0].as_mut().expect("adjacency entry points at a live edge");
+            picked.push((rec.slot, &mut rec.val));
+        }
+        E::rel_mut(nr, picked.into_iter())
     }
 }
 

@@ -65,13 +65,6 @@ struct SearchProducer<'g, NV, ER: graph::Edge, G> {
     min_chunk: usize,
 }
 
-unsafe impl<'g, NV: Sync, ER: graph::Edge, G: Sync> Send for SearchProducer<'g, NV, ER, G>
-where
-    ER::Val: Sync,
-    ER::Slot: Sync,
-    ER::CsrStore: Sync,
-{}
-
 impl<'g, NV: Sync + Send + Clone, ER: graph::Edge, G: graph::Graph<NV, ER> + Sync> UnindexedProducer for SearchProducer<'g, NV, ER, G>
 where
     ER::Val: Send + Sync + Clone,

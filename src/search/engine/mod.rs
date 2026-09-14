@@ -991,7 +991,10 @@ pub(crate) struct StackFrame {
 pub struct CsrAdj<NV, ER: graph::Edge> {
     offsets: Vec<u32>,
     neighbors: Vec<u32>,
-    pub(crate) node_vals: Vec<NV>,
+    /// Indexed by raw node id, so gaps in the target's id space are `None`.
+    /// A dense `Vec<NV>` plus an id->index map would cost an extra indirection
+    /// in the `node_val` candidate loops; the niche/discriminant is cheaper.
+    pub(crate) node_vals: Vec<Option<NV>>,
     pub(crate) edge_stores: Vec<ER::CsrStore>,
     all_node_ids: Vec<id::N>,
 }
@@ -1039,13 +1042,13 @@ where
         let mut neighbors = vec![0u32; total];
         let mut edge_stores: Vec<std::mem::MaybeUninit<ER::CsrStore>> =
             (0..total).map(|_| std::mem::MaybeUninit::uninit()).collect();
-        let mut node_vals: Vec<std::mem::MaybeUninit<NV>> =
-            (0..max_id + 1).map(|_| std::mem::MaybeUninit::uninit()).collect();
+        let mut written = 0usize;
+        let mut node_vals: Vec<Option<NV>> = (0..max_id + 1).map(|_| None).collect();
 
         for (node_id, node_val, adj_ids) in target.iter_nodes() {
             let nid = *node_id as usize;
             let start = offsets[nid] as usize;
-            node_vals[nid] = std::mem::MaybeUninit::new(node_val.clone());
+            node_vals[nid] = Some(node_val.clone());
 
             let degree = offsets[nid + 1] - offsets[nid];
             let mut pairs: Vec<(u32, ER::CsrStore)> = Vec::with_capacity(degree as usize);
@@ -1056,19 +1059,31 @@ where
                 pairs.push((*adj as u32, store));
             }
             pairs.sort_unstable_by_key(|(n, _)| *n);
+            assert_eq!(
+                pairs.len(), degree as usize,
+                "csr build: node {nid} reported degree {degree} but yielded {} neighbours",
+                pairs.len(),
+            );
 
             for (i, (adj_raw, store)) in pairs.into_iter().enumerate() {
                 neighbors[start + i] = adj_raw;
                 edge_stores[start + i] = std::mem::MaybeUninit::new(store);
+                written += 1;
             }
         }
 
-        let node_vals = unsafe {
-            std::mem::transmute::<Vec<std::mem::MaybeUninit<NV>>, Vec<NV>>(node_vals)
-        };
-        let edge_stores = unsafe {
-            std::mem::transmute::<Vec<std::mem::MaybeUninit<ER::CsrStore>>, Vec<ER::CsrStore>>(edge_stores)
-        };
+        assert_eq!(
+            written, total,
+            "csr build: {written} of {total} adjacency slots written",
+        );
+        let edge_stores: Vec<ER::CsrStore> = edge_stores.into_iter()
+            // SAFETY: `offsets` is a prefix sum over distinct node ids, so the
+            // `[start, start + degree)` block each node writes is disjoint from
+            // every other node's and lies inside `total`; with the per-node
+            // `pairs.len() == degree` assert above, `written == total` therefore
+            // means every one of the `total` slots was written exactly once.
+            .map(|store| unsafe { store.assume_init() })
+            .collect();
 
         let mut all_node_ids: Vec<id::N> = target.iter_node_ids().collect();
         all_node_ids.sort_unstable();
@@ -1099,7 +1114,10 @@ impl<NV, ER: graph::Edge> CsrAdj<NV, ER> {
 
     #[inline(always)]
     pub(crate) fn node_val(&self, n: u32) -> &NV {
-        &self.node_vals[n as usize]
+        match &self.node_vals[n as usize] {
+            Some(val) => val,
+            None => panic!("csr node_val: node id {n} is a gap in the target id space"),
+        }
     }
 
     #[inline(always)]
