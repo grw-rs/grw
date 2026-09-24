@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
+            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-d99113f4.js"></script>
+        <script src="toc-0738087a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -284,6 +284,14 @@ structure using FNV hashing. This catches:</p>
 <li>Reordered fields</li>
 <li>Added/removed fields</li>
 </ul>
+<h2 id="composite-edge-values"><a class="header" href="#composite-edge-values">Composite Edge Values</a></h2>
+<p>A composite edge value such as <code>TypeSet&lt;P&gt;</code> is saved as its parts in kind
+order, under its own layout hash, so the format is still v3. A file written
+while each link held a plain <code>P</code> fails the strict edge layout check; it loads
+into a <code>TypeSet&lt;P&gt;</code> graph only through the explicit
+<code>load_promoting</code>/<code>load_promoting_with</code> (on <code>MGraph</code> and <code>VGraph</code>), each old
+link becoming a one-part link. See
+<a href="./composite-values.html#persistence">Composite Values</a>.</p>
 <h2 id="loading-an-old-file-convert"><a class="header" href="#loading-an-old-file-convert">Loading an old file: <code>convert</code></a></h2>
 <p>A file written by the pre-v3 format is rejected by <code>load</code>/<code>load_with</code>/
 <code>read_header</code> with a message naming <code>convert</code>:</p>

@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
+            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-d99113f4.js"></script>
+        <script src="toc-0738087a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -197,6 +197,10 @@
 <tr><td><code>N(id).val(v)</code></td><td>Node value — exact match</td></tr>
 <tr><td><code>N(id).test(|v| ...)</code></td><td>Node value predicate</td></tr>
 <tr><td><code>E().val(v)</code></td><td>Edge value — exact match</td></tr>
+<tr><td><code>E().test(|v| ...)</code></td><td>Edge value predicate</td></tr>
+<tr><td><code>E().has::&lt;T&gt;()</code> / <code>E().has_kind(k)</code></td><td>The link holds a part of that kind (composite edge values)</td></tr>
+<tr><td><code>E().has::&lt;T&gt;().test(|t: &amp;T| ...)</code></td><td>Predicate on the part just named</td></tr>
+<tr><td><code>!E().has::&lt;T&gt;()</code></td><td>No link holding that part — unlike <code>!E()</code>, another part may still link the pair</td></tr>
 <tr><td><code>X(id)</code></td><td>Context node — pinned to a specific graph node</td></tr>
 <tr><td><code>N(name)</code> / <code>n(name)</code></td><td>Named pattern node / reference — names lower to ids; <code>pattern.lid("name")</code></td></tr>
 <tr><td><code>N(id: pattern)</code></td><td>Node value must match a Rust pattern (<code>Some(1)</code>, <code>Kind::A { .. }</code>, <code>1..=5</code>, <code>A | B</code>)</td></tr>
@@ -291,6 +295,12 @@ let session = search![&amp;g,
         N(0).test(|p: &amp;Point| p.x &gt; 10.0) ^ N(1)
     }
 ].unwrap();</code></pre>
+<h2 id="parts-of-a-composite-link"><a class="header" href="#parts-of-a-composite-link">Parts of a Composite Link</a></h2>
+<p>When the edge value is a composite, a pattern edge asks the link for the
+parts it must hold: <code>E().has::&lt;T&gt;()</code>, chained <code>.has::&lt;A&gt;().has::&lt;B&gt;()</code>, a
+<code>.test</code> on the part just named, and <code>!E().has::&lt;T&gt;()</code>. Terms on one pair and
+slot merge into one constraint, and a pattern that could never match is a
+typed error of the query. See <a href="./composite-values.html">Composite Values</a>.</p>
 <h2 id="context-nodes"><a class="header" href="#context-nodes">Context Nodes</a></h2>
 <p><code>X(name = node_id)</code> pins a pattern node to a specific graph node, named on the left and given its target on the right:</p>
 <pre><code class="language-rust">use grw::graph::{edge, MGraph};

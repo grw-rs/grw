@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
+            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-d99113f4.js"></script>
+        <script src="toc-0738087a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -197,6 +197,9 @@
 <tr><td><code>e()</code></td><td>Existing edge reference (for value swap)</td></tr>
 <tr><td><code>!e()</code></td><td>Remove existing edge</td></tr>
 <tr><td><code>.val(v)</code></td><td>Set value on node or edge</td></tr>
+<tr><td><code>E().include(p)</code></td><td>Add a part to a composite link, creating the link on a vacant pair</td></tr>
+<tr><td><code>E().exclude::&lt;T&gt;()</code></td><td>Drop a composite link’s <code>T</code> part</td></tr>
+<tr><td><code>E().exclude_kind(k)</code></td><td>Drop the part of a runtime kind</td></tr>
 </tbody>
 </table>
 </div>
@@ -277,6 +280,12 @@ modify!(g, [N(1) &amp; E().val(100u32) ^ N(2)]).unwrap();
 // swap edge value
 modify!(g, [X(0) &amp; e().val(200u32) ^ X(1)]).unwrap();</code></pre>
 <p><svg viewbox="0 0 262 132" style="max-width:262px;display:block;margin:0.8em auto" role="img" aria-label="swap edge"><line x1="90" y1="58" x2="172" y2="58" stroke="#7ee0a3" stroke-width="2.4" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="192" cy="58" r="21" fill="#f0a63f26" /><circle cx="192" cy="58" r="15" fill="#f0a63f" /><text x="192" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><text x="131" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">200</text></svg></p>
+<h2 id="parts-of-a-composite-link"><a class="header" href="#parts-of-a-composite-link">Parts of a Composite Link</a></h2>
+<p>On a graph whose edge value is a composite, a link changes part by part:
+<code>E().include(p)</code>, <code>E().exclude::&lt;T&gt;()</code> and <code>E().exclude_kind(k)</code>, while <code>!e()</code>
+still deletes the whole link. The combinator decides what a link with no parts
+left means — <code>TypeSet</code> removes it. Refusals are typed (<code>PartRejected</code>,
+<code>PartNotHeld</code>, <code>PartConflict</code>). See <a href="./composite-values.html">Composite Values</a>.</p>
 <h2 id="modification-result"><a class="header" href="#modification-result">Modification Result</a></h2>
 <p>The returned <code>Modification</code> struct contains:</p>
 <ul>

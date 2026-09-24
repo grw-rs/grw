@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
+            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-d99113f4.js"></script>
+        <script src="toc-0738087a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -187,8 +187,9 @@
 <li><strong><code>modify!</code></strong> — transactional graph mutation: add/remove/change nodes and edges atomically</li>
 <li><strong><code>search!</code></strong> — graph pattern matching iterator with morphism control</li>
 </ul>
+<p>A link between two nodes can hold a <a href="#composite-values">composite value</a>: several typed parts, included, excluded and searched for one at a time.</p>
 <p>All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying <code>from_fragment()</code> / <code>modify()</code> / <code>compile()</code> functions directly.</p>
-<p>These DSLs are built with <code>macro_rules!</code> — no procedural macros — by overloading Rust operators (<code>^</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code>, <code>&amp;</code>, <code>!</code>) to express graph edge semantics.</p>
+<p>The graph and modify DSLs — <code>mgraph!</code>, <code>vgraph!</code> and <code>modify!</code> — are <code>macro_rules!</code> macros that overload Rust operators (<code>^</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code>, <code>&amp;</code>, <code>!</code>) to express graph edge semantics. <code>search!</code> and <code>pattern!</code> are procedural macros whose pattern grammar lives in the <a href="https://github.com/grw-rs/grw_pattern"><code>grw_pattern</code></a> crate; they, the <code>#[grw::repl]</code> attribute, <code>#[derive(Val)]</code> and <code>#[derive(Part)]</code> come from <a href="https://github.com/grw-rs/grw_derive"><code>grw_derive</code></a>, a required dependency of grw.</p>
 <h2 id="quick-example"><a class="header" href="#quick-example">Quick Example</a></h2>
 <pre><code class="language-rust">use grw::*;
 use grw::graph::edge;
@@ -240,7 +241,7 @@ for m in &amp;session {
 <li><strong>Directed</strong> graphs allow 2 edges per node pair (one in each direction)</li>
 <li><strong>Anydirected</strong> graphs allow 3 edges per node pair (both directions + undirected)</li>
 </ul>
-<p>If you need multiple edges between the same pair with the same orientation, model that as a collection in the edge value type.</p>
+<p>If you need several relations between the same pair with the same orientation, make the edge value a <a href="#composite-values">composite</a>: one link holding several typed parts, at most one per kind.</p>
 <h2 id="type-aliases"><a class="header" href="#type-aliases">Type Aliases</a></h2>
 <p>Common configurations have convenient aliases:</p>
 <pre><code class="language-rust">// Undirected
@@ -301,6 +302,7 @@ ones in the same transaction.</p>
 <tr><td><code>n(id)</code></td><td>Reference to previously defined node</td></tr>
 <tr><td><code>E()</code></td><td>Edge constructor (for attaching values)</td></tr>
 <tr><td><code>.val(v)</code></td><td>Attach a value to a node or edge</td></tr>
+<tr><td><code>.include(p)</code></td><td>Add a part to a composite edge value (see <a href="#composite-values">Composite Values</a>)</td></tr>
 <tr><td><code>^</code></td><td>Undirected edge</td></tr>
 <tr><td><code>&gt;&gt;</code></td><td>Directed edge (source → target)</td></tr>
 <tr><td><code>&lt;&lt;</code></td><td>Directed edge (target ← source)</td></tr>
@@ -355,6 +357,11 @@ let g: MGraph&lt;(), edge::Undir&lt;f64&gt;&gt; = mgraph![
 let g: MGraph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = mgraph![
     N(0).val("a") &amp; E().val(10) ^ N(1).val("b")
 ].unwrap();</code></pre>
+<h3 id="composite-edge-values"><a class="header" href="#composite-edge-values">Composite Edge Values</a></h3>
+<p>When the edge value is a composite (for example <code>TypeSet&lt;P&gt;</code>),
+<code>E().include(p).include(q)</code> builds one link holding both parts; naming one
+kind twice on a link is a typed build error. See
+<a href="#composite-values">Composite Values</a>.</p>
 <h3 id="anonymous-nodes"><a class="header" href="#anonymous-nodes">Anonymous Nodes</a></h3>
 <pre><code class="language-rust">// ids assigned automatically
 let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N_() ^ N_() ^ N_()].unwrap();</code></pre>
@@ -426,6 +433,9 @@ let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![
 <tr><td><code>e()</code></td><td>Existing edge reference (for value swap)</td></tr>
 <tr><td><code>!e()</code></td><td>Remove existing edge</td></tr>
 <tr><td><code>.val(v)</code></td><td>Set value on node or edge</td></tr>
+<tr><td><code>E().include(p)</code></td><td>Add a part to a composite link, creating the link on a vacant pair</td></tr>
+<tr><td><code>E().exclude::&lt;T&gt;()</code></td><td>Drop a composite link’s <code>T</code> part</td></tr>
+<tr><td><code>E().exclude_kind(k)</code></td><td>Drop the part of a runtime kind</td></tr>
 </tbody>
 </table>
 </div>
@@ -506,6 +516,12 @@ modify!(g, [N(1) &amp; E().val(100u32) ^ N(2)]).unwrap();
 // swap edge value
 modify!(g, [X(0) &amp; e().val(200u32) ^ X(1)]).unwrap();</code></pre>
 <p><svg viewbox="0 0 262 132" style="max-width:262px;display:block;margin:0.8em auto" role="img" aria-label="swap edge"><line x1="90" y1="58" x2="172" y2="58" stroke="#7ee0a3" stroke-width="2.4" /><circle cx="70" cy="58" r="21" fill="#f0a63f26" /><circle cx="70" cy="58" r="15" fill="#f0a63f" /><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="192" cy="58" r="21" fill="#f0a63f26" /><circle cx="192" cy="58" r="15" fill="#f0a63f" /><text x="192" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><text x="131" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">200</text></svg></p>
+<h2 id="parts-of-a-composite-link"><a class="header" href="#parts-of-a-composite-link">Parts of a Composite Link</a></h2>
+<p>On a graph whose edge value is a composite, a link changes part by part:
+<code>E().include(p)</code>, <code>E().exclude::&lt;T&gt;()</code> and <code>E().exclude_kind(k)</code>, while <code>!e()</code>
+still deletes the whole link. The combinator decides what a link with no parts
+left means — <code>TypeSet</code> removes it. Refusals are typed (<code>PartRejected</code>,
+<code>PartNotHeld</code>, <code>PartConflict</code>). See <a href="#composite-values">Composite Values</a>.</p>
 <h2 id="modification-result"><a class="header" href="#modification-result">Modification Result</a></h2>
 <p>The returned <code>Modification</code> struct contains:</p>
 <ul>
@@ -546,6 +562,10 @@ let real_id = result.new_node_ids[&amp;LocalId(1)];</code></pre>
 <tr><td><code>N(id).val(v)</code></td><td>Node value — exact match</td></tr>
 <tr><td><code>N(id).test(|v| ...)</code></td><td>Node value predicate</td></tr>
 <tr><td><code>E().val(v)</code></td><td>Edge value — exact match</td></tr>
+<tr><td><code>E().test(|v| ...)</code></td><td>Edge value predicate</td></tr>
+<tr><td><code>E().has::&lt;T&gt;()</code> / <code>E().has_kind(k)</code></td><td>The link holds a part of that kind (composite edge values)</td></tr>
+<tr><td><code>E().has::&lt;T&gt;().test(|t: &amp;T| ...)</code></td><td>Predicate on the part just named</td></tr>
+<tr><td><code>!E().has::&lt;T&gt;()</code></td><td>No link holding that part — unlike <code>!E()</code>, another part may still link the pair</td></tr>
 <tr><td><code>X(id)</code></td><td>Context node — pinned to a specific graph node</td></tr>
 <tr><td><code>N(name)</code> / <code>n(name)</code></td><td>Named pattern node / reference — names lower to ids; <code>pattern.lid("name")</code></td></tr>
 <tr><td><code>N(id: pattern)</code></td><td>Node value must match a Rust pattern (<code>Some(1)</code>, <code>Kind::A { .. }</code>, <code>1..=5</code>, <code>A | B</code>)</td></tr>
@@ -640,6 +660,12 @@ let session = search![&amp;g,
         N(0).test(|p: &amp;Point| p.x &gt; 10.0) ^ N(1)
     }
 ].unwrap();</code></pre>
+<h2 id="parts-of-a-composite-link-1"><a class="header" href="#parts-of-a-composite-link-1">Parts of a Composite Link</a></h2>
+<p>When the edge value is a composite, a pattern edge asks the link for the
+parts it must hold: <code>E().has::&lt;T&gt;()</code>, chained <code>.has::&lt;A&gt;().has::&lt;B&gt;()</code>, a
+<code>.test</code> on the part just named, and <code>!E().has::&lt;T&gt;()</code>. Terms on one pair and
+slot merge into one constraint, and a pattern that could never match is a
+typed error of the query. See <a href="#composite-values">Composite Values</a>.</p>
 <h2 id="context-nodes"><a class="header" href="#context-nodes">Context Nodes</a></h2>
 <p><code>X(name = node_id)</code> pins a pattern node to a specific graph node, named on the left and given its target on the right:</p>
 <pre><code class="language-rust">use grw::graph::{edge, MGraph};
@@ -1079,6 +1105,378 @@ injectivity composes across them.</li>
 <li><strong>Cycles → free endpoints + an injective path cluster</strong> referencing them.</li>
 </ol>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="composite-values"><a class="header" href="#composite-values">Composite Values</a></h1>
+<p>Between two nodes a graph holds at most <strong>one link per slot</strong> (see
+<a href="#graph-model">Graph Model</a>). When one link must say several things at
+once — two nodes that are related in more than one way — its value is a
+<strong>composite</strong>: a set of typed <strong>parts</strong>, at most one part per <strong>kind</strong>. The
+link stays one link; its value grows and shrinks part by part.</p>
+<p>The <code>Composite</code> trait is the contract: build a value from one part, list its
+parts, look one up by kind, include a part, exclude a kind. Each refusal is
+the combinator’s own typed error. grw ships one combinator, <code>TypeSet&lt;P&gt;</code>, and
+a downstream crate can write its own.</p>
+<p>The snippets in this chapter share these imports and declarations:</p>
+<pre><code class="language-rust">use grw::composite::{Composite, Included, KindOf, Kinded, Part, Removed, TypeSet, Typed};
+use grw::edge::Dir;
+use grw::graph::{Graph, MGraph};
+use grw::modify::error::{apply, Apply, Modify};
+use grw::{id, mgraph, modify, search};</code></pre>
+<h2 id="declaring-the-parts-derivepart"><a class="header" href="#declaring-the-parts-derivepart">Declaring the parts: <code>#[derive(Part)]</code></a></h2>
+<p>Each variant of a part enum is one kind, and holds exactly one payload type:</p>
+<pre><code class="language-rust">#[derive(Debug, Clone, PartialEq)]
+pub struct Signs {
+    pub since: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Uses {
+    pub service: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Part)]
+pub enum Rel {
+    Signs(Signs),
+    Uses(Uses),
+}
+
+pub type Link = TypeSet&lt;Rel&gt;;</code></pre>
+<p><code>#[derive(Part)]</code> generates a fieldless kind enum (<code>RelKind { Signs, Uses }</code>),
+implements <code>Kinded</code> for <code>Rel</code>, <code>From&lt;Signs&gt;</code> / <code>From&lt;Uses&gt;</code> for <code>Rel</code>, and
+<code>PartOf&lt;Signs&gt;</code> / <code>PartOf&lt;Uses&gt;</code>, which name the static kind of each payload
+type. From those, every composite over <code>Rel</code> answers by type:
+<code>get::&lt;Signs&gt;()</code>, <code>include(Uses { .. })</code>, <code>exclude::&lt;Signs&gt;()</code> (the <code>Typed</code>
+trait) and, in patterns, <code>has::&lt;Signs&gt;()</code>. The derive refuses a struct, a
+generic enum, a variant that is not a single-field tuple variant, and two
+variants with the same payload type.</p>
+<p>A part type does not need the derive: any type implementing <code>Kinded</code> can be
+the part of a <code>TypeSet</code>, and is then used through the raw-part forms
+(<code>include(part)</code>, <code>exclude_kind(kind)</code>, <code>has_kind(kind)</code>).</p>
+<h2 id="typeset"><a class="header" href="#typeset"><code>TypeSet</code></a></h2>
+<p><code>TypeSet&lt;P&gt;</code> keeps its parts in kind order, one per kind. Including an equal
+part is <code>Included::Held</code> and changes nothing; including a different part of a
+kind already held is refused (<code>KindPresent</code>); excluding a kind not held is
+refused (<code>NotHeld</code>); excluding the last part leaves nothing, and the link is
+removed.</p>
+<pre><code class="language-rust">let link = Link::from_part(Rel::from(Signs { since: 2023 }));
+let Ok(Included::Added(link)) = link.include(Uses { service: 7 }) else {
+    panic!("Uses is new to the link");
+};
+
+assert_eq!(link.get::&lt;Signs&gt;(), Some(&amp;Signs { since: 2023 }));
+assert_eq!(link.parts().count(), 2);
+assert_eq!(link.include(Uses { service: 7 }).ok(), Some(Included::Held));
+assert_eq!(link.include(Uses { service: 8 }).err().map(|refused| refused.kind), Some(RelKind::Uses));
+assert_eq!(link.exclude::&lt;Uses&gt;().ok(), Some(Removed::Remains(Link::from_part(Rel::from(Signs { since: 2023 })))));</code></pre>
+<h2 id="building-mgraph--vgraph"><a class="header" href="#building-mgraph--vgraph">Building: <code>mgraph!</code> / <code>vgraph!</code></a></h2>
+<p><code>E().include(p)</code> puts a part on the link; further <code>.include(q)</code> calls add more
+parts to the same link. Naming one kind twice on one link is a typed build
+error (<code>graph::error::Part::Repeated</code>), even when the two parts are equal.</p>
+<pre><code class="language-rust">let g = mgraph![&lt;(), Dir&lt;Link&gt;&gt;;
+    N(0) &amp; E().include(Signs { since: 2023 }).include(Uses { service: 7 }) &gt;&gt; N(1),
+    n(1) &amp; E().include(Uses { service: 9 }) &gt;&gt; N(2),
+]
+.unwrap();
+assert_eq!(g.edge_count(), 2);
+
+let twice = mgraph![&lt;(), Dir&lt;Link&gt;&gt;;
+    N(0) &amp; E().include(Signs { since: 2023 }).include(Signs { since: 2024 }) &gt;&gt; N(1)
+];
+assert!(twice.is_err());</code></pre>
+<p><code>E().val(whole)</code> still takes a whole composite value as given.</p>
+<h2 id="changing-modify"><a class="header" href="#changing-modify">Changing: <code>modify!</code></a></h2>
+<pre><code class="language-rust">let mut g = mgraph![&lt;(), Dir&lt;Link&gt;&gt;;
+    N(0) &amp; E().include(Signs { since: 2023 }) &gt;&gt; N(1),
+    n(1) &amp; E().include(Uses { service: 9 }) &gt;&gt; N(2),
+]
+.unwrap();
+
+modify!(g, [X(0) &amp; E().include(Uses { service: 7 }) &gt;&gt; x(1)]).unwrap();
+modify!(g, [X(0) &amp; E().include(Uses { service: 4 }) &gt;&gt; x(2)]).unwrap();
+modify!(g, [X(0) &amp; E().exclude::&lt;Signs&gt;() &gt;&gt; x(1)]).unwrap();
+modify!(g, [X(1) &amp; E().exclude_kind(RelKind::Uses) &gt;&gt; x(2)]).unwrap();
+modify!(g, [X(0) &amp; !e() &gt;&gt; x(2)]).unwrap();
+
+assert_eq!(g.edge_count(), 1);
+let (_, link) = g.edges_between(id::N(0), id::N(1)).next().unwrap();
+assert_eq!(link.get::&lt;Uses&gt;(), Some(&amp;Uses { service: 7 }));
+assert_eq!(link.get::&lt;Signs&gt;(), None);</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Form</th><th>Effect</th></tr>
+</thead>
+<tbody>
+<tr><td><code>E().include(p)</code></td><td>the link holds <code>p</code>; on a vacant pair the link is created</td></tr>
+<tr><td><code>E().exclude::&lt;T&gt;()</code></td><td>the link drops its <code>T</code> part</td></tr>
+<tr><td><code>E().exclude_kind(k)</code></td><td>the same, with the kind chosen at runtime</td></tr>
+<tr><td><code>!e()</code></td><td>the whole link is deleted, every part with it</td></tr>
+</tbody>
+</table>
+</div>
+<p>Part operations on one pair in one <code>modify!</code> fold in order into one change of
+the link: an add, a value swap, a removal, or nothing when the result equals
+the stored value.</p>
+<h3 id="refusals"><a class="header" href="#refusals">Refusals</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Error (<code>modify::error::apply::Edge</code>)</th><th>When</th></tr>
+</thead>
+<tbody>
+<tr><td><code>PartRejected { refused, .. }</code></td><td>the combinator refused an include</td></tr>
+<tr><td><code>PartNotHeld { refused, .. }</code></td><td>the combinator refused an exclude</td></tr>
+<tr><td><code>PartConflict(a, b)</code></td><td>one <code>modify!</code> changes a link both whole (<code>e().val</code>, <code>!e()</code>, a new <code>E()</code>) and part by part</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>refused</code> carries the combinator’s own refusal, unchanged; read it back by
+naming the combinator: <code>refused.of::&lt;Link&gt;()</code>. A refused batch applies
+nothing.</p>
+<pre><code class="language-rust">let mut g = mgraph![&lt;(), Dir&lt;Link&gt;&gt;; N(0) &amp; E().include(Signs { since: 2023 }) &gt;&gt; N(1)].unwrap();
+
+match modify!(g, [X(0) &amp; E().include(Signs { since: 1999 }) &gt;&gt; x(1)]).err() {
+    Some(Modify::Apply(Apply::Edge(apply::Edge::PartRejected { refused, .. }))) =&gt; {
+        assert_eq!(refused.of::&lt;Link&gt;().map(|r| r.kind), Some(RelKind::Signs));
+    }
+    other =&gt; panic!("expected PartRejected, got {other:?}"),
+}
+
+match modify!(g, [X(0) &amp; E().exclude::&lt;Uses&gt;() &gt;&gt; x(1)]).err() {
+    Some(Modify::Apply(Apply::Edge(apply::Edge::PartNotHeld { refused, .. }))) =&gt; {
+        assert_eq!(refused.of::&lt;Link&gt;().map(|r| r.kind), Some(RelKind::Uses));
+    }
+    other =&gt; panic!("expected PartNotHeld, got {other:?}"),
+}
+
+let whole = Link::from_part(Rel::from(Uses { service: 7 }));
+let both = modify!(g, [X(0) &amp; e().val(whole) &gt;&gt; x(1), x(0) &amp; E().exclude::&lt;Signs&gt;() &gt;&gt; x(1)]);
+assert!(matches!(both.err(), Some(Modify::Apply(Apply::Edge(apply::Edge::PartConflict(_, _))))));</code></pre>
+<h2 id="a-combinator-of-your-own"><a class="header" href="#a-combinator-of-your-own">A combinator of your own</a></h2>
+<p>What an empty composite means is the combinator’s decision. <code>TypeSet</code> says the
+link is gone. A combinator that keeps a hollow link says otherwise — this one
+answers <code>Removed::Remains</code> with no parts left:</p>
+<pre><code class="language-rust">#[derive(Debug, thiserror::Error)]
+#[error("the link already holds another {0:?}")]
+pub struct OtherPartHeld&lt;K: std::fmt::Debug&gt;(pub K);
+
+#[derive(Debug, thiserror::Error)]
+#[error("the link holds no {0:?}")]
+pub struct NothingToExclude&lt;K: std::fmt::Debug&gt;(pub K);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeepHollow&lt;P&gt; {
+    parts: Vec&lt;P&gt;,
+}
+
+impl&lt;P: Kinded&gt; KeepHollow&lt;P&gt; {
+    pub fn is_hollow(&amp;self) -&gt; bool {
+        self.parts.is_empty()
+    }
+
+    fn at(&amp;self, kind: &amp;P::Kind) -&gt; Result&lt;usize, usize&gt; {
+        self.parts.binary_search_by(|held| held.kind().cmp(kind))
+    }
+}
+
+impl&lt;P: Kinded + Clone + PartialEq&gt; Composite for KeepHollow&lt;P&gt; {
+    type Part = P;
+    type IncludeRefused = OtherPartHeld&lt;P::Kind&gt;;
+    type ExcludeRefused = NothingToExclude&lt;P::Kind&gt;;
+
+    fn from_part(part: P) -&gt; Self {
+        KeepHollow { parts: vec![part] }
+    }
+
+    fn parts(&amp;self) -&gt; impl Iterator&lt;Item = &amp;P&gt; {
+        self.parts.iter()
+    }
+
+    fn part(&amp;self, kind: &amp;KindOf&lt;Self&gt;) -&gt; Option&lt;&amp;P&gt; {
+        self.at(kind).ok().map(|i| &amp;self.parts[i])
+    }
+
+    fn with_part(&amp;self, part: P) -&gt; Result&lt;Included&lt;Self&gt;, OtherPartHeld&lt;P::Kind&gt;&gt; {
+        match self.at(&amp;part.kind()) {
+            Ok(i) if self.parts[i] == part =&gt; Ok(Included::Held),
+            Ok(_) =&gt; Err(OtherPartHeld(part.kind())),
+            Err(i) =&gt; {
+                let mut parts = self.parts.clone();
+                parts.insert(i, part);
+                Ok(Included::Added(KeepHollow { parts }))
+            }
+        }
+    }
+
+    fn without_part(&amp;self, kind: &amp;KindOf&lt;Self&gt;) -&gt; Result&lt;Removed&lt;Self&gt;, NothingToExclude&lt;P::Kind&gt;&gt; {
+        match self.at(kind) {
+            Ok(i) =&gt; {
+                let mut parts = self.parts.clone();
+                parts.remove(i);
+                Ok(Removed::Remains(KeepHollow { parts }))
+            }
+            Err(_) =&gt; Err(NothingToExclude(kind.clone())),
+        }
+    }
+}</code></pre>
+<p>The graph DSLs and the engine work with any <code>Composite</code>:</p>
+<pre><code class="language-rust">let mut g = mgraph![&lt;(), Dir&lt;KeepHollow&lt;Rel&gt;&gt;&gt;;
+    N(0) &amp; E().include(Signs { since: 2023 }) &gt;&gt; N(1)
+]
+.unwrap();
+
+modify!(g, [X(0) &amp; E().exclude::&lt;Signs&gt;() &gt;&gt; x(1)]).unwrap();
+
+assert_eq!(g.edge_count(), 1);
+assert!(g.edges_between(id::N(0), id::N(1)).all(|(_, link)| link.is_hollow()));</code></pre>
+<h2 id="searching-has"><a class="header" href="#searching-has">Searching: <code>has</code></a></h2>
+<p>The examples search this graph:</p>
+<pre><code class="language-rust">fn hub() -&gt; MGraph&lt;(), Dir&lt;Link&gt;&gt; {
+    mgraph![&lt;(), Dir&lt;Link&gt;&gt;;
+        N(0) &amp; E().include(Signs { since: 2021 }) &gt;&gt; N(1),
+        n(0) &amp; E().include(Signs { since: 2022 }) &gt;&gt; N(2),
+        n(0) &amp; E().include(Signs { since: 2023 }) &gt;&gt; N(3),
+        n(1) &amp; E().include(Signs { since: 2024 }) &gt;&gt; n(2),
+        n(2) &amp; E().include(Uses { service: 7 }) &gt;&gt; n(3),
+    ]
+    .unwrap()
+}</code></pre>
+<pre><code class="language-rust">let g = hub();
+
+let signed = search![&amp;g, get(Mono) { N(0) &amp; E().has::&lt;Signs&gt;() &gt;&gt; N(1) }].unwrap();
+assert_eq!(signed.iter().count(), 4);
+
+let recent = search![&amp;g, get(Mono) {
+    N(0) &amp; E().has::&lt;Signs&gt;().test(|s: &amp;Signs| s.since &gt;= 2023) &gt;&gt; N(1)
+}]
+.unwrap();
+assert_eq!(recent.iter().count(), 2);
+
+let raw = search![&amp;g, get(Mono) {
+    N(0) &amp; E().has_kind(RelKind::Uses).test(|p: &amp;Rel| matches!(p, Rel::Uses(u) if u.service == 7)) &gt;&gt; N(1)
+}]
+.unwrap();
+assert_eq!(raw.iter().count(), 1);
+
+let whole = search![&amp;g, get(Mono) { N(0) &amp; E().test(|v: &amp;Link| v.parts().count() == 1) &gt;&gt; N(1) }].unwrap();
+assert_eq!(whole.iter().count(), 5);</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Form</th><th>Matches</th></tr>
+</thead>
+<tbody>
+<tr><td><code>E().has::&lt;T&gt;()</code></td><td>a link holding a <code>T</code> part, whatever else it holds</td></tr>
+<tr><td><code>E().has::&lt;A&gt;().has::&lt;B&gt;()</code></td><td>a link holding both</td></tr>
+<tr><td><code>E().has::&lt;T&gt;().test(|t: &amp;T| ..)</code></td><td>the predicate reads the part named just before it</td></tr>
+<tr><td><code>E().has_kind(k)</code></td><td>the same with a runtime kind; <code>.test</code> then reads the raw part</td></tr>
+<tr><td><code>E().test(|v: &amp;Link| ..)</code></td><td>with no <code>has</code> before it, the predicate reads the whole value</td></tr>
+<tr><td><code>!E().has::&lt;T&gt;()</code></td><td>no link holding a <code>T</code> part — another part may still link the pair</td></tr>
+<tr><td><code>!E()</code></td><td>no link at all</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>has::&lt;T&gt;()</code> compiles only where the link’s value has a <code>T</code> part, and a
+<code>.test</code> closure must take the part its <code>has</code> named.</p>
+<p><code>!E().has::&lt;T&gt;()</code> and <code>!E()</code> differ exactly where a pair is linked by some
+other part:</p>
+<pre><code class="language-rust">let g = hub();
+
+let no_uses = search![&amp;g, get(Mono) {
+    N(0) &amp; E().has::&lt;Signs&gt;() &gt;&gt; N(1),
+    n(0) &amp; E().has::&lt;Signs&gt;() &gt;&gt; N(2),
+    n(1) &amp; !E().has::&lt;Uses&gt;() &gt;&gt; n(2)
+}]
+.unwrap();
+assert_eq!(no_uses.iter().count(), 5);
+
+let no_link = search![&amp;g, get(Mono) {
+    N(0) &amp; E().has::&lt;Signs&gt;() &gt;&gt; N(1),
+    n(0) &amp; E().has::&lt;Signs&gt;() &gt;&gt; N(2),
+    n(1) &amp; !E() &gt;&gt; n(2)
+}]
+.unwrap();
+assert_eq!(no_link.iter().count(), 4);</code></pre>
+<h3 id="terms-on-one-pair-merge"><a class="header" href="#terms-on-one-pair-merge">Terms on one pair merge</a></h3>
+<p>All terms on one pair and slot within a cluster become one constraint on the
+link — a conjunction. <code>E().has::&lt;A&gt;()</code> beside <code>!E().has::&lt;B&gt;()</code> means “holds A
+and not B”, as one pattern edge:</p>
+<pre><code class="language-rust">let g = hub();
+
+let merged = search![&amp;g, get(Mono) {
+    N(0) &amp; E().has::&lt;Signs&gt;() &gt;&gt; N(1),
+    n(0) &amp; !E().has::&lt;Uses&gt;() &gt;&gt; n(1)
+}]
+.unwrap();
+assert_eq!(merged.query().edge_count(), 1);
+assert_eq!(merged.iter().count(), 4);
+
+let contradiction = search![&amp;g, get(Mono) {
+    N(0) &amp; E().has::&lt;Signs&gt;() &gt;&gt; N(1),
+    n(0) &amp; !E().has::&lt;Signs&gt;() &gt;&gt; n(1)
+}];
+assert!(contradiction.is_err());</code></pre>
+<p>The query refuses what could never match, with typed errors of
+<code>search::error::Edge</code>:</p>
+<ul>
+<li><code>PartRepeated</code> — one kind required twice on one link;</li>
+<li><code>Contradictory</code> — what one term requires another forbids: <code>!E()</code> beside
+a positive term, or an untested <code>!E().has::&lt;A&gt;()…</code> beside a term that
+requires every part it names;</li>
+<li><code>ConflictingPred</code> — a <code>ban</code> cluster putting a part term on a pattern edge
+its <code>get</code> cluster already declared.</li>
+</ul>
+<h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
+<p>A composite value is saved as its parts in kind order; the
+<a href="#persistence-2">snapshot format</a> is unchanged (still v3), and the file
+header’s edge layout hash tells a composite file from any other. <code>load</code> /
+<code>load_with</code> remain strict: a non-canonical part order is refused, never
+re-sorted.</p>
+<p>A snapshot written while each link held one plain value <code>P</code> loads into a
+<code>TypeSet&lt;P&gt;</code> graph through the explicit promoting path only — each old link
+becomes a one-part link. The part type here implements <code>Kinded</code> by hand:</p>
+<pre><code class="language-rust">use grw::composite::Kinded;
+use grw::Val;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Val, serde::Serialize, serde::Deserialize)]
+pub enum Role {
+    Owner,
+    Reader,
+}
+
+#[derive(Debug, Clone, PartialEq, Val, serde::Serialize, serde::Deserialize)]
+pub struct Grant {
+    pub role: Role,
+    pub since: u32,
+}
+
+impl Kinded for Grant {
+    type Kind = Role;
+
+    fn kind(&amp;self) -&gt; Role {
+        self.role
+    }
+}</code></pre>
+<pre><code class="language-rust">use grw::graph::VGraph;
+use promoted::{Grant, Role};
+
+let old: MGraph&lt;(), Dir&lt;Grant&gt;&gt; = mgraph![&lt;(), Dir&lt;Grant&gt;&gt;;
+    N(0) &amp; E().val(Grant { role: Role::Owner, since: 2020 }) &gt;&gt; N(1)
+]
+.unwrap();
+let path = std::env::temp_dir().join(format!("grw_book_promoted_{}.grw", std::process::id()));
+old.save(&amp;path).unwrap();
+
+assert!(MGraph::&lt;(), Dir&lt;TypeSet&lt;Grant&gt;&gt;&gt;::load(&amp;path).is_err());
+let g: MGraph&lt;(), Dir&lt;TypeSet&lt;Grant&gt;&gt;&gt; = MGraph::load_promoting(&amp;path).unwrap();
+let (_, link) = g.edges_between(id::N(0), id::N(1)).next().unwrap();
+assert_eq!(link.parts().count(), 1);
+let v: VGraph&lt;(), Dir&lt;TypeSet&lt;Grant&gt;&gt;&gt; = VGraph::load_promoting(&amp;path).unwrap();
+assert_eq!(v.edge_count(), 1);
+
+std::fs::remove_file(&amp;path).unwrap();</code></pre>
+<p><code>load_promoting_with(path, decls)</code> restores indices as <code>load_with</code> does. A file
+whose edge values are neither the composite nor its part is refused.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="versioned-graphs"><a class="header" href="#versioned-graphs">Versioned Graphs</a></h1>
 <p><code>MGraph</code> mutates in place: <code>modify!</code> takes <code>&amp;mut self</code> and the graph you had
 is the graph you now have. <code>VGraph</code> is the same graph as a <strong>value</strong>. Every
@@ -1435,7 +1833,7 @@ representation change without re-declaring them by hand.</p>
 with <code>.key(index, value)</code> / <code>.key_in(index, [values])</code>, seeding the search
 with the index’s hit set instead of scanning every node — see
 <a href="#key-predicates">Key Predicates</a>.</p>
-<h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
+<h2 id="persistence-1"><a class="header" href="#persistence-1">Persistence</a></h2>
 <p>The <code>.grw</code> snapshot format carries the whole catalogue and every table
 alongside the graph — see <a href="#indices-1">Persistence</a>. <code>save</code>
 writes them, <code>load</code> refuses a file whose catalogue is non-empty (naming the
@@ -1547,7 +1945,7 @@ let count2 = Seq::search(r.query(), &amp;indexed).unwrap().count();</code></pre>
 <h2 id="key-predicates-bypass-the-scan"><a class="header" href="#key-predicates-bypass-the-scan">Key Predicates Bypass The Scan</a></h2>
 <p>A <a href="#key-predicates"><code>.key</code>/<code>.key_in</code></a> predicate never touches <code>value_groups</code> at all, on any tier: it resolves straight through the graph’s own <a href="#indices">index</a> tables (<code>Graph::index_hit</code>), producing a candidate pool directly instead of scanning node values.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="persistence-1"><a class="header" href="#persistence-1">Persistence</a></h1>
+<h1 id="persistence-2"><a class="header" href="#persistence-2">Persistence</a></h1>
 <p>GRW graphs can be saved to and loaded from binary <code>.grw</code> files (format
 version 3), with layout validation and an integrity check over the whole
 file.</p>
@@ -1653,6 +2051,14 @@ structure using FNV hashing. This catches:</p>
 <li>Reordered fields</li>
 <li>Added/removed fields</li>
 </ul>
+<h2 id="composite-edge-values-1"><a class="header" href="#composite-edge-values-1">Composite Edge Values</a></h2>
+<p>A composite edge value such as <code>TypeSet&lt;P&gt;</code> is saved as its parts in kind
+order, under its own layout hash, so the format is still v3. A file written
+while each link held a plain <code>P</code> fails the strict edge layout check; it loads
+into a <code>TypeSet&lt;P&gt;</code> graph only through the explicit
+<code>load_promoting</code>/<code>load_promoting_with</code> (on <code>MGraph</code> and <code>VGraph</code>), each old
+link becoming a one-part link. See
+<a href="#persistence">Composite Values</a>.</p>
 <h2 id="loading-an-old-file-convert"><a class="header" href="#loading-an-old-file-convert">Loading an old file: <code>convert</code></a></h2>
 <p>A file written by the pre-v3 format is rejected by <code>load</code>/<code>load_with</code>/
 <code>read_header</code> with a message naming <code>convert</code>:</p>
@@ -1821,6 +2227,8 @@ watched.modify(ops).unwrap();
 <li><code>N(name)</code> / <code>n(name)</code> — named pattern node / reference, alongside integer <code>N(id)</code> / <code>n(id)</code></li>
 <li><code>N(id: pattern)</code> / <code>N(name: pattern)</code> — node value must match a Rust pattern</li>
 <li><code>E(pattern)</code> — edge value must match a Rust pattern</li>
+<li><code>E().has::&lt;T&gt;()</code> / <code>E().has_kind(k)</code> — the link holds a part of that kind; <code>.test(|t: &amp;T| ..)</code> reads that part</li>
+<li><code>!E().has::&lt;T&gt;()</code> — no link holding that part; <code>!E()</code> — no link at all</li>
 <li><code>X(name = node_id)</code> / <code>X(name = node_id : pattern)</code> — context node pinned to a graph node, optionally value-checked</li>
 <li><code>pattern![..]</code> — graph-free <code>Pattern</code>; rejects <code>X(..)</code></li>
 <li><code>search![&amp;g, p]</code> / <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> — run a stored pattern, optionally pinning named nodes</li>

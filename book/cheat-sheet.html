@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
+            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-d99113f4.js"></script>
+        <script src="toc-0738087a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -268,6 +268,8 @@
 <li><code>N(name)</code> / <code>n(name)</code> — named pattern node / reference, alongside integer <code>N(id)</code> / <code>n(id)</code></li>
 <li><code>N(id: pattern)</code> / <code>N(name: pattern)</code> — node value must match a Rust pattern</li>
 <li><code>E(pattern)</code> — edge value must match a Rust pattern</li>
+<li><code>E().has::&lt;T&gt;()</code> / <code>E().has_kind(k)</code> — the link holds a part of that kind; <code>.test(|t: &amp;T| ..)</code> reads that part</li>
+<li><code>!E().has::&lt;T&gt;()</code> — no link holding that part; <code>!E()</code> — no link at all</li>
 <li><code>X(name = node_id)</code> / <code>X(name = node_id : pattern)</code> — context node pinned to a graph node, optionally value-checked</li>
 <li><code>pattern![..]</code> — graph-free <code>Pattern</code>; rejects <code>X(..)</code></li>
 <li><code>search![&amp;g, p]</code> / <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> — run a stored pattern, optionally pinning named nodes</li>

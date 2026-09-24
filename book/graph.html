@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
+            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-d99113f4.js"></script>
+        <script src="toc-0738087a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -192,6 +192,7 @@
 <tr><td><code>n(id)</code></td><td>Reference to previously defined node</td></tr>
 <tr><td><code>E()</code></td><td>Edge constructor (for attaching values)</td></tr>
 <tr><td><code>.val(v)</code></td><td>Attach a value to a node or edge</td></tr>
+<tr><td><code>.include(p)</code></td><td>Add a part to a composite edge value (see <a href="./composite-values.html">Composite Values</a>)</td></tr>
 <tr><td><code>^</code></td><td>Undirected edge</td></tr>
 <tr><td><code>&gt;&gt;</code></td><td>Directed edge (source → target)</td></tr>
 <tr><td><code>&lt;&lt;</code></td><td>Directed edge (target ← source)</td></tr>
@@ -246,6 +247,11 @@ let g: MGraph&lt;(), edge::Undir&lt;f64&gt;&gt; = mgraph![
 let g: MGraph&lt;&amp;str, edge::Undir&lt;u32&gt;&gt; = mgraph![
     N(0).val("a") &amp; E().val(10) ^ N(1).val("b")
 ].unwrap();</code></pre>
+<h3 id="composite-edge-values"><a class="header" href="#composite-edge-values">Composite Edge Values</a></h3>
+<p>When the edge value is a composite (for example <code>TypeSet&lt;P&gt;</code>),
+<code>E().include(p).include(q)</code> builds one link holding both parts; naming one
+kind twice on a link is a typed build error. See
+<a href="./composite-values.html">Composite Values</a>.</p>
 <h3 id="anonymous-nodes"><a class="header" href="#anonymous-nodes">Anonymous Nodes</a></h3>
 <pre><code class="language-rust">// ids assigned automatically
 let g: MGraph&lt;(), edge::Undir&lt;()&gt;&gt; = mgraph![N_() ^ N_() ^ N_()].unwrap();</code></pre>

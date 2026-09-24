@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ac346e.js";
+            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-d99113f4.js"></script>
+        <script src="toc-0738087a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -204,7 +204,7 @@
 <li><strong>Directed</strong> graphs allow 2 edges per node pair (one in each direction)</li>
 <li><strong>Anydirected</strong> graphs allow 3 edges per node pair (both directions + undirected)</li>
 </ul>
-<p>If you need multiple edges between the same pair with the same orientation, model that as a collection in the edge value type.</p>
+<p>If you need several relations between the same pair with the same orientation, make the edge value a <a href="./composite-values.html">composite</a>: one link holding several typed parts, at most one per kind.</p>
 <h2 id="type-aliases"><a class="header" href="#type-aliases">Type Aliases</a></h2>
 <p>Common configurations have convenient aliases:</p>
 <pre><code class="language-rust">// Undirected

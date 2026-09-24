@@ -208,7 +208,7 @@
       <p class="eyebrow">Graph rewriting · Rust</p>
       <h1>Graphs as<br>a <span class="em">first-class</span><br>expression.</h1>
       <p class="lede">Build a graph, mutate it transactionally, run patterns over it, consume the matches — one loop, inside a Rust process.</p>
-      <p class="sub">Three small DSLs built on <code>macro_rules!</code> — no procedural macros — overload Rust's operators so an edge is just <code>^</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code> — and a variable-length path is just <code>..</code>.</p>
+      <p class="sub">Three small DSLs overload Rust's operators so an edge is just <code>^</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code> — and a variable-length path is just <code>..</code>. <code>mgraph!</code> and <code>modify!</code> are <code>macro_rules!</code>; <code>search!</code> is a procedural macro from <code>grw_derive</code>.</p>
       <div class="loop">
         <a href="#act1">mgraph!</a><span class="sep">→</span>
         <a href="#act2">modify!</a><span class="sep">→</span>
