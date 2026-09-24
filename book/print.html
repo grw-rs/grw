@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5a0e06ac.js";
+            window.path_to_searchindex_js = "searchindex-46788db4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0738087a.js"></script>
@@ -1167,6 +1167,9 @@ assert_eq!(link.parts().count(), 2);
 assert_eq!(link.include(Uses { service: 7 }).ok(), Some(Included::Held));
 assert_eq!(link.include(Uses { service: 8 }).err().map(|refused| refused.kind), Some(RelKind::Uses));
 assert_eq!(link.exclude::&lt;Uses&gt;().ok(), Some(Removed::Remains(Link::from_part(Rel::from(Signs { since: 2023 })))));</code></pre>
+<p>Part operations work on <code>Dir</code> and <code>Undir</code> graphs whose edge value is a
+composite. An <code>Anydir</code> graph’s value (<code>AnyVal&lt;U, D&gt;</code>) is not one, so
+<code>include</code>, <code>exclude</code> and <code>has</code> do not compile there.</p>
 <h2 id="building-mgraph--vgraph"><a class="header" href="#building-mgraph--vgraph">Building: <code>mgraph!</code> / <code>vgraph!</code></a></h2>
 <p><code>E().include(p)</code> puts a part on the link; further <code>.include(q)</code> calls add more
 parts to the same link. Naming one kind twice on one link is a typed build
