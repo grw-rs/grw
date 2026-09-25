@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-edf48a87.js";
+            window.path_to_searchindex_js = "searchindex-d9271aff.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0738087a.js"></script>
@@ -543,7 +543,9 @@ value’s own, read back with <code>refused.of::&lt;Bond&gt;()</code> on <code>^
 slot (only a whole-value op can put one there) is refused with
 <code>apply::Edge::SlotClass</code>.</p>
 <p>Outside <code>search!</code>, <code>has</code> and <code>has_kind</code> on a bare <code>E()</code> come from the
-<code>grw::search::dsl::Seek</code> trait, which has to be in scope.</p>
+<code>grw::search::dsl::Seek</code> trait, which has to be in scope; <code>use grw::prelude::*;</code>
+brings it in together with <code>mgraph!</code>, <code>vgraph!</code>, <code>modify!</code>, <code>search!</code>,
+<code>pattern!</code>, <code>#[derive(Val)]</code>, <code>#[derive(Part)]</code>, <code>Typed</code> and <code>Composite</code>.</p>
 <h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
 <p>A composite value is saved as its parts in kind order; the
 <a href="./persistence.html">snapshot format</a> is unchanged (still v3), and the file
