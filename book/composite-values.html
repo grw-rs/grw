@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d9271aff.js";
+            window.path_to_searchindex_js = "searchindex-5f83cd03.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0738087a.js"></script>
@@ -189,11 +189,12 @@ parts, look one up by kind, include a part, exclude a kind. Each refusal is
 the combinator’s own typed error. grw ships one combinator, <code>TypeSet&lt;P&gt;</code>, and
 a downstream crate can write its own.</p>
 <p>The snippets in this chapter share these imports and declarations:</p>
-<pre><code class="language-rust">use grw::composite::{Composite, Included, KindOf, Kinded, Part, Removed, TypeSet, Typed};
+<pre><code class="language-rust">use grw::prelude::*;
+use grw::composite::{Included, KindOf, Kinded, Removed, TypeSet};
 use grw::edge::{Anydir, Dir};
 use grw::graph::{Graph, MGraph};
 use grw::modify::error::{apply, Apply, Modify};
-use grw::{id, mgraph, modify, search};</code></pre>
+use grw::id;</code></pre>
 <h2 id="declaring-the-parts-derivepart"><a class="header" href="#declaring-the-parts-derivepart">Declaring the parts: <code>#[derive(Part)]</code></a></h2>
 <p>Each variant of a part enum is one kind, and holds exactly one payload type:</p>
 <pre><code class="language-rust">#[derive(Debug, Clone, PartialEq)]
@@ -555,8 +556,8 @@ re-sorted.</p>
 <p>A snapshot written while each link held one plain value <code>P</code> loads into a
 <code>TypeSet&lt;P&gt;</code> graph through the explicit promoting path only — each old link
 becomes a one-part link. The part type here implements <code>Kinded</code> by hand:</p>
-<pre><code class="language-rust">use grw::composite::Kinded;
-use grw::Val;
+<pre><code class="language-rust">use grw::prelude::*;
+use grw::composite::Kinded;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Val, serde::Serialize, serde::Deserialize)]
 pub enum Role {
