@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-46788db4.js";
+            window.path_to_searchindex_js = "searchindex-edf48a87.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0738087a.js"></script>
@@ -695,7 +695,7 @@ let and_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
     ban(Mono) { n(p) ^ N(c), n(q) ^ n(c) }
 ].unwrap();
 let and_session =
-    Session::from_pattern(and_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
+    Session::from_pattern(&amp;and_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
 assert_eq!(and_session.iter().count(), 1); // only p—5 holds, so the ban can't fire
 
 // "none of these": two separate bans, each pinned to the same node 5.
@@ -705,7 +705,7 @@ let or_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
     ban(Mono) { n(q) ^ N(c2) }
 ].unwrap();
 let or_session =
-    Session::from_pattern(or_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
+    Session::from_pattern(&amp;or_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
 assert_eq!(or_session.iter().count(), 0); // p—5 alone is enough to fire the first ban</code></pre>
 <p><code>pattern!</code> rejects <code>X(..)</code> outright (see <a href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a>), so a ban-only position pinned by external id — rather than by <code>.val()</code>/<code>.test()</code>/<code>.key()</code> — is spelled with a plain, named <code>N(c)</code> and bound afterwards through <code>Session::from_pattern</code>’s pins, exactly as <code>and_form</code>/<code>or_form</code> do above.</p>
 <p>A pin on a banned position aims the ban at <em>one specific</em> node instead of the whole graph: “<code>p</code> must not be connected like this to Alice” is not the same claim as “<code>p</code> must not be connected like this to anyone”. Say <code>p1</code> blocks Alice, <code>p2</code> blocks only Bob, and <code>p3</code> blocks nobody:</p>
@@ -843,7 +843,7 @@ to, or the ids a closure predicate admits. It is <code>None</code> when the node
 carries no predicate at all, or when <code>idx</code> is not a pattern node of the
 session’s query — it never panics on an out-of-range index.</p>
 <h2 id="stored-patterns-and-pinning"><a class="header" href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a></h2>
-<p>A <code>Pattern</code> from <code>pattern![..]</code> is consumed by the search it is handed to: <code>search![&amp;g, p]</code> runs it as written, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. A <code>Pattern</code> holds boxed predicates, so it is not <code>Clone</code>; to run the same shape more than once, build it in a constructor function and call that per search — <code>search![&amp;g, cif_incident()]</code>. A pin on a node inside a ban cluster restricts the ban to that one node; see <a href="#negation-bans-and-pins">Negation, Bans And Pins</a>.</p>
+<p>A <code>Pattern</code> from <code>pattern![..]</code> compiles its query once and shares it: <code>search![&amp;g, p]</code> runs it as written and borrows <code>p</code>, so <code>search![&amp;g, p]</code> again — over the same graph or a different one — runs the same compiled query with no rebuild, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. <code>Pattern</code> is <code>Clone</code>: cloning shares the compiled query behind an <code>Arc</code> rather than recompiling it. A pin on a node inside a ban cluster restricts the ban to that one node; see <a href="#negation-bans-and-pins">Negation, Bans And Pins</a>.</p>
 <pre><code class="language-rust">use grw::graph::{edge, MGraph};
 use grw::search::Pattern;
 use grw::{mgraph, pattern, search};
@@ -853,7 +853,7 @@ let p: Pattern&lt;u8, edge::Undir&lt;()&gt;&gt; = pattern![get(Mono) { N(a) ^ N(
 let middle = grw::id::N(1);
 let s = search![&amp;g, p with X(a = middle)].unwrap();
 assert_eq!(s.iter().count(), 2);</code></pre>
-<p>Pinning the same name twice, literally, in one <code>with</code> clause is a compile error (<code>node `a` pinned twice</code>). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is <code>error::Search::UnknownName</code>, pinning the same name twice through the manual <code>Session::from_pattern</code> API is <code>error::Search::DuplicatePin</code>, pinning to a graph node that doesn’t exist is <code>error::Search::TargetMissing</code>, and two different pins landing on the same target node under an injective morphism is <code>error::Search::Bind</code> (<code>BindError::Collision</code>).</p>
+<p>Pinning the same name twice, literally, in one <code>with</code> clause is a compile error (<code>node `a` pinned twice</code>). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is <code>error::Search::UnknownName</code>, pinning the same name twice through the manual <code>Session::from_pattern</code> API is <code>error::Search::Bind</code> (<code>BindError::Duplicate</code>, naming the pinned node), pinning to a graph node that doesn’t exist is <code>error::Search::TargetMissing</code>, and two different pins landing on the same target node under an injective morphism is <code>error::Search::Bind</code> (<code>BindError::Collision</code>).</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="variable-length-paths"><a class="header" href="#variable-length-paths">Variable-Length Paths</a></h1>
 <p>Prefix a pattern node with <code>..</code> and the edge becomes a <strong>variable-length
@@ -1117,7 +1117,7 @@ the combinator’s own typed error. grw ships one combinator, <code>TypeSet&lt;P
 a downstream crate can write its own.</p>
 <p>The snippets in this chapter share these imports and declarations:</p>
 <pre><code class="language-rust">use grw::composite::{Composite, Included, KindOf, Kinded, Part, Removed, TypeSet, Typed};
-use grw::edge::Dir;
+use grw::edge::{Anydir, Dir};
 use grw::graph::{Graph, MGraph};
 use grw::modify::error::{apply, Apply, Modify};
 use grw::{id, mgraph, modify, search};</code></pre>
@@ -1167,9 +1167,10 @@ assert_eq!(link.parts().count(), 2);
 assert_eq!(link.include(Uses { service: 7 }).ok(), Some(Included::Held));
 assert_eq!(link.include(Uses { service: 8 }).err().map(|refused| refused.kind), Some(RelKind::Uses));
 assert_eq!(link.exclude::&lt;Uses&gt;().ok(), Some(Removed::Remains(Link::from_part(Rel::from(Signs { since: 2023 })))));</code></pre>
-<p>Part operations work on <code>Dir</code> and <code>Undir</code> graphs whose edge value is a
-composite. An <code>Anydir</code> graph’s value (<code>AnyVal&lt;U, D&gt;</code>) is not one, so
-<code>include</code>, <code>exclude</code> and <code>has</code> do not compile there.</p>
+<p>Part operations work wherever the value a slot holds is a composite. On a
+<code>Dir</code> or <code>Undir</code> graph that is the edge value itself. On an <code>Anydir&lt;U, D&gt;</code>
+graph the operator picks the slot, and with it the value the part belongs to:
+see <a href="#anydir-graphs-the-operator-picks-the-slot">Anydir graphs</a>.</p>
 <h2 id="building-mgraph--vgraph"><a class="header" href="#building-mgraph--vgraph">Building: <code>mgraph!</code> / <code>vgraph!</code></a></h2>
 <p><code>E().include(p)</code> puts a part on the link; further <code>.include(q)</code> calls add more
 parts to the same link. Naming one kind twice on one link is a typed build
@@ -1428,6 +1429,48 @@ requires every part it names;</li>
 <li><code>ConflictingPred</code> — a <code>ban</code> cluster putting a part term on a pattern edge
 its <code>get</code> cluster already declared.</li>
 </ul>
+<h2 id="anydir-graphs-the-operator-picks-the-slot"><a class="header" href="#anydir-graphs-the-operator-picks-the-slot">Anydir graphs: the operator picks the slot</a></h2>
+<p>An <code>Anydir&lt;U, D&gt;</code> graph holds an undirected value <code>U</code> and a directed value <code>D</code>
+between the same two nodes, each in its own slot (its edge value is
+<code>AnyVal&lt;U, D&gt;</code>). <code>include</code>, <code>exclude</code>, <code>exclude_kind</code>, <code>has</code> and <code>has_kind</code>
+wait for the operator: on <code>^</code> they work on the <code>U</code> held in the undirected
+slot, on <code>&gt;&gt;</code> / <code>&lt;&lt;</code> on the <code>D</code> held in the directed slot. The graph literal’s
+<code>include</code> waits the same way. The two values may be different composites:</p>
+<pre><code class="language-rust">#[derive(Debug, Clone, PartialEq)]
+pub struct Knows {
+    pub since: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Part)]
+pub enum Tie {
+    Knows(Knows),
+}
+
+pub type Bond = TypeSet&lt;Tie&gt;;</code></pre>
+<pre><code class="language-rust">let mut g = mgraph![&lt;(), Anydir&lt;Bond, Link&gt;&gt;;
+    N(0) &amp; E().include(Knows { since: 2019 }) ^ N(1),
+    n(0) &amp; E().include(Signs { since: 2023 }) &gt;&gt; n(1),
+]
+.unwrap();
+assert_eq!(g.edge_count(), 2);
+
+modify!(g, [X(0) &amp; E().include(Uses { service: 7 }) &gt;&gt; x(1), x(1) &amp; E().exclude::&lt;Knows&gt;() ^ x(0)]).unwrap();
+assert_eq!(g.edge_count(), 1);
+
+let known = search![&amp;g, get(Mono) { N(0) &amp; E().has::&lt;Knows&gt;() ^ N(1) }].unwrap();
+assert_eq!(known.iter().count(), 0);
+let used = search![&amp;g, get(Mono) { N(0) &amp; E().has::&lt;Signs&gt;().has::&lt;Uses&gt;() &gt;&gt; N(1) }].unwrap();
+assert_eq!(used.iter().count(), 1);</code></pre>
+<p>A part the slot’s value cannot hold does not compile: <code>E().include(Signs { .. })</code>
+on <code>^</code> names a part of <code>Rel</code>, not of <code>Tie</code>, and so does <code>E().has::&lt;Signs&gt;()</code>
+on <code>^</code>. Everything else is as on <code>Dir</code>: an equal part changes nothing, a batch
+that ends where it started writes nothing, and the refusals are the slot
+value’s own, read back with <code>refused.of::&lt;Bond&gt;()</code> on <code>^</code> and
+<code>refused.of::&lt;Link&gt;()</code> on <code>&gt;&gt;</code> / <code>&lt;&lt;</code>. A value of the other class held in a
+slot (only a whole-value op can put one there) is refused with
+<code>apply::Edge::SlotClass</code>.</p>
+<p>Outside <code>search!</code>, <code>has</code> and <code>has_kind</code> on a bare <code>E()</code> come from the
+<code>grw::search::dsl::Seek</code> trait, which has to be in scope.</p>
 <h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
 <p>A composite value is saved as its parts in kind order; the
 <a href="#persistence-2">snapshot format</a> is unchanged (still v3), and the file
@@ -2054,6 +2097,22 @@ structure using FNV hashing. This catches:</p>
 <li>Reordered fields</li>
 <li>Added/removed fields</li>
 </ul>
+<h2 id="errors"><a class="header" href="#errors">Errors</a></h2>
+<p>Every <code>save</code>, <code>load*</code>, <code>read_header</code> and <code>convert</code> answers a
+<code>persist::Error { path, reason }</code>: the file it read or wrote, and a typed
+<code>Reason</code> — <code>Io</code>, <code>Format</code> (magic, version, section tag or range, truncation,
+trailer hash, cardinality, UTF-8), <code>EdgeKind</code>, <code>Layout { side, .. }</code>,
+<code>Catalogue</code> (an undeclared, unheld or mismatched index), <code>Value { site, source }</code>
+for a node value, edge value, free section or index set bincode refused,
+<code>Promotion</code> and <code>V2</code>.</p>
+<pre><code class="language-rust">use grw::graph::persist::{Layout, Reason, Side};
+
+let Err(err) = MGraph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw")) else { panic!("a u32 file is refused as i64") };
+assert!(matches!(err.reason, Reason::Layout(Layout { side: Side::Node, .. })));</code></pre>
+<p>Reads are strict: every value, the free section and every index set must be
+consumed exactly by its decode, so a slice with bytes left over is a
+<code>Reason::Value</code> naming its site. Writes are the plain <code>bincode::serialize</code>
+output, so every file grw has written still reads.</p>
 <h2 id="composite-edge-values-1"><a class="header" href="#composite-edge-values-1">Composite Edge Values</a></h2>
 <p>A composite edge value such as <code>TypeSet&lt;P&gt;</code> is saved as its parts in kind
 order, under its own layout hash, so the format is still v3. A file written

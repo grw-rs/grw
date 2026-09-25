@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-46788db4.js";
+            window.path_to_searchindex_js = "searchindex-edf48a87.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0738087a.js"></script>
@@ -190,7 +190,7 @@ the combinator’s own typed error. grw ships one combinator, <code>TypeSet&lt;P
 a downstream crate can write its own.</p>
 <p>The snippets in this chapter share these imports and declarations:</p>
 <pre><code class="language-rust">use grw::composite::{Composite, Included, KindOf, Kinded, Part, Removed, TypeSet, Typed};
-use grw::edge::Dir;
+use grw::edge::{Anydir, Dir};
 use grw::graph::{Graph, MGraph};
 use grw::modify::error::{apply, Apply, Modify};
 use grw::{id, mgraph, modify, search};</code></pre>
@@ -240,9 +240,10 @@ assert_eq!(link.parts().count(), 2);
 assert_eq!(link.include(Uses { service: 7 }).ok(), Some(Included::Held));
 assert_eq!(link.include(Uses { service: 8 }).err().map(|refused| refused.kind), Some(RelKind::Uses));
 assert_eq!(link.exclude::&lt;Uses&gt;().ok(), Some(Removed::Remains(Link::from_part(Rel::from(Signs { since: 2023 })))));</code></pre>
-<p>Part operations work on <code>Dir</code> and <code>Undir</code> graphs whose edge value is a
-composite. An <code>Anydir</code> graph’s value (<code>AnyVal&lt;U, D&gt;</code>) is not one, so
-<code>include</code>, <code>exclude</code> and <code>has</code> do not compile there.</p>
+<p>Part operations work wherever the value a slot holds is a composite. On a
+<code>Dir</code> or <code>Undir</code> graph that is the edge value itself. On an <code>Anydir&lt;U, D&gt;</code>
+graph the operator picks the slot, and with it the value the part belongs to:
+see <a href="#anydir-graphs-the-operator-picks-the-slot">Anydir graphs</a>.</p>
 <h2 id="building-mgraph--vgraph"><a class="header" href="#building-mgraph--vgraph">Building: <code>mgraph!</code> / <code>vgraph!</code></a></h2>
 <p><code>E().include(p)</code> puts a part on the link; further <code>.include(q)</code> calls add more
 parts to the same link. Naming one kind twice on one link is a typed build
@@ -501,6 +502,48 @@ requires every part it names;</li>
 <li><code>ConflictingPred</code> — a <code>ban</code> cluster putting a part term on a pattern edge
 its <code>get</code> cluster already declared.</li>
 </ul>
+<h2 id="anydir-graphs-the-operator-picks-the-slot"><a class="header" href="#anydir-graphs-the-operator-picks-the-slot">Anydir graphs: the operator picks the slot</a></h2>
+<p>An <code>Anydir&lt;U, D&gt;</code> graph holds an undirected value <code>U</code> and a directed value <code>D</code>
+between the same two nodes, each in its own slot (its edge value is
+<code>AnyVal&lt;U, D&gt;</code>). <code>include</code>, <code>exclude</code>, <code>exclude_kind</code>, <code>has</code> and <code>has_kind</code>
+wait for the operator: on <code>^</code> they work on the <code>U</code> held in the undirected
+slot, on <code>&gt;&gt;</code> / <code>&lt;&lt;</code> on the <code>D</code> held in the directed slot. The graph literal’s
+<code>include</code> waits the same way. The two values may be different composites:</p>
+<pre><code class="language-rust">#[derive(Debug, Clone, PartialEq)]
+pub struct Knows {
+    pub since: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Part)]
+pub enum Tie {
+    Knows(Knows),
+}
+
+pub type Bond = TypeSet&lt;Tie&gt;;</code></pre>
+<pre><code class="language-rust">let mut g = mgraph![&lt;(), Anydir&lt;Bond, Link&gt;&gt;;
+    N(0) &amp; E().include(Knows { since: 2019 }) ^ N(1),
+    n(0) &amp; E().include(Signs { since: 2023 }) &gt;&gt; n(1),
+]
+.unwrap();
+assert_eq!(g.edge_count(), 2);
+
+modify!(g, [X(0) &amp; E().include(Uses { service: 7 }) &gt;&gt; x(1), x(1) &amp; E().exclude::&lt;Knows&gt;() ^ x(0)]).unwrap();
+assert_eq!(g.edge_count(), 1);
+
+let known = search![&amp;g, get(Mono) { N(0) &amp; E().has::&lt;Knows&gt;() ^ N(1) }].unwrap();
+assert_eq!(known.iter().count(), 0);
+let used = search![&amp;g, get(Mono) { N(0) &amp; E().has::&lt;Signs&gt;().has::&lt;Uses&gt;() &gt;&gt; N(1) }].unwrap();
+assert_eq!(used.iter().count(), 1);</code></pre>
+<p>A part the slot’s value cannot hold does not compile: <code>E().include(Signs { .. })</code>
+on <code>^</code> names a part of <code>Rel</code>, not of <code>Tie</code>, and so does <code>E().has::&lt;Signs&gt;()</code>
+on <code>^</code>. Everything else is as on <code>Dir</code>: an equal part changes nothing, a batch
+that ends where it started writes nothing, and the refusals are the slot
+value’s own, read back with <code>refused.of::&lt;Bond&gt;()</code> on <code>^</code> and
+<code>refused.of::&lt;Link&gt;()</code> on <code>&gt;&gt;</code> / <code>&lt;&lt;</code>. A value of the other class held in a
+slot (only a whole-value op can put one there) is refused with
+<code>apply::Edge::SlotClass</code>.</p>
+<p>Outside <code>search!</code>, <code>has</code> and <code>has_kind</code> on a bare <code>E()</code> come from the
+<code>grw::search::dsl::Seek</code> trait, which has to be in scope.</p>
 <h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
 <p>A composite value is saved as its parts in kind order; the
 <a href="./persistence.html">snapshot format</a> is unchanged (still v3), and the file

@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-46788db4.js";
+            window.path_to_searchindex_js = "searchindex-edf48a87.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0738087a.js"></script>
@@ -284,6 +284,22 @@ structure using FNV hashing. This catches:</p>
 <li>Reordered fields</li>
 <li>Added/removed fields</li>
 </ul>
+<h2 id="errors"><a class="header" href="#errors">Errors</a></h2>
+<p>Every <code>save</code>, <code>load*</code>, <code>read_header</code> and <code>convert</code> answers a
+<code>persist::Error { path, reason }</code>: the file it read or wrote, and a typed
+<code>Reason</code> — <code>Io</code>, <code>Format</code> (magic, version, section tag or range, truncation,
+trailer hash, cardinality, UTF-8), <code>EdgeKind</code>, <code>Layout { side, .. }</code>,
+<code>Catalogue</code> (an undeclared, unheld or mismatched index), <code>Value { site, source }</code>
+for a node value, edge value, free section or index set bincode refused,
+<code>Promotion</code> and <code>V2</code>.</p>
+<pre><code class="language-rust">use grw::graph::persist::{Layout, Reason, Side};
+
+let Err(err) = MGraph::&lt;i64, edge::Undir&lt;i64&gt;&gt;::load(Path::new("u32_graph.grw")) else { panic!("a u32 file is refused as i64") };
+assert!(matches!(err.reason, Reason::Layout(Layout { side: Side::Node, .. })));</code></pre>
+<p>Reads are strict: every value, the free section and every index set must be
+consumed exactly by its decode, so a slice with bytes left over is a
+<code>Reason::Value</code> naming its site. Writes are the plain <code>bincode::serialize</code>
+output, so every file grw has written still reads.</p>
 <h2 id="composite-edge-values"><a class="header" href="#composite-edge-values">Composite Edge Values</a></h2>
 <p>A composite edge value such as <code>TypeSet&lt;P&gt;</code> is saved as its parts in kind
 order, under its own layout hash, so the format is still v3. A file written

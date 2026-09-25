@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "navy";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-46788db4.js";
+            window.path_to_searchindex_js = "searchindex-edf48a87.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0738087a.js"></script>
@@ -330,7 +330,7 @@ let and_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
     ban(Mono) { n(p) ^ N(c), n(q) ^ n(c) }
 ].unwrap();
 let and_session =
-    Session::from_pattern(and_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
+    Session::from_pattern(&amp;and_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
 assert_eq!(and_session.iter().count(), 1); // only p—5 holds, so the ban can't fire
 
 // "none of these": two separate bans, each pinned to the same node 5.
@@ -340,7 +340,7 @@ let or_form: Pattern&lt;(), edge::Undir&lt;()&gt;&gt; = pattern![
     ban(Mono) { n(q) ^ N(c2) }
 ].unwrap();
 let or_session =
-    Session::from_pattern(or_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
+    Session::from_pattern(&amp;or_form, &amp;g, &amp;[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
 assert_eq!(or_session.iter().count(), 0); // p—5 alone is enough to fire the first ban</code></pre>
 <p><code>pattern!</code> rejects <code>X(..)</code> outright (see <a href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a>), so a ban-only position pinned by external id — rather than by <code>.val()</code>/<code>.test()</code>/<code>.key()</code> — is spelled with a plain, named <code>N(c)</code> and bound afterwards through <code>Session::from_pattern</code>’s pins, exactly as <code>and_form</code>/<code>or_form</code> do above.</p>
 <p>A pin on a banned position aims the ban at <em>one specific</em> node instead of the whole graph: “<code>p</code> must not be connected like this to Alice” is not the same claim as “<code>p</code> must not be connected like this to anyone”. Say <code>p1</code> blocks Alice, <code>p2</code> blocks only Bob, and <code>p3</code> blocks nobody:</p>
@@ -478,7 +478,7 @@ to, or the ids a closure predicate admits. It is <code>None</code> when the node
 carries no predicate at all, or when <code>idx</code> is not a pattern node of the
 session’s query — it never panics on an out-of-range index.</p>
 <h2 id="stored-patterns-and-pinning"><a class="header" href="#stored-patterns-and-pinning">Stored Patterns And Pinning</a></h2>
-<p>A <code>Pattern</code> from <code>pattern![..]</code> is consumed by the search it is handed to: <code>search![&amp;g, p]</code> runs it as written, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. A <code>Pattern</code> holds boxed predicates, so it is not <code>Clone</code>; to run the same shape more than once, build it in a constructor function and call that per search — <code>search![&amp;g, cif_incident()]</code>. A pin on a node inside a ban cluster restricts the ban to that one node; see <a href="#negation-bans-and-pins">Negation, Bans And Pins</a>.</p>
+<p>A <code>Pattern</code> from <code>pattern![..]</code> compiles its query once and shares it: <code>search![&amp;g, p]</code> runs it as written and borrows <code>p</code>, so <code>search![&amp;g, p]</code> again — over the same graph or a different one — runs the same compiled query with no rebuild, and <code>search![&amp;g, p with X(a = id), X(b = id), ..]</code> pins named nodes to concrete graph ids first. <code>Pattern</code> is <code>Clone</code>: cloning shares the compiled query behind an <code>Arc</code> rather than recompiling it. A pin on a node inside a ban cluster restricts the ban to that one node; see <a href="#negation-bans-and-pins">Negation, Bans And Pins</a>.</p>
 <pre><code class="language-rust">use grw::graph::{edge, MGraph};
 use grw::search::Pattern;
 use grw::{mgraph, pattern, search};
@@ -488,7 +488,7 @@ let p: Pattern&lt;u8, edge::Undir&lt;()&gt;&gt; = pattern![get(Mono) { N(a) ^ N(
 let middle = grw::id::N(1);
 let s = search![&amp;g, p with X(a = middle)].unwrap();
 assert_eq!(s.iter().count(), 2);</code></pre>
-<p>Pinning the same name twice, literally, in one <code>with</code> clause is a compile error (<code>node `a` pinned twice</code>). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is <code>error::Search::UnknownName</code>, pinning the same name twice through the manual <code>Session::from_pattern</code> API is <code>error::Search::DuplicatePin</code>, pinning to a graph node that doesn’t exist is <code>error::Search::TargetMissing</code>, and two different pins landing on the same target node under an injective morphism is <code>error::Search::Bind</code> (<code>BindError::Collision</code>).</p>
+<p>Pinning the same name twice, literally, in one <code>with</code> clause is a compile error (<code>node `a` pinned twice</code>). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is <code>error::Search::UnknownName</code>, pinning the same name twice through the manual <code>Session::from_pattern</code> API is <code>error::Search::Bind</code> (<code>BindError::Duplicate</code>, naming the pinned node), pinning to a graph node that doesn’t exist is <code>error::Search::TargetMissing</code>, and two different pins landing on the same target node under an injective morphism is <code>error::Search::Bind</code> (<code>BindError::Collision</code>).</p>
 
                     </main>
 
