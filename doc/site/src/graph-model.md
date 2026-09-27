@@ -20,7 +20,7 @@ Between any two nodes, there can be at most **one edge per slot**. This means:
 - **Directed** graphs allow 2 edges per node pair (one in each direction)
 - **Anydirected** graphs allow 3 edges per node pair (both directions + undirected)
 
-If you need multiple edges between the same pair with the same orientation, model that as a collection in the edge value type.
+If you need several relations between the same pair with the same orientation, make the edge value a [composite](./composite-values.md): one link holding several typed parts, at most one per kind.
 
 ## Type Aliases
 

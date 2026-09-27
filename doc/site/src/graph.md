@@ -11,6 +11,7 @@ The `mgraph!` macro constructs a graph from a declarative description of nodes a
 | `n(id)` | Reference to previously defined node |
 | `E()` | Edge constructor (for attaching values) |
 | `.val(v)` | Attach a value to a node or edge |
+| `.include(p)` | Add a part to a composite edge value (see [Composite Values](./composite-values.md)) |
 | `^` | Undirected edge |
 | `>>` | Directed edge (source → target) |
 | `<<` | Directed edge (target ← source) |
@@ -81,6 +82,13 @@ let g: MGraph<&str, edge::Undir<u32>> = mgraph![
     N(0).val("a") & E().val(10) ^ N(1).val("b")
 ].unwrap();
 ```
+
+### Composite Edge Values
+
+When the edge value is a composite (for example `TypeSet<P>`),
+`E().include(p).include(q)` builds one link holding both parts; naming one
+kind twice on a link is a typed build error. See
+[Composite Values](./composite-values.md).
 
 ### Anonymous Nodes
 

@@ -11,6 +11,8 @@ use crate::Id;
 use crate::search::Morphism;
 use crate::search::query::{Query, BanCluster, NodePred};
 
+pub(crate) type EdgePredRef<'a, ER> = &'a (dyn Fn(&<ER as graph::Edge>::Val) -> bool + Send + Sync);
+
 pub(crate) trait Index<NV, ER: graph::Edge> {
     type Neighbors<'a>: ExactSizeIterator<Item = u32> + 'a where Self: 'a;
     type Reverse: ReverseLookup;
@@ -24,7 +26,7 @@ pub(crate) trait Index<NV, ER: graph::Edge> {
     fn check_edge(
         &self, n1: u32, n2: u32,
         slot: ER::Slot, any_slot: bool, negated: bool,
-        pred: Option<&(dyn Fn(&ER::Val) -> bool + Send + Sync)>,
+        pred: Option<EdgePredRef<'_, ER>>,
     ) -> bool;
 
     fn occupied_edge_slots(&self, n1: u32, n2: u32) -> smallvec::SmallVec<[ER::Slot; 3]>;
@@ -139,7 +141,7 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     #[inline(always)]
     fn degree(&self, n: u32) -> u32 {
         match self.graph.degree(id::N(n as Id)) {
-            Some(d) => d as u32,
+            Some(d) => d,
             None => 0,
         }
     }
@@ -163,7 +165,7 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
 
     fn neighbors(&self, n: u32) -> Self::Neighbors<'_> {
         match self.graph.neighbor_ids(id::N(n as Id)) {
-            Some(ids) => ids.map(|n| *n as u32).collect::<Vec<_>>().into_iter(),
+            Some(ids) => ids.map(|n| *n).collect::<Vec<_>>().into_iter(),
             None => Vec::new().into_iter(),
         }
     }
@@ -176,7 +178,7 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     fn check_edge(
         &self, n1: u32, n2: u32,
         slot: ER::Slot, any_slot: bool, negated: bool,
-        pred: Option<&(dyn Fn(&ER::Val) -> bool + Send + Sync)>,
+        pred: Option<EdgePredRef<'_, ER>>,
     ) -> bool {
         let n1_id = id::N(n1 as Id);
         let n2_id = id::N(n2 as Id);
@@ -257,7 +259,7 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     #[inline(always)]
     fn degree(&self, n: u32) -> u32 {
         match self.graph.degree(id::N(n as Id)) {
-            Some(d) => d as u32,
+            Some(d) => d,
             None => 0,
         }
     }
@@ -281,7 +283,7 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
 
     fn neighbors(&self, n: u32) -> Self::Neighbors<'_> {
         match self.graph.neighbor_ids(id::N(n as Id)) {
-            Some(ids) => ids.map(|n| *n as u32).collect::<Vec<_>>().into_iter(),
+            Some(ids) => ids.map(|n| *n).collect::<Vec<_>>().into_iter(),
             None => Vec::new().into_iter(),
         }
     }
@@ -294,7 +296,7 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     fn check_edge(
         &self, n1: u32, n2: u32,
         slot: ER::Slot, any_slot: bool, negated: bool,
-        pred: Option<&(dyn Fn(&ER::Val) -> bool + Send + Sync)>,
+        pred: Option<EdgePredRef<'_, ER>>,
     ) -> bool {
         let n1_id = id::N(n1 as Id);
         let n2_id = id::N(n2 as Id);
@@ -408,7 +410,7 @@ impl<NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Index<NV, ER> for Indexed<'_,
     fn check_edge(
         &self, n1: u32, n2: u32,
         slot: ER::Slot, any_slot: bool, negated: bool,
-        pred: Option<&(dyn Fn(&ER::Val) -> bool + Send + Sync)>,
+        pred: Option<EdgePredRef<'_, ER>>,
     ) -> bool {
         let store = self.data.edge_store_at(n1, n2);
         let actual_slot = if n1 <= n2 { slot } else { ER::reverse_slot(slot) };
@@ -477,7 +479,7 @@ where
             rustc_hash::FxHashMap::with_capacity_and_hasher(0, rustc_hash::FxBuildHasher);
         for &n in csr.all_node_ids() {
             let val = csr.node_val(*n).clone();
-            value_groups.entry(val).or_insert_with(Vec::new).push(n);
+            value_groups.entry(val).or_default().push(n);
         }
         RevCsrValData { csr, value_groups }
     }
@@ -526,7 +528,7 @@ where
     fn check_edge(
         &self, n1: u32, n2: u32,
         slot: ER::Slot, any_slot: bool, negated: bool,
-        pred: Option<&(dyn Fn(&ER::Val) -> bool + Send + Sync)>,
+        pred: Option<EdgePredRef<'_, ER>>,
     ) -> bool {
         let store = self.data.csr.edge_store_at(n1, n2);
         let actual_slot = if n1 <= n2 { slot } else { ER::reverse_slot(slot) };
@@ -710,6 +712,10 @@ impl Match {
         self.bindings.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.bindings.is_empty()
+    }
+
     pub fn as_slice(&self) -> &[(LocalId, id::N)] {
         &self.bindings
     }
@@ -804,7 +810,7 @@ impl Match {
         query: &'a super::query::Query<NV, ER>,
         csr: &'a CsrAdj<NV, ER>,
     ) -> impl Iterator<Item = MatchedEdge<ER::Slot>> + 'a {
-        let specific = query.edges.iter().enumerate().filter_map(move |(_, pe)| {
+        let specific = query.edges.iter().filter_map(move |pe| {
             if pe.negated || pe.ban_only || pe.any_slot { return None }
             let src_lid = query.nodes[pe.source].local_id;
             let tgt_lid = query.nodes[pe.target].local_id;
@@ -828,7 +834,7 @@ impl Match {
                     if let Some(pred) = edge_pred {
                         occupied.retain(|slot| {
                             ER::csr_store_val(s, *slot)
-                                .map(|v| pred(v))
+                                .map(pred)
                                 .unwrap_or(false)
                         });
                     }
@@ -934,9 +940,8 @@ impl<'a, NV, ER: graph::Edge + graph::HasRel, G: graph::Graph<NV, ER>> Translate
             for (def, val) in self.graph.rel(ns) {
                 let (_, slot): (crate::NR<id::N>, ER::Slot) = def.into();
                 if already_claimed.contains(&slot) { continue }
-                if let Some(pred) = edge_pred {
-                    if !pred(val) { continue }
-                }
+                if let Some(pred) = edge_pred
+                    && !pred(val) { continue }
                 claimed.entry(key).or_default().push(slot);
                 result.push(MatchedEdge { src: src_nid, tgt: tgt_nid, slot, any_slot: true });
             }
@@ -1007,19 +1012,19 @@ pub(crate) fn edge_check<ER: graph::Edge>(
     any_slot: bool,
     negated: bool,
     actual_slot: ER::Slot,
-    pred: Option<&(dyn Fn(&ER::Val) -> bool + Send + Sync)>,
+    pred: Option<EdgePredRef<'_, ER>>,
 ) -> bool {
     let satisfied = if any_slot {
         match store {
             None => false,
-            Some(s) => pred.map_or(true, |p| ER::csr_any_match(s, p)),
+            Some(s) => pred.is_none_or(|p| ER::csr_any_match(s, p)),
         }
     } else if ER::SLOT_COUNT == 1 && pred.is_none() {
         store.is_some()
     } else {
         match store.and_then(|s| ER::csr_store_val(s, actual_slot)) {
             None => false,
-            Some(val) => pred.map_or(true, |p| p(val)),
+            Some(val) => pred.is_none_or(|p| p(val)),
         }
     };
     if negated { !satisfied } else { satisfied }
@@ -1056,7 +1061,7 @@ where
                 let edges_iter = target.edges_between(node_id, adj)
                     .map(|(slot, val)| (slot, val.clone()));
                 let store = ER::build_csr_store(edges_iter);
-                pairs.push((*adj as u32, store));
+                pairs.push(((*adj), store));
             }
             pairs.sort_unstable_by_key(|(n, _)| *n);
             assert_eq!(
@@ -1178,7 +1183,7 @@ impl<NV, ER: graph::Edge> Index<NV, ER> for CsrAdj<NV, ER> {
     fn check_edge(
         &self, n1: u32, n2: u32,
         slot: ER::Slot, any_slot: bool, negated: bool,
-        pred: Option<&(dyn Fn(&ER::Val) -> bool + Send + Sync)>,
+        pred: Option<EdgePredRef<'_, ER>>,
     ) -> bool {
         let store = CsrAdj::edge_store_at(self, n1, n2);
         let actual_slot = if n1 <= n2 { slot } else { ER::reverse_slot(slot) };
@@ -1238,7 +1243,7 @@ pub(crate) struct Ctx<'a, NV, ER: graph::Edge, G, I> {
 }
 
 pub struct Session<'g, NV, ER: graph::Edge, G> {
-    query: Query<NV, ER>,
+    query: Arc<Query<NV, ER>>,
     indexed: Graph<'g, NV, ER, G>,
     bindings: Vec<Option<id::N>>,
     pools: std::sync::OnceLock<Vec<Option<Vec<id::N>>>>,
@@ -1254,17 +1259,15 @@ where
     ) -> Result<Self, super::error::Search> {
         match search {
             super::query::Search::Resolved(r) => {
-                for binding in &r.bindings {
-                    if let Some(pinned) = binding {
-                        if !graph.has_node(*pinned) {
-                            return Err(super::error::Search::TargetMissing(**pinned));
-                        }
+                for pinned in r.bindings.iter().flatten() {
+                    if !graph.has_node(*pinned) {
+                        return Err(super::error::Search::TargetMissing(**pinned));
                     }
                 }
                 require_indices(&r.query, graph)?;
                 let bindings = r.bindings;
                 let indexed = Indexed::new(graph, <RevCsr as Tier<NV, ER>>::build(graph));
-                Ok(Session { query: r.query, indexed, bindings, pools: std::sync::OnceLock::new() })
+                Ok(Session { query: Arc::new(r.query), indexed, bindings, pools: std::sync::OnceLock::new() })
             }
             super::query::Search::Unresolved(_) => Err(super::error::Search::BoundPatternInSession),
         }
@@ -1289,27 +1292,29 @@ where
         let query = unresolved.into_query();
         require_indices(&query, graph)?;
         let indexed = Indexed::new(graph, <RevCsr as Tier<NV, ER>>::build(graph));
-        Ok(Session { query, indexed, bindings, pools: std::sync::OnceLock::new() })
+        Ok(Session { query: Arc::new(query), indexed, bindings, pools: std::sync::OnceLock::new() })
     }
 
     pub fn from_pattern(
-        pattern: super::pattern::Pattern<NV, ER>,
+        pattern: &super::pattern::Pattern<NV, ER>,
         graph: &'g G,
         pins: &[(&str, id::N)],
     ) -> Result<Self, super::error::Search> {
-        let (query, names) = pattern.into_parts();
+        let query = pattern.query_arc();
         require_indices(&query, graph)?;
         let mut bindings: Vec<Option<id::N>> = vec![None; query.node_count()];
         for (name, target) in pins {
-            let lid = names.lid(name).ok_or_else(|| super::error::Search::UnknownName((*name).to_string()))?;
+            let lid = pattern.lid(name)?;
             let idx = query.node_index(lid).ok_or_else(|| super::error::Search::NameNotInQuery((*name).to_string()))?;
-            if bindings[idx].is_some() {
-                return Err(super::error::Search::DuplicatePin((*name).to_string()));
-            }
+            super::query::bind_pin(
+                &mut bindings,
+                idx,
+                super::query::PinnedNode::Named { name: (*name).to_string(), lid: lid.0 },
+                *target,
+            )?;
             if !graph.has_node(*target) {
                 return Err(super::error::Search::TargetMissing(**target));
             }
-            bindings[idx] = Some(*target);
         }
         super::query::check_injective(&query, &bindings)?;
         let indexed = Indexed::new(graph, <RevCsr as Tier<NV, ER>>::build(graph));
@@ -1622,9 +1627,8 @@ fn compute_search_order<NV, ER: graph::Edge>(
                 Morphism::Epi | Morphism::Homo => true,
             };
             if !degree_ok { continue; }
-            if let Some(p) = pred {
-                if !p.eval_custom(csr.node_val(*n)) { continue; }
-            }
+            if let Some(p) = pred
+                && !p.eval_custom(csr.node_val(*n)) { continue; }
             count += 1;
         }
         cand_counts[ni] = count;
@@ -1769,7 +1773,7 @@ impl<R: ReverseLookup> State<R> {
         ctx: &Ctx<'_, NV, ER, G, I>,
         n1: id::N,
         n2: id::N,
-        pred: &(dyn Fn(&ER::Val) -> bool + Send + Sync),
+        pred: EdgePredRef<'_, ER>,
     ) -> bool {
         ctx.index.check_edge(*n1, *n2, ER::SLOT_MIN, true, false, Some(pred))
     }
@@ -1784,11 +1788,10 @@ impl<R: ReverseLookup> State<R> {
         if !ctx.query.has_mixed_induced || ctx.query.node_morphism[pattern_idx].is_induced() {
             for raw_neighbor in ctx.index.neighbors(candidate_id) {
                 let mpi = self.reverse.get(raw_neighbor);
-                if mpi != UNMAPPED {
-                    if (ctx.query.pattern_adj_bits[pattern_idx] >> mpi) & 1 == 0 {
+                if mpi != UNMAPPED
+                    && (ctx.query.pattern_adj_bits[pattern_idx] >> mpi) & 1 == 0 {
                         return false;
                     }
-                }
             }
             true
         } else {
@@ -1816,11 +1819,10 @@ impl<R: ReverseLookup> State<R> {
             let neighbor = adj_bits.trailing_zeros() as usize;
             adj_bits &= adj_bits - 1;
             let mapped = self.mapping[neighbor];
-            if mapped != UNMAPPED {
-                if !ctx.index.is_adjacent(candidate_id, mapped) {
+            if mapped != UNMAPPED
+                && !ctx.index.is_adjacent(candidate_id, mapped) {
                     return false;
                 }
-            }
         }
         if ctx.query.needs_reverse_scan(pattern_idx) {
             return self.is_feasible_reverse_only(ctx, pattern_idx, candidate_id);
@@ -1850,7 +1852,7 @@ impl<R: ReverseLookup> State<R> {
                     let path_config = ctx.query.edges[edge_idx].path.as_ref().unwrap();
                     let pred = ctx.query.edge_preds[edge_idx].as_ref();
                     let edge_filter = move |s: ER::Slot, ev: &ER::Val| -> bool {
-                        (any_slot || s == slot) && pred.map_or(true, |p| p(ev))
+                        (any_slot || s == slot) && pred.is_none_or(|p| p(ev))
                     };
                     let pc = crate::search::path::PathConstraint::from_morphism(
                         ctx.query.edges[edge_idx].path_morphism,
@@ -1951,8 +1953,7 @@ impl<R: ReverseLookup> State<R> {
 
     pub(crate) fn lookahead_ok<NV, ER: graph::Edge, G: graph::Graph<NV, ER>, I: Index<NV, ER>>(&self, ctx: &Ctx<'_, NV, ER, G, I>, from_depth: usize) -> bool {
         let search_order = &self.search_order;
-        for d in (from_depth + 1)..search_order.len() {
-            let pi = search_order[d];
+        for &pi in &search_order[(from_depth + 1)..] {
             let mapped_neighbor_count = if pi < 64 {
                 let mut adj = ctx.query.pattern_adj_bits[pi];
                 let mut count = 0u32;
@@ -2022,8 +2023,8 @@ impl<R: ReverseLookup> State<R> {
                 Morphism::Epi | Morphism::Homo => {}
             }
             let mut ok = true;
-            for i in 0..other_count {
-                if !ctx.index.is_adjacent(raw, other_mapped[i]) {
+            for &om in &other_mapped[..other_count] {
+                if !ctx.index.is_adjacent(raw, om) {
                     ok = false;
                     break;
                 }
@@ -2138,28 +2139,24 @@ impl<R: ReverseLookup> State<R> {
                     if !self.has_uncovered_edge(ctx, src_target, tgt_target, &covered) {
                         return false;
                     }
-                    if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
-                        if !self.uncovered_pred_matches(ctx, src_target, tgt_target, &covered, pred.as_ref()) {
+                    if let Some(pred) = &ctx.query.edge_preds[edge_idx]
+                        && !self.uncovered_pred_matches(ctx, src_target, tgt_target, &covered, pred.as_ref()) {
                             return false;
                         }
-                    }
                 }
             } else {
                 if edge.negated {
                     let adjacent = ctx.target.is_adjacent(src_id, tgt_id);
                     if adjacent {
                         let edge_def = ER::edge(edge.slot, (src_id, tgt_id));
-                        match ctx.target.get_edge_val(edge_def) {
-                            Some(val) => {
-                                if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
-                                    if pred(val) {
-                                        return false;
-                                    }
-                                } else {
+                        if let Some(val) = ctx.target.get_edge_val(edge_def) {
+                            if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
+                                if pred(val) {
                                     return false;
                                 }
+                            } else {
+                                return false;
                             }
-                            None => {}
                         }
                     }
                 } else {
@@ -2169,11 +2166,10 @@ impl<R: ReverseLookup> State<R> {
                     let edge_def = ER::edge(edge.slot, (src_id, tgt_id));
                     match ctx.target.get_edge_val(edge_def) {
                         Some(val) => {
-                            if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
-                                if !pred(val) {
+                            if let Some(pred) = &ctx.query.edge_preds[edge_idx]
+                                && !pred(val) {
                                     return false;
                                 }
-                            }
                         }
                         None => return false,
                     }
@@ -2271,11 +2267,10 @@ impl<R: ReverseLookup> State<R> {
                     if !adjacent {
                         return false;
                     }
-                    if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
-                        if !self.any_slot_pred_matches(ctx, candidate, other_target, pred.as_ref()) {
+                    if let Some(pred) = &ctx.query.edge_preds[edge_idx]
+                        && !self.any_slot_pred_matches(ctx, candidate, other_target, pred.as_ref()) {
                             return false;
                         }
-                    }
                 }
             } else {
                 let slot = if this_is_source {
@@ -2288,17 +2283,14 @@ impl<R: ReverseLookup> State<R> {
                     let adjacent = ctx.target.is_adjacent(candidate_id, other_id);
                     if adjacent {
                         let edge_def = ER::edge(slot, (candidate_id, other_id));
-                        match ctx.target.get_edge_val(edge_def) {
-                            Some(val) => {
-                                if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
-                                    if pred(val) {
-                                        return false;
-                                    }
-                                } else {
+                        if let Some(val) = ctx.target.get_edge_val(edge_def) {
+                            if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
+                                if pred(val) {
                                     return false;
                                 }
+                            } else {
+                                return false;
                             }
-                            None => {}
                         }
                     }
                 } else {
@@ -2309,11 +2301,10 @@ impl<R: ReverseLookup> State<R> {
                     let edge_def = ER::edge(slot, (candidate_id, other_id));
                     match ctx.target.get_edge_val(edge_def) {
                         Some(val) => {
-                            if let Some(pred) = &ctx.query.edge_preds[edge_idx] {
-                                if !pred(val) {
+                            if let Some(pred) = &ctx.query.edge_preds[edge_idx]
+                                && !pred(val) {
                                     return false;
                                 }
-                            }
                         }
                         None => return false,
                     }
@@ -2348,7 +2339,7 @@ impl<R: ReverseLookup> State<R> {
                         let any_slot = pe.any_slot;
                         let pred = ctx.query.edge_preds[ei].as_ref();
                         let edge_filter = |s: ER::Slot, ev: &ER::Val| -> bool {
-                            (any_slot || s == slot) && pred.map_or(true, |p| p(ev))
+                            (any_slot || s == slot) && pred.is_none_or(|p| p(ev))
                         };
                         let pc = crate::search::path::PathConstraint::from_morphism(
                             pe.path_morphism,

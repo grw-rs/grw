@@ -2,11 +2,12 @@
 
 Graph construction, mutation, and morphism matching in Rust.
 
-GRW is an embedded graph rewriting system that runs inside a Rust process. The user API is modelled as small domain-specific languages built with `macro_rules!` — no procedural macros — by overloading Rust operators to express graph edge semantics. All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying `from_fragment()` / `modify()` / `compile()` functions directly.
+GRW is an embedded graph rewriting system that runs inside a Rust process. The user API is modelled as small domain-specific languages. The graph and modify DSLs — `mgraph!`, `vgraph!` and `modify!` — are `macro_rules!` macros that overload Rust operators (`^`, `>>`, `<<`, `&`, `!`) to express graph edge semantics. `search!` and `pattern!` are `macro_rules!` trampolines in grw that forward to procedural macros in [`grw_derive`](https://github.com/grw-rs/grw_derive), whose pattern grammar lives in the [`grw_pattern`](https://github.com/grw-rs/grw_pattern) crate; `grw_derive`, a required dependency of grw, also provides the `#[grw::repl]` attribute, `#[derive(Val)]` and `#[derive(Part)]`. All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying `from_fragment()` / `modify()` / `compile()` functions directly.
 
 - [**`mgraph!`**](#mgraph--construction) — graph literal (like `vec!`)
 - [**`modify!`**](#modify--mutation) — transactional graph mutation (add/remove/change nodes and edges atomically)
 - [**`search!`**](#search--pattern-matching) — graph pattern matching iterator with morphism control
+- [**Composite link values**](#composite-link-values) — one link between two nodes holding several typed parts
 
 ## Graph model
 
@@ -735,7 +736,7 @@ assert_eq!(Seq::search(edges.query(), &indexed).unwrap().count(), 2);
 
 <details open><summary><b>Stored patterns and pinning</b></summary>
 
-A `Pattern` from `pattern![..]` is consumed by the search it is handed to: `search![&g, p]` runs it as written, and `search![&g, p with X(a = id), X(b = id), ..]` pins named nodes to concrete graph ids first. A `Pattern` holds boxed predicates, so it is not `Clone`; to run the same shape more than once, build it in a constructor function and call that per search — `search![&g, cif_incident()]`.
+A `Pattern` from `pattern![..]` compiles its query once and shares it: `search![&g, p]` runs it as written and borrows `p`, so `search![&g, p]` again — over the same graph or a different one — runs the same compiled query with no rebuild, and `search![&g, p with X(a = id), X(b = id), ..]` pins named nodes to concrete graph ids first. `Pattern` is `Clone`: cloning shares the compiled query behind an `Arc` rather than recompiling it.
 
 ```rust
 use grw::graph::{edge, MGraph};
@@ -749,7 +750,99 @@ let s = search![&g, p with X(a = middle)].unwrap();
 assert_eq!(s.iter().count(), 2);
 ```
 
-Pinning the same name twice, literally, in one `with` clause is a compile error (``node `a` pinned twice``). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is `error::Search::UnknownName`, pinning the same name twice through the manual `Session::from_pattern` API is `error::Search::DuplicatePin`, pinning to a graph node that doesn't exist is `error::Search::TargetMissing`, and two different pins landing on the same target node under an injective morphism is `error::Search::Bind` (`BindError::Collision`).
+Pinning the same name twice, literally, in one `with` clause is a compile error (``node `a` pinned twice``). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is `error::Search::UnknownName`, pinning the same name twice through the manual `Session::from_pattern` API is `error::Search::Bind` (`BindError::Duplicate`, naming the pinned node), pinning to a graph node that doesn't exist is `error::Search::TargetMissing`, and two different pins landing on the same target node under an injective morphism is `error::Search::Bind` (`BindError::Collision`).
+
+</details>
+
+---
+
+<h2>Composite link values</h2>
+
+A pair of nodes has at most one link per slot. When the link must say several things at once, its value is a **composite**: a set of typed parts, at most one per kind. The `Composite` trait is the contract (`from_part`, `parts`, `part`, `with_part`, `without_part`, each refusal a typed error of the combinator's own); `TypeSet<P>` is the combinator grw ships, and a downstream crate may write its own.
+
+<details open><summary><b>Declare the parts</b></summary>
+
+```rust
+use grw::prelude::*;
+use grw::composite::TypeSet;
+
+#[derive(Debug, Clone, PartialEq)]
+struct Signs { since: u32 }
+
+#[derive(Debug, Clone, PartialEq)]
+struct Uses { service: u32 }
+
+#[derive(Debug, Clone, PartialEq, Part)]
+enum Rel {
+    Signs(Signs),
+    Uses(Uses),
+}
+
+type Link = TypeSet<Rel>;
+```
+
+`#[derive(Part)]` gives `Rel` a kind enum (`RelKind { Signs, Uses }`) and ties each payload type to its kind, so a `Link` answers `get::<Signs>()`, `include(Uses { .. })` and `exclude::<Signs>()` by type (with `grw::composite::Typed` in scope). `use grw::prelude::*;` brings the everyday names in one line: `mgraph!`, `vgraph!`, `modify!`, `search!`, `pattern!`, `#[derive(Val)]`, `#[derive(Part)]`, and the method traits `Typed`, `Composite` and `Seek` (the last is what `E().has::<T>()` needs outside `search!`).
+
+</details>
+
+<details open><summary><b>Build, include, exclude</b></summary>
+
+```rust
+let mut g = mgraph![<(), grw::edge::Dir<Link>>;
+    N(0) & E().include(Signs { since: 2023 }).include(Uses { service: 7 }) >> N(1),
+    n(1) & E().include(Uses { service: 9 }) >> N(2),
+].unwrap();
+
+modify!(g, [X(1) & E().include(Signs { since: 2024 }) >> x(2)]).unwrap();
+modify!(g, [X(0) & E().exclude::<Uses>() >> x(1)]).unwrap();
+modify!(g, [X(1) & E().exclude_kind(RelKind::Uses) >> x(2)]).unwrap();
+modify!(g, [X(0) & !e() >> x(1)]).unwrap();
+```
+
+| Form | Meaning |
+|------|---------|
+| `E().include(p)` | the link holds `p`; on a vacant pair the link is created |
+| `E().exclude::<T>()` | the link drops its `T` part; the combinator decides what an empty link is (`TypeSet` removes it) |
+| `E().exclude_kind(k)` | the same, with the kind chosen at runtime |
+| `!e()` | the whole link goes, every part with it |
+
+Including an equal part changes nothing. A different part of a kind the link already holds is refused (`PartRejected`), and excluding a kind the link does not hold is refused (`PartNotHeld`), each carrying the combinator's own refusal, read back with `refused.of::<Link>()`. A graph literal that names one kind twice on one link is a typed build error.
+
+</details>
+
+<details open><summary><b>Search by part</b></summary>
+
+```rust
+let s = search![&g, get(Mono) {
+    N(0) & E().has::<Signs>().test(|s: &Signs| s.since > 2020) >> N(1)
+}].unwrap();
+```
+
+| Form | Matches |
+|------|---------|
+| `E().has::<T>()` | a link holding a `T` part, whatever else it holds |
+| `E().has::<A>().has::<B>()` | a link holding both |
+| `E().has::<T>().test(\|t: &T\| ..)` | the predicate reads the part just named |
+| `E().has_kind(k)` | the same with a runtime kind; `.test` then reads the raw part |
+| `E().test(\|v: &Link\| ..)` | the predicate reads the whole value |
+| `!E().has::<T>()` | no link holding a `T` part (the pair may still be linked by another part) |
+| `!E()` | no link at all |
+
+`has::<T>()` compiles only where the link value has a `T` part. Terms on one pair and slot merge into one constraint: `E().has::<A>()` beside `!E().has::<B>()` means "holds A and not B". Naming one kind twice (`PartRepeated`) and requiring what the same pattern forbids (`Contradictory`) are typed compile errors of the query.
+
+On an `Anydir<U, D>` graph the operator picks the slot a part op works on: `^` includes, excludes and asks for parts of the undirected value `U`, `>>` / `<<` of the directed value `D`, and a part the slot's value cannot hold does not compile. Outside `search!`, `has` / `has_kind` on a bare `E()` come from the `grw::search::dsl::Seek` trait, which `grw::prelude` brings into scope.
+
+</details>
+
+<details open><summary><b>Snapshots</b></summary>
+
+A composite link saves as its parts in kind order and loads strictly with `load`/`load_with`. A snapshot written when the links held a single part value `P` loads into a `TypeSet<P>` graph only through the explicit promoting path, each old link becoming a one-part link:
+
+```rust
+let g: MGraph<(), grw::edge::Dir<TypeSet<Rel>>> = MGraph::load_promoting(&path)?;
+```
+
+`load_promoting_with(path, decls)` restores indices the same way `load_with` does, and `VGraph` has both. The file header tells a composite file from a part file; a file that is neither is refused.
 
 </details>
 

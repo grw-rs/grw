@@ -413,8 +413,8 @@ mod tests {
         let ids5: IdSet<id::N> = untyped::IdSet::from([10, 20, 30, 40, 49]).into();
         let ids6: IdSet<id::N> = untyped::IdSet::from([10, 20, 30, 40, 50]).into();
 
-        assert!(!(ids1 < ids2));
-        assert!(!(ids1 > ids2));
+        assert!(ids1 >= ids2);
+        assert!(ids1 <= ids2);
         assert!(ids1 < ids3);
         assert!(ids4 < ids3);
         assert!(ids5 < ids6);

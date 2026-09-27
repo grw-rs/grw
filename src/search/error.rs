@@ -30,6 +30,12 @@ pub enum Edge {
         src: Id,
         tgt: Id,
     },
+    #[error("edge n({src})-n({tgt}) requires a part of kind {kind:?} twice")]
+    PartRepeated {
+        src: Id,
+        tgt: Id,
+        kind: crate::composite::PartKind,
+    },
     #[error("redundant ban edge: n({src})-n({tgt}) already required by get pattern")]
     RedundantInBan {
         src: Id,
@@ -61,20 +67,6 @@ pub enum Cluster {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Context {
-    #[error("X({0}) is not a context node in this pattern")]
-    NotFound(Id),
-    #[error("duplicate mapping for X({0})")]
-    Duplicate(Id),
-    #[error("missing context mapping for X nodes: {0:?}")]
-    Missing(Vec<Id>),
-    #[error("context target node {0} does not exist in graph")]
-    TargetMissing(Id),
-    #[error("X({x1}) and X({x2}) both map to target node {target} under injective morphism")]
-    Collision { x1: Id, x2: Id, target: Id },
-}
-
-#[derive(Debug, thiserror::Error)]
 pub enum Search {
     #[error(transparent)]
     Node(#[from] Node),
@@ -94,8 +86,6 @@ pub enum Search {
     ContextInPattern(Vec<crate::graph::dsl::LocalId>),
     #[error("unknown pattern node name {0:?}")]
     UnknownName(String),
-    #[error("pattern node {0:?} pinned twice")]
-    DuplicatePin(String),
     #[error("pins require an unresolved search; this search has no context nodes to pin")]
     PinsOnResolvedPattern,
     #[error("pattern node name {0:?} has no node in the compiled query")]

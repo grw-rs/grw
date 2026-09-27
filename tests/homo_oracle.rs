@@ -136,51 +136,51 @@ fn oracle(case: &Case) -> Verdict {
 
 fn build_and_run(case: &Case) -> Option<(BTreeSet<Vec<u32>>, usize, usize, usize)> {
     use grw::graph::dsl as gdsl;
-    type GER = grw::graph::edge::Undir<()>;
-    let mut ops: Vec<gdsl::Op<(), GER>> = Vec::new();
+    type Ger = grw::graph::edge::Undir<()>;
+    let mut ops: Vec<gdsl::Op<(), Ger>> = Vec::new();
     for i in 0..case.target_n as u32 {
-        ops.push(gdsl::N::<(), GER>(i).into());
+        ops.push(gdsl::N::<(), Ger>(i).into());
     }
     for &(a, b) in &case.target_edges {
-        ops.push((gdsl::n::<(), GER>(a) ^ gdsl::n::<(), GER>(b)).into());
+        ops.push((gdsl::n::<(), Ger>(a) ^ gdsl::n::<(), Ger>(b)).into());
     }
-    let g: grw::graph::MUndir0 = gdsl::from_fragment::<(), GER>(ops).unwrap();
+    let g: grw::graph::MUndir0 = gdsl::from_fragment::<(), Ger>(ops).unwrap();
     let t = g.index(RevCsr);
 
     // Every node is DEFINED in its assigned cluster (bare N), so the
     // node's morphism follows cluster_of exactly; edges are pure references
     // and never move a definition.
-    let mut cluster_ops: Vec<Vec<dsl::Op<(), GER>>> =
+    let mut cluster_ops: Vec<Vec<dsl::Op<(), Ger>>> =
         (0..case.cluster_morphism.len()).map(|_| Vec::new()).collect();
     for i in 0..case.pattern_n {
-        cluster_ops[case.cluster_of[i]].push(dsl::N::<(), GER>(i as u32).into());
+        cluster_ops[case.cluster_of[i]].push(dsl::N::<(), Ger>(i as u32).into());
     }
     for &(a, b) in &case.pattern_edges {
         cluster_ops[case.cluster_of[a as usize]]
-            .push((dsl::n::<(), GER>(a) ^ dsl::n::<(), GER>(b)).into());
+            .push((dsl::n::<(), Ger>(a) ^ dsl::n::<(), Ger>(b)).into());
     }
-    let clusters: Vec<dsl::ClusterOps<(), GER>> = cluster_ops.into_iter()
+    let clusters: Vec<dsl::ClusterOps<(), Ger>> = cluster_ops.into_iter()
         .zip(case.cluster_morphism.iter())
         .filter(|(ops, _)| !ops.is_empty())
         .map(|(ops, &m)| dsl::get(m, ops))
         .collect();
     if clusters.is_empty() { return None; }
 
-    let Search::Resolved(r) = search::compile::<(), GER>(clusters).unwrap() else { return None; };
+    let Search::Resolved(r) = search::compile::<(), Ger>(clusters).unwrap() else { return None; };
     let query = r.query();
 
     let mut engine_set = BTreeSet::new();
-    for m in Seq::search(&query, &t).unwrap() {
+    for m in Seq::search(query, &t).unwrap() {
         let mut v = vec![u32::MAX; case.pattern_n];
-        for i in 0..case.pattern_n {
+        for (i, slot) in v.iter_mut().enumerate() {
             let n = m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound");
-            v[i] = *n as u32;
+            *slot = *n;
         }
         engine_set.insert(v);
     }
-    let seq_count = Seq::search(&query, &t).unwrap().count();
-    let par_enum: usize = Par::search(&query, &t).unwrap().map(|_m| 1usize).sum();
-    let par_count = Par::search(&query, &t).unwrap().count();
+    let seq_count = Seq::search(query, &t).unwrap().count();
+    let par_enum: usize = Par::search(query, &t).unwrap().map(|_m| 1usize).sum();
+    let par_count = Par::search(query, &t).unwrap().count();
     Some((engine_set, seq_count, par_enum, par_count))
 }
 

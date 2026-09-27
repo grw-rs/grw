@@ -47,6 +47,7 @@ pub enum FieldType {
     Struct(fn() -> &'static [FieldInfo]),
     Enum(&'static EnumMeta),
     Array(fn() -> FieldType),
+    Set(fn() -> FieldType),
 }
 
 impl PartialEq for FieldType {
@@ -67,6 +68,7 @@ impl PartialEq for FieldType {
             (Self::Struct(a), Self::Struct(b)) => std::ptr::fn_addr_eq(*a, *b),
             (Self::Enum(a), Self::Enum(b)) => std::ptr::eq(*a, *b),
             (Self::Array(a), Self::Array(b)) => std::ptr::fn_addr_eq(*a, *b),
+            (Self::Set(a), Self::Set(b)) => std::ptr::fn_addr_eq(*a, *b),
             _ => false,
         }
     }
@@ -105,6 +107,23 @@ pub trait __GrwMethodFallback {
     fn __grw_method_table() -> &'static [MethodMeta] { &[] }
 }
 
+#[doc = r#"
+```
+use grw::layout::{FieldType, Val};
+
+#[derive(Val)]
+struct Weight {
+    w: f64,
+    active: bool,
+}
+
+let fields = Weight::fields();
+assert_eq!(fields.len(), 2);
+assert_eq!(fields[0].name, "w");
+assert_eq!(fields[0].ty, FieldType::F64);
+assert_eq!(Weight::field_type(), FieldType::Struct(Weight::fields));
+```
+"#]
 pub trait Val: 'static {
     fn fields() -> &'static [FieldInfo];
     fn methods() -> &'static [MethodMeta] { &[] }

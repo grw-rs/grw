@@ -10,8 +10,11 @@ use grw::modify::{self, LocalId, Node};
 use grw::modify::node::{Bind, Exist, New};
 use grw::{Id, NR, id};
 
+type NodeList = Vec<(Id, ())>;
+type EdgeList<ER, EV> = Vec<(<ER as graph::Edge>::Def, EV)>;
+
 fn degree_histogram<ER: graph::Edge, EV>(
-    (ns, es): (Vec<(Id, ())>, Vec<(ER::Def, EV)>),
+    (ns, es): (NodeList, EdgeList<ER, EV>),
 ) -> Vec<(Id, usize)> {
     use std::collections::BTreeMap;
     let mut deg: BTreeMap<Id, Id> = BTreeMap::new();
@@ -27,11 +30,11 @@ fn degree_histogram<ER: graph::Edge, EV>(
         }
     }
     let mut hist: BTreeMap<Id, usize> = BTreeMap::new();
-    for (_, &d) in &deg {
+    for &d in deg.values() {
         *hist.entry(d).or_insert(0) += 1;
     }
     let mut result: Vec<_> = hist.into_iter().collect();
-    result.sort_by(|a, b| b.0.cmp(&a.0));
+    result.sort_by_key(|b| std::cmp::Reverse(b.0));
     result
 }
 
@@ -62,7 +65,7 @@ impl<ER: graph::Edge> Shadow<ER> {
         self.edges.insert((nr, slot));
     }
 
-    fn to_vecs(&self) -> (Vec<(Id, ())>, Vec<(ER::Def, ())>) {
+    fn to_vecs(&self) -> (NodeList, EdgeList<ER, ()>) {
         let ns: Vec<(Id, ())> = self.nodes.iter().map(|&id| (id, ())).collect();
         let es: Vec<(ER::Def, ())> = self
             .edges

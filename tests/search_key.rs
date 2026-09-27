@@ -49,7 +49,7 @@ fn indexed_chain(count: u32) -> MG {
 fn pairs<I: IntoIterator<Item = grw::search::Match>>(matches: I) -> BTreeSet<(u32, u32)> {
     matches
         .into_iter()
-        .map(|m| (*m.get(0u32).unwrap() as u32, *m.get(1u32).unwrap() as u32))
+        .map(|m| ((*m.get(0u32).unwrap()), (*m.get(1u32).unwrap())))
         .collect()
 }
 
@@ -122,7 +122,7 @@ fn key_on_context_node() {
     let g = indexed_chain(50);
     let five = grw::id::N(5);
     let s = search![&g, get(Mono) { X(c = five).key(BY_VAL, 5u32) ^ N(o) }].unwrap();
-    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(1u32).unwrap() as u32).collect();
+    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(1u32).unwrap()).collect();
     seen.sort_unstable();
     assert_eq!(seen, vec![4, 6], "a key on a context node narrows it like any other node");
 
@@ -312,7 +312,7 @@ fn seq_and_par_agree_on_key_pools() {
     let seq = pairs(s.iter());
     let par: BTreeSet<(u32, u32)> = {
         s.par_iter()
-            .map(|m| (*m.get(0u32).unwrap() as u32, *m.get(1u32).unwrap() as u32))
+            .map(|m| ((*m.get(0u32).unwrap()), (*m.get(1u32).unwrap())))
             .collect()
     };
     assert_eq!(seq, par, "the parallel driver reads the same pool as the sequential one");
@@ -324,15 +324,15 @@ fn stored_pattern_with_key_runs_via_from_pattern() {
     let g = indexed_chain(300);
     let p: Pattern<u32, ER> =
         pattern![get(Mono) { N(a).key_in(BY_BUCKET, [7u32]) ^ N(b) }].unwrap();
-    let s = Session::from_pattern(p, &g, &[]).unwrap();
-    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap() as u32).collect();
+    let s = Session::from_pattern(&p, &g, &[]).unwrap();
+    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap()).collect();
     seen.sort_unstable();
     seen.dedup();
     assert_eq!(seen, vec![7, 107, 207], "a stored pattern's key predicate survives storage");
 
     let p2: Pattern<u32, ER> =
         pattern![get(Mono) { N(a).key(BY_VAL, 5u32) ^ N(b) }].unwrap();
-    let err = Session::from_pattern(p2, &chain(300), &[]).err().unwrap();
+    let err = Session::from_pattern(&p2, &chain(300), &[]).err().unwrap();
     assert!(matches!(err, error::Search::IndexMissing { index } if index == BY_VAL));
 }
 
@@ -367,7 +367,7 @@ fn macro_key_form_on_context_pin_member_and_non_member() {
     let g = indexed_chain(50);
     let five = grw::id::N(5);
     let member = search![&g, get(Mono) { X(c = five : key(BY_VAL, 5u32)) ^ N(o) }].unwrap();
-    let mut seen: Vec<u32> = member.iter().map(|m| *m.get(1u32).unwrap() as u32).collect();
+    let mut seen: Vec<u32> = member.iter().map(|m| *m.get(1u32).unwrap()).collect();
     seen.sort_unstable();
     assert_eq!(
         seen,
@@ -387,8 +387,8 @@ fn macro_key_form_on_context_pin_member_and_non_member() {
 fn macro_key_in_pattern_runs_via_from_pattern() {
     let g = indexed_chain(300);
     let p: Pattern<u32, ER> = pattern![get(Mono) { N(a: key_in(BY_BUCKET, [7u32])) ^ N(b) }].unwrap();
-    let s = Session::from_pattern(p, &g, &[]).unwrap();
-    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap() as u32).collect();
+    let s = Session::from_pattern(&p, &g, &[]).unwrap();
+    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap()).collect();
     seen.sort_unstable();
     seen.dedup();
     assert_eq!(

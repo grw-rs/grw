@@ -11,15 +11,25 @@ pub enum Node {
     UndefinedRef(Id),
 }
 
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
+pub enum Part {
+    #[error("the link names a part of kind {0:?} twice")]
+    Repeated(crate::composite::PartKind),
+    #[error("the link refused the part: {0}")]
+    Refused(crate::modify::error::apply::IncludeRefused),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum Edge<S: Debug + Eq> {
     #[error("duplicate edge {0:?} slot {1:?}")]
     Duplicate(NR<id::N>, S),
     #[error("edge references missing node {0:?}")]
     NodeNotFound(id::N),
+    #[error("edge {rel:?} slot {slot:?}: {part}")]
+    Part { rel: NR<id::N>, slot: S, part: Part },
 }
 
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Build<S: Debug + Eq> {
     #[error(transparent)]
     Node(#[from] Node),
@@ -43,4 +53,12 @@ pub enum Index {
     KeyTagMismatch { index: super::index::IndexName, expected: super::index::KeyTag, got: super::index::KeyTag },
     #[error("index {index} is not unique across nodes {nodes:?}")]
     NotUnique { index: super::index::IndexName, nodes: Vec<id::N> },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Map<X: Debug + std::fmt::Display> {
+    #[error("{0}")]
+    Value(X),
+    #[error(transparent)]
+    Index(Index),
 }

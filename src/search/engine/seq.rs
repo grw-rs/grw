@@ -75,7 +75,7 @@ impl<'g, NV, ER: graph::Edge, G: graph::Graph<NV, ER>> Iter<'g, NV, ER, G> {
 }
 
 pub struct IntoIter<'g, NV, ER: graph::Edge, G> {
-    query: Query<NV, ER>,
+    query: std::sync::Arc<Query<NV, ER>>,
     indexed: super::Graph<'g, NV, ER, G>,
     state: State<Vec<u32>>,
     watcher: crate::watch::Silent,
@@ -199,9 +199,8 @@ impl<R: ReverseLookup> State<R> {
                 Morphism::Epi | Morphism::Homo => {}
             }
             if is_injective && self.reverse.get(*n) != super::UNMAPPED { continue; }
-            if let Some(pred) = &ctx.query.node_preds[depth0_idx] {
-                if !pred.eval_custom(ctx.index.node_val(*n)) { continue; }
-            }
+            if let Some(pred) = &ctx.query.node_preds[depth0_idx]
+                && !pred.eval_custom(ctx.index.node_val(*n)) { continue; }
             if check_profile {
                 nbr_degs.clear();
                 nbr_degs.extend(
@@ -240,11 +239,10 @@ impl<R: ReverseLookup> State<R> {
             if !self.key_pool_admits(ctx, pattern_idx, target_n) {
                 return;
             }
-            if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                if !pred.eval_custom(ctx.index.node_val(*target_n)) {
+            if let Some(pred) = &ctx.query.node_preds[pattern_idx]
+                && !pred.eval_custom(ctx.index.node_val(*target_n)) {
                     return;
                 }
-            }
             out.push(target_n);
             return;
         }
@@ -290,12 +288,11 @@ impl<R: ReverseLookup> State<R> {
                         Morphism::Epi | Morphism::Homo => {}
                     }
                     if !self.key_pool_admits(ctx, pattern_idx, id::N(raw as Id)) { return false; }
-                    if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                        if !pred.eval_custom(ctx.index.node_val(raw)) { return false; }
-                    }
+                    if let Some(pred) = &ctx.query.node_preds[pattern_idx]
+                        && !pred.eval_custom(ctx.index.node_val(raw)) { return false; }
                     if can_fast_verify {
-                        for i in 0..other_count {
-                            if !ctx.index.is_adjacent(raw, other_mapped[i]) {
+                        for &om in &other_mapped[..other_count] {
+                            if !ctx.index.is_adjacent(raw, om) {
                                 return false;
                             }
                         }
@@ -324,7 +321,7 @@ impl<R: ReverseLookup> State<R> {
                                     let path_config = ctx.query.edges[edge_idx].path.as_ref().unwrap();
                                     let pred = ctx.query.edge_preds[edge_idx].as_ref();
                                     let edge_filter = |s: ER::Slot, ev: &ER::Val| -> bool {
-                                        (any_slot || s == slot) && pred.map_or(true, |p| p(ev))
+                                        (any_slot || s == slot) && pred.is_none_or(|p| p(ev))
                                     };
                                     let pc = crate::search::path::PathConstraint::from_morphism(
                                         ctx.query.edges[edge_idx].path_morphism,
@@ -371,9 +368,8 @@ impl<R: ReverseLookup> State<R> {
                     Morphism::Epi | Morphism::Homo => {}
                 }
                 if is_injective && self.reverse.get(*n) != super::UNMAPPED { return false; }
-                if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                    if !pred.eval_custom(ctx.index.node_val(*n)) { return false; }
-                }
+                if let Some(pred) = &ctx.query.node_preds[pattern_idx]
+                    && !pred.eval_custom(ctx.index.node_val(*n)) { return false; }
                 true
             }));
 
@@ -434,7 +430,7 @@ impl<R: ReverseLookup> State<R> {
                     if self.reverse.get(*n) != super::UNMAPPED {
                         continue;
                     }
-                    if ban_mapping.iter().any(|m| *m == Some(n)) {
+                    if ban_mapping.contains(&Some(n)) {
                         continue;
                     }
                 }
@@ -445,11 +441,10 @@ impl<R: ReverseLookup> State<R> {
                 continue;
             }
 
-            if let Some(pred) = &ctx.query.node_preds[pattern_idx] {
-                if !pred.eval_custom(ctx.index.node_val(*n)) {
+            if let Some(pred) = &ctx.query.node_preds[pattern_idx]
+                && !pred.eval_custom(ctx.index.node_val(*n)) {
                     continue;
                 }
-            }
 
             if !self.ban_node_feasible(ctx, ban, ban_mapping, depth, n) {
                 continue;
@@ -518,14 +513,13 @@ impl<R: ReverseLookup> State<R> {
             }
 
             if !self.key_pool_admits(ctx, leaf_pi, id::N(raw as Id)) { continue; }
-            if let Some(pred) = &ctx.query.node_preds[leaf_pi] {
-                if !pred.eval_custom(ctx.index.node_val(raw)) { continue; }
-            }
+            if let Some(pred) = &ctx.query.node_preds[leaf_pi]
+                && !pred.eval_custom(ctx.index.node_val(raw)) { continue; }
 
             if can_fast {
                 let mut ok = true;
-                for i in 0..other_count {
-                    if !ctx.index.is_adjacent(raw, other_mapped[i]) {
+                for &om in &other_mapped[..other_count] {
+                    if !ctx.index.is_adjacent(raw, om) {
                         ok = false;
                         break;
                     }
@@ -542,11 +536,10 @@ impl<R: ReverseLookup> State<R> {
                 }
                 if !ok { continue; }
 
-                if needs_reverse_scan {
-                    if !self.is_feasible_reverse_only(ctx, leaf_pi, raw) {
+                if needs_reverse_scan
+                    && !self.is_feasible_reverse_only(ctx, leaf_pi, raw) {
                         continue;
                     }
-                }
             } else {
                 let mut ok = true;
                 for &(neighbor_idx, slot, any_slot, negated) in &ctx.query.adj_check[leaf_pi] {
@@ -567,7 +560,7 @@ impl<R: ReverseLookup> State<R> {
                             let path_config = ctx.query.edges[edge_idx].path.as_ref().unwrap();
                             let pred = ctx.query.edge_preds[edge_idx].as_ref();
                             let edge_filter = |s: ER::Slot, ev: &ER::Val| -> bool {
-                                (any_slot || s == slot) && pred.map_or(true, |p| p(ev))
+                                (any_slot || s == slot) && pred.is_none_or(|p| p(ev))
                             };
                             let pc = crate::search::path::PathConstraint::unconstrained();
                             let has_path = crate::search::path::execute_paths(
@@ -678,18 +671,12 @@ impl<R: ReverseLookup> State<R> {
 
             if (self.forward_verified_depths >> depth) & 1 == 1 {
                 if ctx.query.needs_reverse_scan(pattern_idx) {
-                    if ER::SLOT_COUNT > 1 {
+                    if ER::SLOT_COUNT > 1 || W::ACTIVE {
                         if !self.is_feasible(ctx, pattern_idx, candidate, watcher) {
                             continue;
                         }
-                    } else if W::ACTIVE {
-                        if !self.is_feasible(ctx, pattern_idx, candidate, watcher) {
-                            continue;
-                        }
-                    } else {
-                        if !self.is_feasible_reverse_only(ctx, pattern_idx, *candidate) {
-                            continue;
-                        }
+                    } else if !self.is_feasible_reverse_only(ctx, pattern_idx, *candidate) {
+                        continue;
                     }
                 }
             } else {
@@ -715,17 +702,14 @@ impl<R: ReverseLookup> State<R> {
 
             if W::ACTIVE {
                 let local_id = ctx.query.nodes[pattern_idx].local_id;
-                match watcher.on_bind(depth, local_id, candidate) {
-                    crate::watch::Control::Stop => {
-                        self.exhausted = true;
-                        return (None, total);
-                    }
-                    _ => {}
+                if let crate::watch::Control::Stop = watcher.on_bind(depth, local_id, candidate) {
+                    self.exhausted = true;
+                    return (None, total);
                 }
             }
 
-            if depth + 2 < search_len {
-                if !self.lookahead_ok(ctx, depth) {
+            if depth + 2 < search_len
+                && !self.lookahead_ok(ctx, depth) {
                     if W::ACTIVE {
                         let local_id = ctx.query.nodes[pattern_idx].local_id;
                         watcher.on_unbind(depth, local_id);
@@ -734,7 +718,6 @@ impl<R: ReverseLookup> State<R> {
                     if !IJ::MIXED || ctx.query.is_injective[pattern_idx] { self.reverse.clear(*candidate); }
                     continue;
                 }
-            }
 
             if depth + 1 == search_len {
                 // Compute path intermediates and protect them from ban candidates
@@ -749,7 +732,7 @@ impl<R: ReverseLookup> State<R> {
                         let any_slot = pe.any_slot;
                         let pred = ctx.query.edge_preds[ei].as_ref();
                         let edge_filter = |s: ER::Slot, ev: &ER::Val| -> bool {
-                            (any_slot || s == slot) && pred.map_or(true, |p| p(ev))
+                            (any_slot || s == slot) && pred.is_none_or(|p| p(ev))
                         };
                         let pc = crate::search::path::PathConstraint::from_morphism(
                             pe.path_morphism,

@@ -67,7 +67,7 @@ macro_rules! impl_anon_edge_op {
             fn $op(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    val: Ok(ER::Val::default()),
                     target: rhs.into_op(),
                 });
                 self
@@ -83,7 +83,7 @@ macro_rules! impl_anon_edge_op {
             fn $op(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    val: Ok(ER::Val::default()),
                     target: rhs.into_op(),
                 });
                 self
@@ -105,7 +105,7 @@ macro_rules! impl_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    val: Ok(self.1 .0.into_val()),
                     target: rhs.into_op(),
                 });
                 node
@@ -121,7 +121,7 @@ macro_rules! impl_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    val: Ok(self.1 .0.into_val()),
                     target: rhs.into_op(),
                 });
                 node
@@ -145,7 +145,7 @@ macro_rules! impl_rawval_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::wrap_slot_val((self.1).0 .0),
+                    val: Ok(ER::wrap_slot_val((self.1).0 .0)),
                     target: rhs.into_op(),
                 });
                 node
@@ -161,7 +161,7 @@ macro_rules! impl_rawval_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::wrap_slot_val((self.1).0 .0),
+                    val: Ok(ER::wrap_slot_val((self.1).0 .0)),
                     target: rhs.into_op(),
                 });
                 node
@@ -172,6 +172,44 @@ macro_rules! impl_rawval_undir_op {
 
 for_each_dir!(impl_rawval_undir_op!(Node<NV, V, ER>, V));
 for_each_dir!(impl_rawval_undir_op!(Ref<NV, ER>));
+
+macro_rules! impl_parts_undir_op {
+    ($NodeTy:ty, $V:ident, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, $V, C, ER: graph::Edge + $Dir + SlotVal<$SlotDir, SlotType = C>, RHS: IntoOp<NV, ER>>
+            $Op<RHS> for UndirPending<$NodeTy, edge::Edge<edge::Parts<C>, NV, ER>>
+        {
+            type Output = $NodeTy;
+            fn $op(self, rhs: RHS) -> $NodeTy {
+                let mut node = self.0;
+                node.edges.push(EdgeOp {
+                    slot: <ER as $Dir>::SLOT,
+                    val: (self.1).0 .0.map(ER::wrap_slot_val),
+                    target: rhs.into_op(),
+                });
+                node
+            }
+        }
+    };
+    ($NodeTy:ty, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, C, ER: graph::Edge + $Dir + SlotVal<$SlotDir, SlotType = C>, RHS: IntoOp<NV, ER>>
+            $Op<RHS> for UndirPending<$NodeTy, edge::Edge<edge::Parts<C>, NV, ER>>
+        {
+            type Output = $NodeTy;
+            fn $op(self, rhs: RHS) -> $NodeTy {
+                let mut node = self.0;
+                node.edges.push(EdgeOp {
+                    slot: <ER as $Dir>::SLOT,
+                    val: (self.1).0 .0.map(ER::wrap_slot_val),
+                    target: rhs.into_op(),
+                });
+                node
+            }
+        }
+    };
+}
+
+for_each_dir!(impl_parts_undir_op!(Node<NV, V, ER>, V));
+for_each_dir!(impl_parts_undir_op!(Ref<NV, ER>));
 
 macro_rules! impl_bitand_connected {
     ($Self:ty, $V:ident) => {
@@ -228,6 +266,20 @@ impl_bitand_undir_pending!(Node<NV, V, ER>, edge::Edge<(), NV, ER>, V);
 impl_bitand_undir_pending!(Node<NV, V, ER>, edge::Edge<HasVal<ER::Val>, NV, ER>, V);
 impl_bitand_undir_pending!(Ref<NV, ER>, edge::Edge<(), NV, ER>);
 impl_bitand_undir_pending!(Ref<NV, ER>, edge::Edge<HasVal<ER::Val>, NV, ER>);
+
+impl<NV, V, C, ER: graph::Edge> BitAnd<edge::Edge<edge::Parts<C>, NV, ER>> for Node<NV, V, ER> {
+    type Output = UndirPending<Self, edge::Edge<edge::Parts<C>, NV, ER>>;
+    fn bitand(self, edge: edge::Edge<edge::Parts<C>, NV, ER>) -> Self::Output {
+        UndirPending(self, edge)
+    }
+}
+
+impl<NV, C, ER: graph::Edge> BitAnd<edge::Edge<edge::Parts<C>, NV, ER>> for Ref<NV, ER> {
+    type Output = UndirPending<Self, edge::Edge<edge::Parts<C>, NV, ER>>;
+    fn bitand(self, edge: edge::Edge<edge::Parts<C>, NV, ER>) -> Self::Output {
+        UndirPending(self, edge)
+    }
+}
 
 // HasRawVal variants: Node & E().val(slot_val) creates UndirPending
 macro_rules! impl_bitand_rawval_pending {

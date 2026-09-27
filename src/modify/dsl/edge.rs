@@ -3,6 +3,8 @@ use super::{ExistEdgeSource, HasVal, IntoExistNode, IntoNode, IntoOptional, Into
 use crate::graph;
 use crate::graph::dsl::{HasRawVal, IsFullVal};
 use crate::graph::edge::{DirSlot, SlotVal, Src, Tgt, Und, UndirSlot};
+use crate::composite::{Composite, Has, KindOf, Kinded};
+use crate::modify::part::{ExcludePart, IncludePart, Part, SlotClassed, Through};
 use std::marker::PhantomData;
 use std::ops::{BitAnd, BitXor, Shl, Shr};
 
@@ -11,10 +13,82 @@ pub mod new {
 
     pub struct Edge<EV, NV, ER: graph::Edge>(pub(crate) EV, pub(crate) PhantomData<(NV, ER)>);
 
+    pub struct PendingInclude<T>(pub(crate) T);
+
+    pub struct PendingExclude<T>(pub(crate) PhantomData<fn() -> T>);
+
+    pub struct PendingExcludeKind<K>(pub(crate) K);
+
     impl<NV, ER: graph::Edge> Edge<(), NV, ER> {
         pub fn val<V>(self, v: V) -> Edge<HasRawVal<V>, NV, ER> {
             Edge(HasRawVal(v), PhantomData)
         }
+
+        pub fn include<T>(self, part: T) -> Edge<PendingInclude<T>, NV, ER> {
+            Edge(PendingInclude(part), PhantomData)
+        }
+
+        pub fn exclude<T>(self) -> Edge<PendingExclude<T>, NV, ER> {
+            Edge(PendingExclude(PhantomData), PhantomData)
+        }
+
+        pub fn exclude_kind<K>(self, kind: K) -> Edge<PendingExcludeKind<K>, NV, ER> {
+            Edge(PendingExcludeKind(kind), PhantomData)
+        }
+    }
+}
+
+mod sealed { pub trait Sealed {} }
+
+impl<T> sealed::Sealed for new::PendingInclude<T> {}
+impl<T> sealed::Sealed for new::PendingExclude<T> {}
+impl<K> sealed::Sealed for new::PendingExcludeKind<K> {}
+
+pub trait PartTerm<ER: graph::Edge, S>: sealed::Sealed {
+    fn into_part(self) -> Part<ER::Val>;
+}
+
+impl<ER, S, C, T> PartTerm<ER, S> for new::PendingInclude<T>
+where
+    ER: graph::Edge + SlotVal<S, SlotType = C> + 'static,
+    S: SlotClassed + 'static,
+    ER::Val: PartialEq + 'static,
+    C: Composite,
+    T: Into<C::Part>,
+    C::Part: Send + Sync + 'static,
+    C::IncludeRefused: Send + Sync + 'static,
+{
+    fn into_part(self) -> Part<ER::Val> {
+        IncludePart::slotted::<Through<ER, S>>(self.0.into()).into()
+    }
+}
+
+impl<ER, S, C, T> PartTerm<ER, S> for new::PendingExclude<T>
+where
+    ER: graph::Edge + SlotVal<S, SlotType = C> + 'static,
+    S: SlotClassed + 'static,
+    ER::Val: PartialEq + 'static,
+    C: Has<T>,
+    KindOf<C>: Send + Sync + 'static,
+    C::ExcludeRefused: Send + Sync + 'static,
+{
+    fn into_part(self) -> Part<ER::Val> {
+        ExcludePart::slotted::<Through<ER, S>>(<C as Has<T>>::part_kind()).into()
+    }
+}
+
+impl<ER, S, C, K> PartTerm<ER, S> for new::PendingExcludeKind<K>
+where
+    ER: graph::Edge + SlotVal<S, SlotType = C> + 'static,
+    S: SlotClassed + 'static,
+    ER::Val: PartialEq + 'static,
+    C: Composite,
+    C::Part: Kinded<Kind = K>,
+    K: Send + Sync + 'static,
+    C::ExcludeRefused: Send + Sync + 'static,
+{
+    fn into_part(self) -> Part<ER::Val> {
+        ExcludePart::slotted::<Through<ER, S>>(self.0).into()
     }
 }
 
@@ -45,6 +119,12 @@ pub struct NewConnected<NV, ER: graph::Edge> {
     pub(crate) target: Node<NV, ER>,
 }
 
+pub struct PartConnected<NV, ER: graph::Edge> {
+    pub(crate) slot: ER::Slot,
+    pub(crate) op: Part<ER::Val>,
+    pub(crate) target: Node<NV, ER>,
+}
+
 pub struct Connected<NV, ER: graph::Edge> {
     pub(crate) slot: ER::Slot,
     pub(crate) val: Option<ER::Val>,
@@ -70,6 +150,11 @@ pub enum Edge<NV, ER: graph::Edge> {
     Exist {
         slot: ER::Slot,
         op: Exist<ER::Val>,
+        target: Node<NV, ER>,
+    },
+    Part {
+        slot: ER::Slot,
+        op: Part<ER::Val>,
         target: Node<NV, ER>,
     },
 }
@@ -116,6 +201,31 @@ macro_rules! impl_connect_new_op {
 }
 
 for_each_dir!(impl_connect_new_op!());
+
+macro_rules! impl_connect_part_op {
+    ($Pending:ident, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<X, NV, ER: graph::Edge + $Dir, RHS: IntoNode<NV, ER>> $Op<RHS> for new::Edge<new::$Pending<X>, NV, ER>
+        where
+            new::$Pending<X>: PartTerm<ER, $SlotDir>,
+        {
+            type Output = new::Edge<PartConnected<NV, ER>, NV, ER>;
+            fn $op(self, rhs: RHS) -> Self::Output {
+                new::Edge(
+                    PartConnected {
+                        slot: <ER as $Dir>::SLOT,
+                        op: self.0.into_part(),
+                        target: rhs.into_node(),
+                    },
+                    PhantomData,
+                )
+            }
+        }
+    };
+}
+
+for_each_dir!(impl_connect_part_op!(PendingInclude));
+for_each_dir!(impl_connect_part_op!(PendingExclude));
+for_each_dir!(impl_connect_part_op!(PendingExcludeKind));
 
 macro_rules! impl_connect_exist_op {
     ($Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
@@ -232,6 +342,34 @@ impl_bitand_connected_new!(node::translated::Node<NV, V, ER>, V);
 impl_bitand_connected_new!(@dnr, node::new::Ref<NV, ER>);
 impl_bitand_connected_new!(node::exist::Ref<NV, ER>);
 impl_bitand_connected_new!(node::translated::Ref<NV, ER>);
+
+macro_rules! impl_bitand_connected_part {
+    ($Self:ty, $V:ident) => {
+        impl<NV, $V, ER: graph::Edge> BitAnd<new::Edge<PartConnected<NV, ER>, NV, ER>> for $Self {
+            type Output = Self;
+            fn bitand(mut self, arm: new::Edge<PartConnected<NV, ER>, NV, ER>) -> Self {
+                self.edges.push(Edge::Part { slot: arm.0.slot, op: arm.0.op, target: arm.0.target });
+                self
+            }
+        }
+    };
+    ($Self:ty) => {
+        impl<NV, ER: graph::Edge> BitAnd<new::Edge<PartConnected<NV, ER>, NV, ER>> for $Self {
+            type Output = Self;
+            fn bitand(mut self, arm: new::Edge<PartConnected<NV, ER>, NV, ER>) -> Self {
+                self.edges.push(Edge::Part { slot: arm.0.slot, op: arm.0.op, target: arm.0.target });
+                self
+            }
+        }
+    };
+}
+
+impl_bitand_connected_part!(node::new::Node<NV, V, ER>, V);
+impl_bitand_connected_part!(node::exist::Node<NV, V, ER>, V);
+impl_bitand_connected_part!(node::translated::Node<NV, V, ER>, V);
+impl_bitand_connected_part!(node::new::Ref<NV, ER>);
+impl_bitand_connected_part!(node::exist::Ref<NV, ER>);
+impl_bitand_connected_part!(node::translated::Ref<NV, ER>);
 
 macro_rules! impl_bitand_connected_exist {
     ($Self:ty, $V:ident) => {
@@ -364,6 +502,30 @@ impl_bitand_undir_pending!(node::translated::Ref<NV, ER>, new::Edge<HasVal<ER::V
 impl_bitand_undir_pending!(node::translated::Ref<NV, ER>, exist::Edge<(), NV, ER>);
 impl_bitand_undir_pending!(node::translated::Ref<NV, ER>, exist::Edge<HasVal<ER::Val>, NV, ER>);
 impl_bitand_undir_pending!(node::translated::Ref<NV, ER>, exist::Rem<(), NV, ER>);
+
+macro_rules! impl_bitand_part_pending {
+    ($(#[$attr:meta])* $Self:ty, [$($G:ident),*]) => {
+        impl_bitand_part_pending!(@one $(#[$attr])* $Self, [$($G),*], PendingInclude);
+        impl_bitand_part_pending!(@one $(#[$attr])* $Self, [$($G),*], PendingExclude);
+        impl_bitand_part_pending!(@one $(#[$attr])* $Self, [$($G),*], PendingExcludeKind);
+    };
+    (@one $(#[$attr:meta])* $Self:ty, [$($G:ident),*], $Pending:ident) => {
+        $(#[$attr])*
+        impl<NV, $($G,)* X, ER: graph::Edge> BitAnd<new::Edge<new::$Pending<X>, NV, ER>> for $Self {
+            type Output = UndirPending<Self, new::Edge<new::$Pending<X>, NV, ER>>;
+            fn bitand(self, edge: new::Edge<new::$Pending<X>, NV, ER>) -> Self::Output {
+                UndirPending(self, edge)
+            }
+        }
+    };
+}
+
+impl_bitand_part_pending!(#[diagnostic::do_not_recommend] node::new::Node<NV, V, ER>, [V]);
+impl_bitand_part_pending!(#[diagnostic::do_not_recommend] node::new::Ref<NV, ER>, []);
+impl_bitand_part_pending!(node::exist::Node<NV, V, ER>, [V]);
+impl_bitand_part_pending!(node::exist::Ref<NV, ER>, []);
+impl_bitand_part_pending!(node::translated::Node<NV, V, ER>, [V]);
+impl_bitand_part_pending!(node::translated::Ref<NV, ER>, []);
 
 // HasRawVal variants: Node & E().val(slot_val) / e().val(slot_val) creates UndirPending
 macro_rules! impl_bitand_rawval_pending {

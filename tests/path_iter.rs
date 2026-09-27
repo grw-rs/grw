@@ -14,7 +14,7 @@ use std::collections::HashSet;
 use grw::edge::anydir;
 use grw::graph::edge::{AnyVal, End};
 use grw::modify::dsl::*;
-use grw::search::path::{self, AStar, Config, Dijkstra, PathConstraint};
+use grw::search::path::{AStar, Config, Dijkstra, PathConstraint};
 
 type GrwGraph = grw::MGraph<(), grw::edge::Anydir<u8>>;
 

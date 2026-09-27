@@ -125,6 +125,7 @@ impl std::ops::Deref for NR<id::N> {
     }
 }
 
+pub mod composite;
 pub mod graph;
 
 pub(crate) use graph::collections::*;
@@ -134,15 +135,35 @@ pub use graph::index;
 
 pub mod modify;
 pub mod search;
+pub mod prelude {
+    pub use crate::composite::{Composite, Part, Typed};
+    pub use crate::layout::Val;
+    pub use crate::search::dsl::Seek;
+    pub use crate::{mgraph, modify, pattern, search, vgraph};
+}
 pub use graph::watcher as watch;
 pub use graph::layout;
 pub use grw_derive::repl;
-pub use grw_derive::pattern;
-pub use grw_derive::search;
+
+#[doc(hidden)]
+#[path = "private.rs"]
+pub mod __private;
+
+#[macro_export]
+macro_rules! search {
+    ($($t:tt)*) => { $crate::__private::search!{ $crate; $($t)* } };
+}
+
+#[macro_export]
+macro_rules! pattern {
+    ($($t:tt)*) => { $crate::__private::pattern!{ $crate; $($t)* } };
+}
+
 pub use layout::Val;
 #[cfg(test)]
 pub(crate) mod test;
 
+pub use composite::{Composite, Kinded, TypeSet};
 pub use graph::MGraph;
 pub use graph::{Graph, VGraph};
 pub use search::Morphism::{self, Iso, SubIso, EpiMono, Mono, Epi, Homo};

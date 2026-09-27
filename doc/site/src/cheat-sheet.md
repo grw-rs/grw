@@ -76,6 +76,8 @@ In practice, real-world graphs have structure (bounded degree, sparsity, value p
 - `N(name)` / `n(name)` — named pattern node / reference, alongside integer `N(id)` / `n(id)`
 - `N(id: pattern)` / `N(name: pattern)` — node value must match a Rust pattern
 - `E(pattern)` — edge value must match a Rust pattern
+- `E().has::<T>()` / `E().has_kind(k)` — the link holds a part of that kind; `.test(|t: &T| ..)` reads that part
+- `!E().has::<T>()` — no link holding that part; `!E()` — no link at all
 - `X(name = node_id)` / `X(name = node_id : pattern)` — context node pinned to a graph node, optionally value-checked
 - `pattern![..]` — graph-free `Pattern`; rejects `X(..)`
 - `search![&g, p]` / `search![&g, p with X(a = id), X(b = id), ..]` — run a stored pattern, optionally pinning named nodes

@@ -13,8 +13,13 @@ macro_rules! for_each_dir {
 
 pub mod edge;
 pub mod node;
+mod parts;
 
-use crate::graph::dsl::{HasVal, IntoOptional, IntoVal};
+pub use edge::Seek;
+pub use parts::{EdgeTerm, Focus, InSlot, Parts, SlotEdge};
+pub(crate) use parts::{Required, Tested};
+
+use crate::graph::dsl::{HasVal, IntoOptional};
 
 pub struct HasPred;
 
@@ -32,11 +37,6 @@ impl IsValEdge for HasPred {}
 impl<T> IntoOptional<T> for HasPred {
     fn into_optional(self) -> Option<T> {
         None
-    }
-}
-impl<T: Default> IntoVal<T> for HasPred {
-    fn into_val(self) -> T {
-        T::default()
     }
 }
 mod validate;
@@ -87,11 +87,13 @@ pub enum Op<NV, ER: graph::Edge> {
     },
 }
 
+pub(crate) type EdgePred<ER> = Box<dyn Fn(&<ER as graph::Edge>::Val) -> bool + Send + Sync>;
+
 #[allow(dead_code)]
 pub struct EdgeOp<NV, ER: graph::Edge> {
     pub slot: ER::Slot,
-    pub val: ER::Val,
-    pub edge_pred: Option<Box<dyn Fn(&ER::Val) -> bool + Send + Sync>>,
+    pub parts: Parts<ER::Val>,
+    pub edge_pred: Option<EdgePred<ER>>,
     pub target: Op<NV, ER>,
     pub negated: bool,
     pub any_slot: bool,

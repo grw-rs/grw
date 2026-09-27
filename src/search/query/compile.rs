@@ -6,6 +6,7 @@ use crate::search::{Decision, Morphism};
 use crate::search::dsl::{ClusterOps, Op, check_pattern};
 use crate::search::error;
 use super::{Query, PatternNode, PatternEdge, BanCluster, Cluster, NodeKind, Search, Resolved, Unresolved};
+use super::constraint::{validated, EdgePred, Flaw, Holds, Lacks, Term};
 use std::collections::BTreeMap;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -43,18 +44,44 @@ fn collect_user_ids<NV, ER: graph::Edge>(op: &Op<NV, ER>, ids: &mut Vec<Id>) {
     }
 }
 
+type EdgeMapKey<ER> = (usize, usize, bool, EdgeSlot<<ER as graph::Edge>::Slot>);
+type EdgePredVal<ER> = Option<Box<dyn Fn(&<ER as graph::Edge>::Val) -> bool + Send + Sync>>;
+type AdjEntry<ER> = (usize, <ER as graph::Edge>::Slot, bool, usize);
+type AdjCheckEntry<ER> = (usize, <ER as graph::Edge>::Slot, bool, bool);
+
 struct Flattener<NV, ER: graph::Edge> {
     node_map: FxHashMap<LocalId, usize>,
     nodes: Vec<PatternNode>,
-    edge_map: BTreeMap<(usize, usize, bool, EdgeSlot<ER::Slot>), usize>,
+    edge_map: BTreeMap<EdgeMapKey<ER>, usize>,
     edges: Vec<PatternEdge<ER>>,
     node_preds: Vec<Option<super::NodePred<NV>>>,
-    edge_preds: Vec<Option<Box<dyn Fn(&ER::Val) -> bool + Send + Sync>>>,
+    edge_preds: Vec<EdgePredVal<ER>>,
+    holds: BTreeMap<usize, Holds<ER::Val>>,
+    lacks: BTreeMap<usize, Lacks<ER::Val>>,
+    shared: FxHashSet<usize>,
     exist_bindings: FxHashMap<usize, crate::id::N>,
     id_space: IdSpace,
 }
 
-impl<NV, ER: graph::Edge> Flattener<NV, ER> {
+type EdgeKey<S> = (usize, usize, bool, EdgeSlot<S>);
+
+enum Fold<V> {
+    IntoHeld(usize),
+    FromLacked(usize, Lacks<V>),
+    Fresh,
+}
+
+fn flawed(flaw: Flaw, src: Id, tgt: Id) -> error::Search {
+    match flaw {
+        Flaw::Repeated(kind) => error::Edge::PartRepeated { src, tgt, kind }.into(),
+        Flaw::Contradictory => error::Edge::Contradictory { src, tgt }.into(),
+    }
+}
+
+impl<NV, ER: graph::Edge> Flattener<NV, ER>
+where
+    ER::Val: 'static,
+{
     fn new(cluster_ops: &[ClusterOps<NV, ER>]) -> Self {
         let mut user_ids = Vec::new();
         for cluster in cluster_ops {
@@ -73,6 +100,9 @@ impl<NV, ER: graph::Edge> Flattener<NV, ER> {
             edges: Vec::new(),
             node_preds: Vec::new(),
             edge_preds: Vec::new(),
+            holds: BTreeMap::new(),
+            lacks: BTreeMap::new(),
+            shared: FxHashSet::default(),
             exist_bindings: FxHashMap::default(),
             id_space,
         }
@@ -151,50 +181,213 @@ impl<NV, ER: graph::Edge> Flattener<NV, ER> {
             };
             let (lo, hi, norm_slot) = normalize_key::<ER>(node_idx, target_idx, edge_slot);
             let key = (lo, hi, edge_negated, norm_slot);
+            let src_lid = self.nodes[lo].local_id.0;
+            let tgt_lid = self.nodes[hi].local_id.0;
+            let term = Term { parts: edge_op.parts.0, whole: edge_op.edge_pred };
+            let pathless = edge_op.path.is_none();
 
-            if let Some(&existing_idx) = self.edge_map.get(&key) {
-                let src_lid = self.nodes[lo].local_id.0;
-                let tgt_lid = self.nodes[hi].local_id.0;
-                if cluster_edges.contains(&existing_idx) {
-                    return Err(error::Edge::Duplicate {
-                        src: src_lid,
-                        tgt: tgt_lid,
-                    }.into());
+            match self.edge_map.get(&key).copied() {
+                Some(existing) if cluster_edges.contains(&existing) => {
+                    let constrained = self.holds.contains_key(&existing) || self.lacks.contains_key(&existing);
+                    let mergeable = (term.has_parts() || constrained) && pathless && self.edges[existing].path.is_none();
+                    if mergeable && self.shared.contains(&existing) {
+                        return Err(error::Edge::ConflictingPred {
+                            src: src_lid,
+                            tgt: tgt_lid,
+                        }.into());
+                    }
+                    if !mergeable {
+                        return Err(error::Edge::Duplicate {
+                            src: src_lid,
+                            tgt: tgt_lid,
+                        }.into());
+                    }
+                    self.merge(existing, edge_negated, term).map_err(|f| flawed(f, src_lid, tgt_lid))?;
                 }
-                let existing_has_pred = self.edge_preds[existing_idx].is_some();
-                let new_has_pred = edge_op.edge_pred.is_some();
-                if existing_has_pred || new_has_pred {
-                    return Err(error::Edge::ConflictingPred {
-                        src: src_lid,
-                        tgt: tgt_lid,
-                    }.into());
+                Some(existing) => {
+                    let existing_has_pred = self.edge_preds[existing].is_some()
+                        || self.holds.contains_key(&existing)
+                        || self.lacks.contains_key(&existing);
+                    let new_has_pred = term.whole.is_some() || term.has_parts();
+                    if existing_has_pred || new_has_pred {
+                        return Err(error::Edge::ConflictingPred {
+                            src: src_lid,
+                            tgt: tgt_lid,
+                        }.into());
+                    }
+                    self.shared.insert(existing);
+                    cluster_edges.push(existing);
                 }
-                cluster_edges.push(existing_idx);
-            } else {
-                let edge_idx = self.edges.len();
-                self.edges.push(PatternEdge {
-                    source: node_idx,
-                    target: target_idx,
-                    slot: edge_op.slot,
-                    negated: edge_negated,
-                    ban_only: false,
-                    any_slot: edge_op.any_slot,
-                    path: edge_op.path,
-                    path_morphism: cluster_morphism,
-                });
-                self.edge_preds.push(edge_op.edge_pred);
-                self.edge_map.insert(key, edge_idx);
-                cluster_edges.push(edge_idx);
+                None => {
+                    let fold = self.fold_for(key, edge_negated, &term, pathless, cluster_edges);
+                    match fold {
+                        Fold::IntoHeld(held) => {
+                            self.forbid_on(held, term).map_err(|f| flawed(f, src_lid, tgt_lid))?;
+                        }
+                        Fold::FromLacked(lacked, lacks) => {
+                            let mut holds = Holds::new(None, term).map_err(|f| flawed(f, src_lid, tgt_lid))?;
+                            holds.forbid_lacked(lacks);
+                            self.holds.insert(lacked, holds);
+                            self.edges[lacked] = PatternEdge {
+                                source: node_idx,
+                                target: target_idx,
+                                slot: edge_op.slot,
+                                negated: false,
+                                ban_only: false,
+                                any_slot: edge_op.any_slot,
+                                path: None,
+                                path_morphism: cluster_morphism,
+                            };
+                            self.edge_map.remove(&(lo, hi, true, norm_slot));
+                            self.edge_map.insert(key, lacked);
+                        }
+                        Fold::Fresh => {
+                            let edge_idx = self.edges.len();
+                            let has_parts = term.has_parts();
+                            let whole = match has_parts {
+                                true => {
+                                    match edge_negated {
+                                        true => {
+                                            let lacks = Lacks::new(term).map_err(|f| flawed(f, src_lid, tgt_lid))?;
+                                            self.lacks.insert(edge_idx, lacks);
+                                        }
+                                        false => {
+                                            let holds = Holds::new(None, term).map_err(|f| flawed(f, src_lid, tgt_lid))?;
+                                            self.holds.insert(edge_idx, holds);
+                                        }
+                                    }
+                                    None
+                                }
+                                false => term.whole,
+                            };
+                            self.edges.push(PatternEdge {
+                                source: node_idx,
+                                target: target_idx,
+                                slot: edge_op.slot,
+                                negated: edge_negated,
+                                ban_only: false,
+                                any_slot: edge_op.any_slot,
+                                path: edge_op.path,
+                                path_morphism: cluster_morphism,
+                            });
+                            self.edge_preds.push(whole);
+                            self.edge_map.insert(key, edge_idx);
+                            cluster_edges.push(edge_idx);
+                        }
+                    }
+                }
             }
         }
 
         Ok(node_idx)
     }
+
+    fn fold_for(
+        &mut self,
+        key: EdgeKey<ER::Slot>,
+        negated: bool,
+        term: &Term<ER::Val>,
+        pathless: bool,
+        cluster_edges: &[usize],
+    ) -> Fold<ER::Val> {
+        let (lo, hi, _, slot) = key;
+        match self.edge_map.get(&(lo, hi, !negated, slot)).copied() {
+            Some(other)
+                if pathless
+                    && cluster_edges.contains(&other)
+                    && !self.shared.contains(&other)
+                    && self.edges[other].path.is_none() =>
+            {
+                match negated {
+                    true if term.has_parts() => Fold::IntoHeld(other),
+                    true => Fold::Fresh,
+                    false => match self.lacks.remove(&other) {
+                        Some(lacks) => Fold::FromLacked(other, lacks),
+                        None => Fold::Fresh,
+                    },
+                }
+            }
+            _ => Fold::Fresh,
+        }
+    }
+
+    fn merge(&mut self, existing: usize, negated: bool, term: Term<ER::Val>) -> Result<(), Flaw> {
+        match negated {
+            false => match self.holds.get_mut(&existing) {
+                Some(holds) => holds.require(term),
+                None => {
+                    let holds = Holds::new(self.edge_preds[existing].take(), term)?;
+                    self.holds.insert(existing, holds);
+                    Ok(())
+                }
+            },
+            true => {
+                let plain = self.edge_preds[existing].is_none() && !self.lacks.contains_key(&existing);
+                match (plain, term.is_plain()) {
+                    (true, _) => validated(term),
+                    (false, true) => {
+                        self.lacks.remove(&existing);
+                        self.edge_preds[existing] = None;
+                        Ok(())
+                    }
+                    (false, false) => match self.lacks.get_mut(&existing) {
+                        Some(lacks) => lacks.lack(term),
+                        None => {
+                            let earlier = Term { parts: Vec::new(), whole: self.edge_preds[existing].take() };
+                            let mut lacks = Lacks::new(earlier)?;
+                            lacks.lack(term)?;
+                            self.lacks.insert(existing, lacks);
+                            Ok(())
+                        }
+                    },
+                }
+            }
+        }
+    }
+
+    fn forbid_on(&mut self, held: usize, term: Term<ER::Val>) -> Result<(), Flaw> {
+        match self.holds.get_mut(&held) {
+            Some(holds) => holds.forbid(term),
+            None => {
+                let empty = Term { parts: Vec::new(), whole: None };
+                let mut holds = Holds::new(self.edge_preds[held].take(), empty)?;
+                holds.forbid(term)?;
+                self.holds.insert(held, holds);
+                Ok(())
+            }
+        }
+    }
+
+    fn settle_constraints(&mut self) -> Result<(), error::Search> {
+        for (idx, holds) in std::mem::take(&mut self.holds) {
+            let pred: EdgePred<ER::Val> = match holds.into_pred() {
+                Ok(pred) => pred,
+                Err(flaw) => return Err(self.flaw_at(idx, flaw)),
+            };
+            self.edge_preds[idx] = Some(pred);
+        }
+        for (idx, lacks) in std::mem::take(&mut self.lacks) {
+            self.edge_preds[idx] = Some(lacks.into_pred());
+        }
+        Ok(())
+    }
+
+    fn flaw_at(&self, idx: usize, flaw: Flaw) -> error::Search {
+        let e = &self.edges[idx];
+        let (lo, hi) = match e.source <= e.target {
+            true => (e.source, e.target),
+            false => (e.target, e.source),
+        };
+        flawed(flaw, self.nodes[lo].local_id.0, self.nodes[hi].local_id.0)
+    }
 }
 
 pub fn compile<NV, ER: graph::Edge>(
     cluster_ops: Vec<ClusterOps<NV, ER>>,
-) -> Result<Search<NV, ER>, error::Search> {
+) -> Result<Search<NV, ER>, error::Search>
+where
+    ER::Val: 'static,
+{
     check_pattern(&cluster_ops)?;
 
     let mut flat: Flattener<NV, ER> = Flattener::new(&cluster_ops);
@@ -284,6 +477,8 @@ pub fn compile<NV, ER: graph::Edge>(
             defined_indices: Vec::new(),
         });
     }
+
+    flat.settle_constraints()?;
 
     for i in get_edge_count..flat.edges.len() {
         flat.edges[i].ban_only = true;
@@ -377,7 +572,7 @@ pub fn compile<NV, ER: graph::Edge>(
                 ..=(*lo, *hi, true, EdgeSlot::Any)
         );
 
-        for (&(_, _, _, ref neg_slot), &neg_ei) in neg_range {
+        for ((_, _, _, neg_slot), &neg_ei) in neg_range {
             let neg_has_pred = flat.edge_preds[neg_ei].is_some();
             if neg_has_pred {
                 continue;
@@ -525,7 +720,7 @@ pub fn compile<NV, ER: graph::Edge>(
     }
 
     let node_count = flat.nodes.len();
-    let mut adj: Vec<Vec<(usize, ER::Slot, bool, usize)>> = vec![Vec::new(); node_count];
+    let mut adj: Vec<Vec<AdjEntry<ER>>> = vec![Vec::new(); node_count];
 
     for (edge_idx, edge) in flat.edges.iter().enumerate() {
         adj[edge.source].push((edge.target, edge.slot, edge.negated, edge_idx));
@@ -654,11 +849,10 @@ pub fn compile<NV, ER: graph::Edge>(
         let mut anchor_nodes: Vec<usize> = Vec::new();
         for &ni in &all_negated_nodes {
             for &(neighbor, _, _, _) in &adj[ni] {
-                if !negated_set.contains(&neighbor) && !flat.nodes[neighbor].ban_only {
-                    if !anchor_nodes.contains(&neighbor) {
+                if !negated_set.contains(&neighbor) && !flat.nodes[neighbor].ban_only
+                    && !anchor_nodes.contains(&neighbor) {
                         anchor_nodes.push(neighbor);
                     }
-                }
             }
         }
         anchor_nodes.sort_unstable();
@@ -715,8 +909,8 @@ pub fn compile<NV, ER: graph::Edge>(
         }
     }
 
-    let mut adj_check: Vec<Vec<(usize, ER::Slot, bool, bool)>> = vec![Vec::new(); node_count];
-    let mut adj_pred: Vec<Vec<(usize, ER::Slot, bool, usize)>> = vec![Vec::new(); node_count];
+    let mut adj_check: Vec<Vec<AdjCheckEntry<ER>>> = vec![Vec::new(); node_count];
+    let mut adj_pred: Vec<Vec<AdjEntry<ER>>> = vec![Vec::new(); node_count];
     for ni in 0..node_count {
         for &(neighbor_idx, slot, negated, edge_idx) in &adj[ni] {
             if flat.edges[edge_idx].ban_only {

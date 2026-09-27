@@ -10,8 +10,11 @@ use grw::modify::{self, LocalId, Node};
 use grw::modify::node::{Bind, Exist, New};
 use grw::{Id, NR, id};
 
+type NodeList = Vec<(Id, ())>;
+type EdgeListUndir = Vec<(edge::undir::E<Id>, ())>;
+
 fn degree_histogram(
-    (ns, es): (Vec<(Id, ())>, Vec<(edge::undir::E<Id>, ())>),
+    (ns, es): (NodeList, EdgeListUndir),
 ) -> Vec<(Id, usize)> {
     use std::collections::BTreeMap;
     let mut deg: BTreeMap<Id, Id> = BTreeMap::new();
@@ -27,11 +30,11 @@ fn degree_histogram(
         }
     }
     let mut hist: BTreeMap<Id, usize> = BTreeMap::new();
-    for (_, &d) in &deg {
+    for &d in deg.values() {
         *hist.entry(d).or_insert(0) += 1;
     }
     let mut result: Vec<_> = hist.into_iter().collect();
-    result.sort_by(|a, b| b.0.cmp(&a.0));
+    result.sort_by_key(|b| std::cmp::Reverse(b.0));
     result
 }
 
@@ -66,7 +69,7 @@ impl Shadow {
         self.edges.remove(&(nr, slot));
     }
 
-    fn to_vecs(&self) -> (Vec<(Id, ())>, Vec<(edge::undir::E<Id>, ())>) {
+    fn to_vecs(&self) -> (NodeList, EdgeListUndir) {
         let ns: Vec<(Id, ())> = self.nodes.iter().map(|&id| (id, ())).collect();
         let es: Vec<(edge::undir::E<Id>, ())> = self
             .edges
@@ -100,12 +103,7 @@ struct RemoveEdgePlan {
     source_id: Id,
 }
 
-fn chaos_step(
-    graph: &mut MUndir0,
-    shadow: &mut Shadow,
-    rng: &mut SmallRng,
-    step: usize,
-    seed: u64,
+struct Params {
     shrink_factor: f64,
     growth_factor: f64,
     density_factor: f64,
@@ -113,13 +111,22 @@ fn chaos_step(
     exist_edge_factor: f64,
     remove_edge_factor: f64,
     max_batch: usize,
+}
+
+fn chaos_step(
+    graph: &mut MUndir0,
+    shadow: &mut Shadow,
+    rng: &mut SmallRng,
+    step: usize,
+    seed: u64,
+    params: &Params,
 ) {
     let existing: Vec<Id> = shadow.nodes.iter().copied().collect();
 
     let removals: Vec<Id> = existing
         .iter()
         .copied()
-        .filter(|_| rng.random_bool(shrink_factor))
+        .filter(|_| rng.random_bool(params.shrink_factor))
         .collect();
     let surviving: Vec<Id> = existing
         .iter()
@@ -128,11 +135,11 @@ fn chaos_step(
         .collect();
 
     let n_new = if surviving.is_empty() {
-        1usize.max((growth_factor * 1.0) as usize)
+        1usize.max((params.growth_factor * 1.0) as usize)
     } else {
-        1usize.max((growth_factor * surviving.len() as f64) as usize)
+        1usize.max((params.growth_factor * surviving.len() as f64) as usize)
     }
-    .min(max_batch);
+    .min(params.max_batch);
 
     let mut ops: Vec<Node<(), edge::Undir<()>>> = Vec::new();
     let mut edge_plan: Vec<PlannedEdge> = Vec::new();
@@ -146,7 +153,7 @@ fn chaos_step(
     if surviving.len() >= 2 {
         let mut planned_exist: BTreeSet<(NR<id::N>, edge::undir::Slot)> = BTreeSet::new();
         for i in 0..surviving.len() {
-            if rng.random_bool(exist_edge_factor) {
+            if rng.random_bool(params.exist_edge_factor) {
                 let j = rng.random_range(0..surviving.len());
                 if i != j {
                     let src = surviving[i];
@@ -181,7 +188,7 @@ fn chaos_step(
             .collect();
 
         for &(nr, slot) in &removable_edges {
-            if rng.random_bool(remove_edge_factor) {
+            if rng.random_bool(params.remove_edge_factor) {
                 remove_edge_plan.push(RemoveEdgePlan {
                     nr,
                     slot,
@@ -243,7 +250,7 @@ fn chaos_step(
     for i in 1..=n_new as Id {
         let mut edges: Vec<modify::edge::Edge<(), edge::Undir<()>>> = Vec::new();
 
-        if !surviving.is_empty() && rng.random_bool(graft_factor) {
+        if !surviving.is_empty() && rng.random_bool(params.graft_factor) {
             let target_id = surviving[rng.random_range(0..surviving.len())];
             let slot = edge::undir::UND;
             edges.push(modify::edge::Edge::New {
@@ -263,7 +270,7 @@ fn chaos_step(
         }
 
         for prev in 1..i {
-            if rng.random_bool(density_factor) {
+            if rng.random_bool(params.density_factor) {
                 let slot = edge::undir::UND;
                 edges.push(modify::edge::Edge::New {
                     slot,
@@ -338,7 +345,11 @@ fn find_early_fail() {
     for step in 0..60 {
         chaos_step(
             &mut g, &mut s, &mut rng, step, seed,
-            0.12, 0.5, 0.3, 0.6, 0.08, 0.06, 15,
+            &Params {
+                shrink_factor: 0.12, growth_factor: 0.5, density_factor: 0.3,
+                graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.06,
+                max_batch: 15,
+            },
         );
     }
 }

@@ -155,6 +155,10 @@ impl<V> super::Nodes<V> {
         self.count
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
     pub fn has(&self, n: id::N) -> bool {
         self.store.get(*n as usize).is_some_and(|opt| opt.is_some())
     }

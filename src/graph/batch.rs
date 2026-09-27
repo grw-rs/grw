@@ -75,9 +75,11 @@ pub(crate) fn collect_edges<NV, E: Edge>(
     Ok(Edges { store, free_ids: edge_free_ids, count })
 }
 
+pub(crate) type DerivedNodesEdges<E> = Result<(Nodes<()>, Edges<E>), error::Edge<<E as Edge>::Slot>>;
+
 pub(crate) fn collect_derived_nodes_from_edges<E: Edge>(
     evs: &mut impl Iterator<Item = (E::Def, E::Val)>,
-) -> Result<(Nodes<()>, Edges<E>), error::Edge<E::Slot>> {
+) -> DerivedNodesEdges<E> {
     let mut nodes = Nodes::default();
     let mut store: Vec<Option<EdgeRec<E::Slot, E::Val>>> = Vec::new();
     let mut edge_free_ids = IdSpace::default();

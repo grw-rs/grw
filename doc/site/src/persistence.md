@@ -125,6 +125,38 @@ structure using FNV hashing. This catches:
 - Reordered fields
 - Added/removed fields
 
+## Errors
+
+Every `save`, `load*`, `read_header` and `convert` answers a
+`persist::Error { path, reason }`: the file it read or wrote, and a typed
+`Reason` — `Io`, `Format` (magic, version, section tag or range, truncation,
+trailer hash, cardinality, UTF-8), `EdgeKind`, `Layout { side, .. }`,
+`Catalogue` (an undeclared, unheld or mismatched index), `Value { site, source }`
+for a node value, edge value, free section or index set bincode refused,
+`Promotion` and `V2`.
+
+```rust
+use grw::graph::persist::{Layout, Reason, Side};
+
+let Err(err) = MGraph::<i64, edge::Undir<i64>>::load(Path::new("u32_graph.grw")) else { panic!("a u32 file is refused as i64") };
+assert!(matches!(err.reason, Reason::Layout(Layout { side: Side::Node, .. })));
+```
+
+Reads are strict: every value, the free section and every index set must be
+consumed exactly by its decode, so a slice with bytes left over is a
+`Reason::Value` naming its site. Writes are the plain `bincode::serialize`
+output, so every file grw has written still reads.
+
+## Composite Edge Values
+
+A composite edge value such as `TypeSet<P>` is saved as its parts in kind
+order, under its own layout hash, so the format is still v3. A file written
+while each link held a plain `P` fails the strict edge layout check; it loads
+into a `TypeSet<P>` graph only through the explicit
+`load_promoting`/`load_promoting_with` (on `MGraph` and `VGraph`), each old
+link becoming a one-part link. See
+[Composite Values](./composite-values.md#persistence).
+
 ## Loading an old file: `convert`
 
 A file written by the pre-v3 format is rejected by `load`/`load_with`/

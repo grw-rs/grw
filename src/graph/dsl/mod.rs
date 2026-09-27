@@ -92,7 +92,7 @@ pub enum Op<NV, ER: graph::Edge> {
 
 pub struct EdgeOp<NV, ER: graph::Edge> {
     pub slot: ER::Slot,
-    pub val: ER::Val,
+    pub val: Result<ER::Val, super::error::Part>,
     pub target: Op<NV, ER>,
 }
 
@@ -140,12 +140,14 @@ fn assign_auto_ids(explicit: &BTreeSet<Id>, auto_count: usize) -> Vec<Id> {
     auto_ids
 }
 
+type EdgesOut<ER> = Vec<((NR<id::N>, <ER as graph::Edge>::Slot), <ER as graph::Edge>::Val)>;
+
 struct Flattener<'a, NV, ER: graph::Edge> {
     id_map: &'a FxHashMap<Id, id::N>,
     auto_ids: &'a [Id],
     auto_cursor: usize,
     nodes_out: Vec<(id::N, NV)>,
-    edges_out: Vec<((NR<id::N>, ER::Slot), ER::Val)>,
+    edges_out: EdgesOut<ER>,
     edge_set: BTreeSet<(NR<id::N>, ER::Slot)>,
 }
 
@@ -191,7 +193,10 @@ impl<'a, NV, ER: graph::Edge> Flattener<'a, NV, ER> {
             if !self.edge_set.insert(key) {
                 return Err(super::error::Edge::Duplicate(rel, slot).into());
             }
-            self.edges_out.push((key, e.val));
+            match e.val {
+                Ok(val) => self.edges_out.push((key, val)),
+                Err(part) => return Err(super::error::Edge::Part { rel, slot, part }.into()),
+            }
         }
 
         Ok(real_id)
@@ -324,29 +329,35 @@ pub fn E<NV, ER: graph::Edge>() -> edge::Edge<(), NV, ER> {
 #[macro_export]
 macro_rules! mgraph {
     [<$nv:ty, $er:ty>; $($expr:expr),* $(,)?] => {{
-        #[allow(unused_imports)]
-        use $crate::graph::dsl::*;
-        $crate::graph::dsl::from_fragment::<$nv, $er>(vec![$($expr.into()),*])
+        let __fragments = {
+            #[allow(unused_imports)]
+            use $crate::graph::dsl::*;
+            ::std::vec![$($expr.into()),*]
+        };
+        $crate::graph::dsl::from_fragment::<$nv, $er>(__fragments)
     }};
     [$($expr:expr),* $(,)?] => {{
         #[allow(unused_imports)]
         use $crate::graph::dsl::*;
-        $crate::graph::dsl::from_fragment(vec![$($expr.into()),*])
+        $crate::graph::dsl::from_fragment(::std::vec![$($expr.into()),*])
     }};
 }
 
 #[macro_export]
 macro_rules! vgraph {
     [<$nv:ty, $er:ty>; $($expr:expr),* $(,)?] => {{
-        #[allow(unused_imports)]
-        use $crate::graph::dsl::*;
-        $crate::graph::dsl::from_fragment::<$nv, $er>(vec![$($expr.into()),*])
+        let __fragments = {
+            #[allow(unused_imports)]
+            use $crate::graph::dsl::*;
+            ::std::vec![$($expr.into()),*]
+        };
+        $crate::graph::dsl::from_fragment::<$nv, $er>(__fragments)
             .map(|g| $crate::graph::VGraph::from_mgraph(&g))
     }};
     [$($expr:expr),* $(,)?] => {{
         #[allow(unused_imports)]
         use $crate::graph::dsl::*;
-        $crate::graph::dsl::from_fragment(vec![$($expr.into()),*])
+        $crate::graph::dsl::from_fragment(::std::vec![$($expr.into()),*])
             .map(|g| $crate::graph::VGraph::from_mgraph(&g))
     }};
 }

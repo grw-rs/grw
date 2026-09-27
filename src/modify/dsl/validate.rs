@@ -81,6 +81,7 @@ fn visit_edge<NV, ER: graph::Edge>(
     let target = match edge {
         Edge::New { target, .. } => target,
         Edge::Exist { target, .. } => target,
+        Edge::Part { target, .. } => target,
     };
     visit_node(target, false, new_defs, new_refs, exist_defs, translated_defs, translated_refs);
 }

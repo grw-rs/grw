@@ -1,0 +1,5 @@
+error: context node `f` is not pinned to a graph node: write `T(f = <expr>)`
+ --> tests/compile_fail/search_unpinned_translated.rs:5:37
+  |
+5 |     let _ = search![&g, get(Mono) { T(f) ^ N(b) }];
+  |                                     ^

@@ -10,10 +10,10 @@ use grw::search::{Pattern, Session};
 use grw::{id, mgraph, pattern, search, Graph as _};
 use rayon::iter::ParallelIterator;
 
-type UER = edge::Undir<()>;
-type DER = edge::Dir<()>;
-type MU = MGraph<(), UER>;
-type MD = MGraph<bool, DER>;
+type Uer = edge::Undir<()>;
+type Der = edge::Dir<()>;
+type MU = MGraph<(), Uer>;
+type MD = MGraph<bool, Der>;
 
 // ============================================================================
 // § Fixture: three candidate "blockers", two named targets.
@@ -37,7 +37,7 @@ fn negated_edge_to_a_shared_pin_bans_only_that_target() {
     let g = blocks_graph();
     let alice = id::N(3);
     let s = search![&g, get(Mono) { N(p).val(true) & !E() >> X(alice = alice) }].unwrap();
-    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap() as u32).collect();
+    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap()).collect();
     seen.sort_unstable();
     assert_eq!(seen, vec![1, 2], "!E must only reject the blocker whose edge points at the pin");
 }
@@ -50,7 +50,7 @@ fn negated_pinned_node_bans_only_that_target() {
         get(Mono) { N(p).val(true) >> (!X(alice = alice)).test(|_: &bool| true) }
     ]
     .unwrap();
-    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap() as u32).collect();
+    let mut seen: Vec<u32> = s.iter().map(|m| *m.get(0u32).unwrap()).collect();
     seen.sort_unstable();
     assert_eq!(
         seen,
@@ -74,14 +74,14 @@ fn negated_pinned_node_bans_only_that_target() {
 fn explicit_ban_cluster_pin_via_from_pattern_bans_only_that_target() {
     let g = blocks_graph();
     let alice = id::N(3);
-    let pat: Pattern<bool, DER> = pattern![
+    let pat: Pattern<bool, Der> = pattern![
         get(Mono) { N(p).val(true) },
         ban(Mono) { n(p) >> N(z) }
     ]
     .unwrap();
     let p_lid = pat.lid("p").unwrap();
 
-    let s = Session::from_pattern(pat, &g, &[("z", alice)]).unwrap();
+    let s = Session::from_pattern(&pat, &g, &[("z", alice)]).unwrap();
     let mut seen: Vec<u32> = s.iter().map(|m| *m.get(p_lid).unwrap() as u32).collect();
     seen.sort_unstable();
     assert_eq!(
@@ -105,26 +105,26 @@ fn not_all_together_vs_none_of_these() {
     let g: MU = mgraph![N(0), N(1), N(2), n(0) ^ n(2)].unwrap();
     let (p, q, five) = (id::N(0), id::N(1), id::N(2));
 
-    let and_form: Pattern<(), UER> = pattern![
+    let and_form: Pattern<(), Uer> = pattern![
         get(Mono) { N(p), N(q) },
         ban(Mono) { n(p) ^ N(c), n(q) ^ n(c) }
     ]
     .unwrap();
-    let and_session = Session::from_pattern(and_form, &g, &[("p", p), ("q", q), ("c", five)]).unwrap();
+    let and_session = Session::from_pattern(&and_form, &g, &[("p", p), ("q", q), ("c", five)]).unwrap();
     assert_eq!(
         and_session.iter().count(),
         1,
         "one ban_only node grouping both edges only fires when both are present at once"
     );
 
-    let or_form: Pattern<(), UER> = pattern![
+    let or_form: Pattern<(), Uer> = pattern![
         get(Mono) { N(p), N(q) },
         ban(Mono) { n(p) ^ N(c1) },
         ban(Mono) { n(q) ^ N(c2) }
     ]
     .unwrap();
     let or_session =
-        Session::from_pattern(or_form, &g, &[("p", p), ("q", q), ("c1", five), ("c2", five)]).unwrap();
+        Session::from_pattern(&or_form, &g, &[("p", p), ("q", q), ("c1", five), ("c2", five)]).unwrap();
     assert_eq!(
         or_session.iter().count(),
         0,
@@ -142,13 +142,13 @@ fn by_mod5() -> IndexDecl<u32> {
     IndexDecl::new(BY_MOD5, Cardinality::Multi, |v: &u32| Some(*v % 5))
 }
 
-fn indexed_path(count: u32) -> MGraph<u32, UER> {
-    let mut ops: Vec<grw::modify::Node<u32, UER>> =
-        (0..count).map(|i| grw::modify::N::<u32, UER>(i).val(i).into()).collect();
+fn indexed_path(count: u32) -> MGraph<u32, Uer> {
+    let mut ops: Vec<grw::modify::Node<u32, Uer>> =
+        (0..count).map(|i| grw::modify::N::<u32, Uer>(i).val(i).into()).collect();
     for i in 0..count.saturating_sub(1) {
-        ops.push((grw::modify::n::<u32, UER>(i) ^ grw::modify::n::<u32, UER>(i + 1)).into());
+        ops.push((grw::modify::n::<u32, Uer>(i) ^ grw::modify::n::<u32, Uer>(i + 1)).into());
     }
-    let mut g: MGraph<u32, UER> = mgraph![].unwrap();
+    let mut g: MGraph<u32, Uer> = mgraph![].unwrap();
     g.modify(ops).unwrap();
     g.with_indices(vec![by_mod5()]).unwrap()
 }
@@ -191,7 +191,7 @@ fn key_and_test_agree_with_the_brute_force_count_on_a_pinned_ban() {
     ]
     .unwrap();
     let by_test = search![&g,
-        get(Mono) { N(a) ^ N(b), n(a) ^ (!X(c = five)).test(|v: &u32| *v % 5 == 0) }
+        get(Mono) { N(a) ^ N(b), n(a) ^ (!X(c = five)).test(|v: &u32| (*v).is_multiple_of(5)) }
     ]
     .unwrap();
 
@@ -222,12 +222,12 @@ impl Rng {
 }
 
 fn random_graph(rng: &mut Rng, node_count: u32) -> MU {
-    let mut ops: Vec<grw::modify::Node<(), UER>> =
-        (0..node_count).map(|i| grw::modify::N::<(), UER>(i).val(()).into()).collect();
+    let mut ops: Vec<grw::modify::Node<(), Uer>> =
+        (0..node_count).map(|i| grw::modify::N::<(), Uer>(i).val(()).into()).collect();
     for i in 0..node_count {
         for j in (i + 1)..node_count {
             if rng.chance(2, 5) {
-                ops.push((grw::modify::n::<(), UER>(i) ^ grw::modify::n::<(), UER>(j)).into());
+                ops.push((grw::modify::n::<(), Uer>(i) ^ grw::modify::n::<(), Uer>(j)).into());
             }
         }
     }
@@ -256,12 +256,12 @@ fn brute_force_oracle_over_random_pinned_bans() {
             "case {case}: shadow-ban shape diverged from the brute-force oracle (nodes={node_count}, pin={pin:?})"
         );
 
-        let pat: Pattern<(), UER> = pattern![
+        let pat: Pattern<(), Uer> = pattern![
             get(Mono) { N(p) ^ N(q) },
             ban(Mono) { n(p) ^ N(z) }
         ]
         .unwrap();
-        let explicit = Session::from_pattern(pat, &g, &[("z", pin)]).unwrap();
+        let explicit = Session::from_pattern(&pat, &g, &[("z", pin)]).unwrap();
         assert_eq!(
             explicit.iter().count(),
             expected,
@@ -288,31 +288,31 @@ fn seq_and_par_agree_on_every_pinned_ban_shape_above() {
     .unwrap();
     assert_eq!(node_form.iter().count(), node_form.par_iter().count());
 
-    let pat: Pattern<bool, DER> = pattern![
+    let pat: Pattern<bool, Der> = pattern![
         get(Mono) { N(p).val(true) },
         ban(Mono) { n(p) >> N(z) }
     ]
     .unwrap();
-    let explicit = Session::from_pattern(pat, &g, &[("z", alice)]).unwrap();
+    let explicit = Session::from_pattern(&pat, &g, &[("z", alice)]).unwrap();
     assert_eq!(explicit.iter().count(), explicit.par_iter().count());
 
     let g2: MU = mgraph![N(0), N(1), N(2), n(0) ^ n(2)].unwrap();
     let (p, q, five) = (id::N(0), id::N(1), id::N(2));
-    let and_form: Pattern<(), UER> = pattern![
+    let and_form: Pattern<(), Uer> = pattern![
         get(Mono) { N(p), N(q) },
         ban(Mono) { n(p) ^ N(c), n(q) ^ n(c) }
     ]
     .unwrap();
-    let and_session = Session::from_pattern(and_form, &g2, &[("p", p), ("q", q), ("c", five)]).unwrap();
+    let and_session = Session::from_pattern(&and_form, &g2, &[("p", p), ("q", q), ("c", five)]).unwrap();
     assert_eq!(and_session.iter().count(), and_session.par_iter().count());
 
-    let or_form: Pattern<(), UER> = pattern![
+    let or_form: Pattern<(), Uer> = pattern![
         get(Mono) { N(p), N(q) },
         ban(Mono) { n(p) ^ N(c1) },
         ban(Mono) { n(q) ^ N(c2) }
     ]
     .unwrap();
     let or_session =
-        Session::from_pattern(or_form, &g2, &[("p", p), ("q", q), ("c1", five), ("c2", five)]).unwrap();
+        Session::from_pattern(&or_form, &g2, &[("p", p), ("q", q), ("c1", five), ("c2", five)]).unwrap();
     assert_eq!(or_session.iter().count(), or_session.par_iter().count());
 }

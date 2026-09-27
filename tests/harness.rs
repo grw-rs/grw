@@ -5,8 +5,11 @@ use grw::{
 };
 use std::time::{Duration, Instant};
 
+type NodeList = Vec<(Id, ())>;
+type EdgeList<ER> = Vec<(<ER as graph::Edge>::Def, ())>;
+
 fn degree_histogram<ER: graph::Edge>(
-    (ns, es): (Vec<(Id, ())>, Vec<(ER::Def, ())>),
+    (ns, es): (NodeList, EdgeList<ER>),
 ) -> Vec<(Id, usize)> {
     use std::collections::BTreeMap;
     let mut deg: BTreeMap<Id, Id> = BTreeMap::new();
@@ -22,11 +25,11 @@ fn degree_histogram<ER: graph::Edge>(
         }
     }
     let mut hist: BTreeMap<Id, usize> = BTreeMap::new();
-    for (_, &d) in &deg {
+    for &d in deg.values() {
         *hist.entry(d).or_insert(0) += 1;
     }
     let mut result: Vec<_> = hist.into_iter().collect();
-    result.sort_by(|a, b| b.0.cmp(&a.0));
+    result.sort_by_key(|b| std::cmp::Reverse(b.0));
     result
 }
 

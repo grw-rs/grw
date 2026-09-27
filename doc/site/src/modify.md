@@ -16,6 +16,9 @@
 | `e()` | Existing edge reference (for value swap) |
 | `!e()` | Remove existing edge |
 | `.val(v)` | Set value on node or edge |
+| `E().include(p)` | Add a part to a composite link, creating the link on a vacant pair |
+| `E().exclude::<T>()` | Drop a composite link's `T` part |
+| `E().exclude_kind(k)` | Drop the part of a runtime kind |
 
 ## Adding Nodes and Edges
 
@@ -128,6 +131,14 @@ modify!(g, [N(1) & E().val(100u32) ^ N(2)]).unwrap();
 modify!(g, [X(0) & e().val(200u32) ^ X(1)]).unwrap();
 ```
 <svg viewBox="0 0 262 132" style="max-width:262px;display:block;margin:0.8em auto" role="img" aria-label="swap edge"><line x1="90" y1="58" x2="172" y2="58" stroke="#7ee0a3" stroke-width="2.4"/><circle cx="70" cy="58" r="21" fill="#f0a63f26"/><circle cx="70" cy="58" r="15" fill="#f0a63f"/><text x="70" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">0</text><circle cx="192" cy="58" r="21" fill="#f0a63f26"/><circle cx="192" cy="58" r="15" fill="#f0a63f"/><text x="192" y="63" text-anchor="middle" font-family="monospace" font-size="15" font-weight="700" fill="#0d0a03">1</text><text x="131" y="70" text-anchor="middle" font-family="monospace" font-size="12" fill="#8b95a9">200</text></svg>
+
+## Parts of a Composite Link
+
+On a graph whose edge value is a composite, a link changes part by part:
+`E().include(p)`, `E().exclude::<T>()` and `E().exclude_kind(k)`, while `!e()`
+still deletes the whole link. The combinator decides what a link with no parts
+left means — `TypeSet` removes it. Refusals are typed (`PartRejected`,
+`PartNotHeld`, `PartConflict`). See [Composite Values](./composite-values.md).
 
 ## Modification Result
 

@@ -1,6 +1,6 @@
 [package]
 name = "grw"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Graph construction, mutation, and morphism matching"
@@ -8,6 +8,10 @@ repository = "https://github.com/grw-rs/grw"
 keywords = ["graph", "isomorphism", "morphism", "pattern-matching"]
 categories = ["algorithms", "data-structures"]
 include = ["src/**/*", "LICENSE-*", "README.md"]
+
+[workspace]
+members = [".", "tests-external/composite_downstream", "tests-external/renamed_grw", "tests-external/no_grw"]
+default-members = [".", "tests-external/composite_downstream", "tests-external/renamed_grw", "tests-external/no_grw"]
 
 [[example]]
 name = "graph_perf"
@@ -20,6 +24,7 @@ id64 = []
 parity = ["dep:rand"]
 
 [dev-dependencies]
+composite_downstream = { path = "tests-external/composite_downstream" }
 trybuild = "1"
 rand = "0.9"
 petgraph = "0.7"
@@ -41,7 +46,7 @@ serde = { version = "1", features = ["derive"] }
 bincode = "1"
 memmap2 = "0.9"
 sha2 = "0.10"
-grw_derive = { version = "0.2.0", git = "https://github.com/grw-rs/grw_derive.git", branch = "master" }
+grw_derive = { version = "0.3.0", git = "https://github.com/grw-rs/grw_derive.git", branch = "master" }
 ordered-float = "5.3.0"
 
 [patch."https://github.com/grw-rs/grw_derive.git"]
@@ -50,3 +55,8 @@ grw_derive = { path = "../grw_derive" }
 [patch."https://github.com/grw-rs/grw_pattern.git"]
 grw_pattern = { path = "../grw_pattern" }
 
+
+[lints.clippy]
+new_without_default = "allow"
+manual_unwrap_or = "allow"
+manual_unwrap_or_default = "allow"

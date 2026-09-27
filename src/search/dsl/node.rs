@@ -1,9 +1,11 @@
 use super::edge::{self, Connected};
 use super::{EdgeOp, IntoOp, Op, UndirPending};
 use super::{HasConstraint, HasPred};
-use crate::graph::dsl::{HasRawVal, HasVal, IntoOptional, IntoVal, LocalId};
+use super::parts::{EdgeTerm, Focus, InSlot, Parts};
+use crate::graph::dsl::{HasRawVal, HasVal, IntoOptional, LocalId};
 use crate::graph;
-use crate::graph::edge::{DirSlot, SlotVal, Src, Tgt, Und, UndirSlot};
+use crate::composite::Kinded;
+use crate::graph::edge::{AnySlot, DirSlot, SlotVal, Src, Tgt, Und, UndirSlot};
 use crate::graph::index::{IndexName, KeyBytes, KeyTag};
 use crate::search::path;
 use crate::search::query::NodePred;
@@ -451,14 +453,12 @@ impl<NV, V: IntoOptional<NV> + HasConstraint, ER: graph::Edge> IntoOp<NV, ER>
 macro_rules! impl_anon_edge_op {
     ($Self:ty, $V:ident, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
         impl<NV, $V, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>> $Op<RHS> for $Self
-        where
-            ER::Val: Default,
         {
             type Output = Self;
             fn $op(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: rhs.into_op(),
                     negated: false,
@@ -471,14 +471,12 @@ macro_rules! impl_anon_edge_op {
     };
     ($Self:ty, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
         impl<NV, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>> $Op<RHS> for $Self
-        where
-            ER::Val: Default,
         {
             type Output = Self;
             fn $op(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: rhs.into_op(),
                     negated: false,
@@ -501,8 +499,7 @@ macro_rules! impl_anon_path_op {
     ($Self:ty, $V:ident, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
         impl<NV, $V, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>, Mode>
             $Op<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>> for $Self
-        where ER::Val: Default,
-        {
+                {
             type Output = Self;
             fn $op(mut self, rhs: std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>) -> Self {
                 let cfg = rhs.end;
@@ -516,7 +513,7 @@ macro_rules! impl_anon_path_op {
                 };
                 self.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: cfg.target.into_op(),
                     negated: false,
@@ -530,8 +527,7 @@ macro_rules! impl_anon_path_op {
     ($Self:ty, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
         impl<NV, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>, Mode>
             $Op<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>> for $Self
-        where ER::Val: Default,
-        {
+                {
             type Output = Self;
             fn $op(mut self, rhs: std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>) -> Self {
                 let cfg = rhs.end;
@@ -545,7 +541,7 @@ macro_rules! impl_anon_path_op {
                 };
                 self.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: cfg.target.into_op(),
                     negated: false,
@@ -570,14 +566,12 @@ for_each_dir!(impl_anon_path_op!(ContextRef<NV, ER>));
 macro_rules! impl_neg_anon_edge_op {
     ($Self:ty, $V:ident, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
         impl<NV, $V, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>> $Op<RHS> for $Self
-        where
-            ER::Val: Default,
         {
             type Output = Self;
             fn $op(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: rhs.into_op(),
                     negated: true,
@@ -598,8 +592,8 @@ for_each_dir!(impl_neg_anon_edge_op!(NegContext<NV, V, ER>, V));
 // =============================================================================
 
 macro_rules! impl_undir_op {
-    ($NodeTy:ty, $V:ident, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
-        impl<NV, $V, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
+    ($NodeTy:ty, $V:ident, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, $V, EV: EdgeTerm<InSlot<ER, $SlotDir>>, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
             $Op<RHS> for UndirPending<$NodeTy, edge::Edge<EV, NV, ER>>
         {
             type Output = $NodeTy;
@@ -607,7 +601,7 @@ macro_rules! impl_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: false,
@@ -618,8 +612,8 @@ macro_rules! impl_undir_op {
             }
         }
     };
-    ($NodeTy:ty, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
-        impl<NV, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
+    ($NodeTy:ty, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, EV: EdgeTerm<InSlot<ER, $SlotDir>>, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
             $Op<RHS> for UndirPending<$NodeTy, edge::Edge<EV, NV, ER>>
         {
             type Output = $NodeTy;
@@ -627,7 +621,7 @@ macro_rules! impl_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: false,
@@ -648,7 +642,7 @@ for_each_dir!(impl_undir_op!(ContextRef<NV, ER>));
 // Path variants of UndirPending resolution: Node & E().test(pred) >> ..target.dfs()
 macro_rules! impl_undir_path_op {
     ($NodeTy:ty, $V:ident, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
-        impl<NV, $V, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>, Mode>
+        impl<NV, $V, EV: super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>, Mode>
             $Op<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>>
             for UndirPending<$NodeTy, edge::Edge<EV, NV, ER>>
         {
@@ -666,7 +660,7 @@ macro_rules! impl_undir_path_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    parts: Parts::none(),
                     edge_pred: self.1 .2,
                     target: cfg.target.into_op(),
                     negated: false,
@@ -678,7 +672,7 @@ macro_rules! impl_undir_path_op {
         }
     };
     ($NodeTy:ty, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
-        impl<NV, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>, Mode>
+        impl<NV, EV: super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>, Mode>
             $Op<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>>
             for UndirPending<$NodeTy, edge::Edge<EV, NV, ER>>
         {
@@ -696,7 +690,7 @@ macro_rules! impl_undir_path_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    parts: Parts::none(),
                     edge_pred: self.1 .2,
                     target: cfg.target.into_op(),
                     negated: false,
@@ -721,8 +715,7 @@ macro_rules! impl_pred_resolve_op {
         // Single edge: Node & E().test(pred) >> Target
         impl<NV, $V, P: 'static, ER: graph::Edge + $Dir + graph::edge::SlotVal<graph::edge::$SlotDir, SlotType = P>, RHS: IntoOp<NV, ER>>
             $Op<RHS> for UndirPending<$NodeTy, edge::Edge<edge::Pred<P>, NV, ER>>
-        where ER::Val: Default,
-        {
+                {
             type Output = $NodeTy;
             fn $op(self, rhs: RHS) -> $NodeTy {
                 let pred = (self.1).0 .0;
@@ -731,7 +724,7 @@ macro_rules! impl_pred_resolve_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: Some(wrapped),
                     target: rhs.into_op(),
                     negated: false,
@@ -746,8 +739,7 @@ macro_rules! impl_pred_resolve_op {
         impl<NV, $V, P: 'static, ER: graph::Edge + $Dir + graph::edge::SlotVal<graph::edge::$SlotDir, SlotType = P>, RHS: IntoOp<NV, ER>, Mode>
             $Op<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>>
             for UndirPending<$NodeTy, edge::Edge<edge::Pred<P>, NV, ER>>
-        where ER::Val: Default,
-        {
+                {
             type Output = $NodeTy;
             fn $op(self, rhs: std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>) -> $NodeTy {
                 let pred = (self.1).0 .0;
@@ -762,7 +754,7 @@ macro_rules! impl_pred_resolve_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: Some(wrapped),
                     target: cfg.target.into_op(),
                     negated: false,
@@ -791,8 +783,7 @@ macro_rules! impl_pred_resolve_noV {
     ($NodeTy:ty, $SlotDir:ident, $Dir:ident, $Op:ident, $op:ident) => {
         impl<NV, P: 'static, ER: graph::Edge + $Dir + graph::edge::SlotVal<graph::edge::$SlotDir, SlotType = P>, RHS: IntoOp<NV, ER>>
             $Op<RHS> for UndirPending<$NodeTy, edge::Edge<edge::Pred<P>, NV, ER>>
-        where ER::Val: Default,
-        {
+                {
             type Output = $NodeTy;
             fn $op(self, rhs: RHS) -> $NodeTy {
                 let pred = (self.1).0 .0;
@@ -800,7 +791,7 @@ macro_rules! impl_pred_resolve_noV {
                     Box::new(move |ev| ER::extract_slot_val(ev).map_or(false, |p| pred(p)));
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
-                    slot: <ER as $Dir>::SLOT, val: ER::Val::default(),
+                    slot: <ER as $Dir>::SLOT, parts: Parts::none(),
                     edge_pred: Some(wrapped), target: rhs.into_op(),
                     negated: false, any_slot: false, path: None,
                 });
@@ -811,8 +802,7 @@ macro_rules! impl_pred_resolve_noV {
         impl<NV, P: 'static, ER: graph::Edge + $Dir + graph::edge::SlotVal<graph::edge::$SlotDir, SlotType = P>, RHS: IntoOp<NV, ER>, Mode>
             $Op<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>>
             for UndirPending<$NodeTy, edge::Edge<edge::Pred<P>, NV, ER>>
-        where ER::Val: Default,
-        {
+                {
             type Output = $NodeTy;
             fn $op(self, rhs: std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>) -> $NodeTy {
                 let pred = (self.1).0 .0;
@@ -825,7 +815,7 @@ macro_rules! impl_pred_resolve_noV {
                 };
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
-                    slot: <ER as $Dir>::SLOT, val: ER::Val::default(),
+                    slot: <ER as $Dir>::SLOT, parts: Parts::none(),
                     edge_pred: Some(wrapped), target: cfg.target.into_op(),
                     negated: false, any_slot: false, path: Some(path_cfg),
                 });
@@ -858,7 +848,7 @@ macro_rules! impl_rawval_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::wrap_slot_val(v),
+                    parts: Parts::none(),
                     edge_pred: Some(pred),
                     target: rhs.into_op(),
                     negated: false,
@@ -891,7 +881,7 @@ macro_rules! impl_rawval_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::wrap_slot_val(v),
+                    parts: Parts::none(),
                     edge_pred: Some(pred),
                     target: cfg.target.into_op(),
                     negated: false,
@@ -914,7 +904,7 @@ macro_rules! impl_rawval_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::wrap_slot_val(v),
+                    parts: Parts::none(),
                     edge_pred: Some(pred),
                     target: rhs.into_op(),
                     negated: false,
@@ -946,7 +936,7 @@ macro_rules! impl_rawval_undir_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: ER::wrap_slot_val(v),
+                    parts: Parts::none(),
                     edge_pred: Some(pred),
                     target: cfg.target.into_op(),
                     negated: false,
@@ -975,7 +965,7 @@ macro_rules! impl_bitand_connected {
             fn bitand(mut self, arm: edge::Edge<Connected<NV, ER>, NV, ER>) -> Self {
                 self.edges.push(EdgeOp {
                     slot: arm.0.slot,
-                    val: arm.0.val,
+                    parts: arm.0.parts,
                     edge_pred: arm.0.pred,
                     target: arm.0.target,
                     negated: false,
@@ -992,7 +982,7 @@ macro_rules! impl_bitand_connected {
             fn bitand(mut self, arm: edge::Edge<Connected<NV, ER>, NV, ER>) -> Self {
                 self.edges.push(EdgeOp {
                     slot: arm.0.slot,
-                    val: arm.0.val,
+                    parts: arm.0.parts,
                     edge_pred: arm.0.pred,
                     target: arm.0.target,
                     negated: false,
@@ -1015,16 +1005,20 @@ impl_bitand_connected!(ContextRef<NV, ER>);
 // =============================================================================
 
 macro_rules! impl_bitand_undir_pending {
-    ($Self:ty, $EdgeTy:ty, $V:ident) => {
-        impl<NV, $V, ER: graph::Edge> BitAnd<$EdgeTy> for $Self {
-            type Output = UndirPending<Self, $EdgeTy>;
-            fn bitand(self, edge: $EdgeTy) -> Self::Output {
-                UndirPending(self, edge)
-            }
-        }
+    ($Self:ty, $V:ident) => {
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<(), NV, ER>, [$V,]);
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<HasVal<ER::Val>, NV, ER>, [$V,]);
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<HasPred, NV, ER>, [$V,]);
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<Focus<P, F>, NV, ER>, [$V, P: Kinded, F,]);
     };
-    ($Self:ty, $EdgeTy:ty) => {
-        impl<NV, ER: graph::Edge> BitAnd<$EdgeTy> for $Self {
+    ($Self:ty) => {
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<(), NV, ER>, []);
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<HasVal<ER::Val>, NV, ER>, []);
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<HasPred, NV, ER>, []);
+        impl_bitand_undir_pending!(@one $Self, edge::Edge<Focus<P, F>, NV, ER>, [P: Kinded, F,]);
+    };
+    (@one $Self:ty, $EdgeTy:ty, [$($G:tt)*]) => {
+        impl<NV, $($G)* ER: graph::Edge> BitAnd<$EdgeTy> for $Self {
             type Output = UndirPending<Self, $EdgeTy>;
             fn bitand(self, edge: $EdgeTy) -> Self::Output {
                 UndirPending(self, edge)
@@ -1033,18 +1027,10 @@ macro_rules! impl_bitand_undir_pending {
     };
 }
 
-impl_bitand_undir_pending!(Free<NV, V, ER>, edge::Edge<(), NV, ER>, V);
-impl_bitand_undir_pending!(Free<NV, V, ER>, edge::Edge<HasVal<ER::Val>, NV, ER>, V);
-impl_bitand_undir_pending!(Free<NV, V, ER>, edge::Edge<HasPred, NV, ER>, V);
-impl_bitand_undir_pending!(FreeRef<NV, ER>, edge::Edge<(), NV, ER>);
-impl_bitand_undir_pending!(FreeRef<NV, ER>, edge::Edge<HasVal<ER::Val>, NV, ER>);
-impl_bitand_undir_pending!(FreeRef<NV, ER>, edge::Edge<HasPred, NV, ER>);
-impl_bitand_undir_pending!(Context<NV, V, ER>, edge::Edge<(), NV, ER>, V);
-impl_bitand_undir_pending!(Context<NV, V, ER>, edge::Edge<HasVal<ER::Val>, NV, ER>, V);
-impl_bitand_undir_pending!(Context<NV, V, ER>, edge::Edge<HasPred, NV, ER>, V);
-impl_bitand_undir_pending!(ContextRef<NV, ER>, edge::Edge<(), NV, ER>);
-impl_bitand_undir_pending!(ContextRef<NV, ER>, edge::Edge<HasVal<ER::Val>, NV, ER>);
-impl_bitand_undir_pending!(ContextRef<NV, ER>, edge::Edge<HasPred, NV, ER>);
+impl_bitand_undir_pending!(Free<NV, V, ER>, V);
+impl_bitand_undir_pending!(FreeRef<NV, ER>);
+impl_bitand_undir_pending!(Context<NV, V, ER>, V);
+impl_bitand_undir_pending!(ContextRef<NV, ER>);
 
 // HasRawVal variants: Node & E().val(slot_val) creates UndirPending
 macro_rules! impl_bitand_rawval_pending {
@@ -1107,7 +1093,7 @@ macro_rules! impl_bitand_neg_connected {
             fn bitand(mut self, arm: edge::NegEdge<Connected<NV, ER>, NV, ER>) -> Self {
                 self.edges.push(EdgeOp {
                     slot: arm.0.slot,
-                    val: arm.0.val,
+                    parts: arm.0.parts,
                     edge_pred: arm.0.pred,
                     target: arm.0.target,
                     negated: true,
@@ -1124,7 +1110,7 @@ macro_rules! impl_bitand_neg_connected {
             fn bitand(mut self, arm: edge::NegEdge<Connected<NV, ER>, NV, ER>) -> Self {
                 self.edges.push(EdgeOp {
                     slot: arm.0.slot,
-                    val: arm.0.val,
+                    parts: arm.0.parts,
                     edge_pred: arm.0.pred,
                     target: arm.0.target,
                     negated: true,
@@ -1149,16 +1135,20 @@ impl_bitand_neg_connected!(NegContext<NV, V, ER>, V);
 // =============================================================================
 
 macro_rules! impl_bitand_neg_undir_pending {
-    ($Self:ty, $EdgeTy:ty, $V:ident) => {
-        impl<NV, $V, ER: graph::Edge> BitAnd<$EdgeTy> for $Self {
-            type Output = UndirPending<Self, $EdgeTy>;
-            fn bitand(self, edge: $EdgeTy) -> Self::Output {
-                UndirPending(self, edge)
-            }
-        }
+    ($Self:ty, $V:ident) => {
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<(), NV, ER>, [$V,]);
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<HasVal<ER::Val>, NV, ER>, [$V,]);
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<HasPred, NV, ER>, [$V,]);
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<Focus<P, F>, NV, ER>, [$V, P: Kinded, F,]);
     };
-    ($Self:ty, $EdgeTy:ty) => {
-        impl<NV, ER: graph::Edge> BitAnd<$EdgeTy> for $Self {
+    ($Self:ty) => {
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<(), NV, ER>, []);
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<HasVal<ER::Val>, NV, ER>, []);
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<HasPred, NV, ER>, []);
+        impl_bitand_neg_undir_pending!(@one $Self, edge::NegEdge<Focus<P, F>, NV, ER>, [P: Kinded, F,]);
+    };
+    (@one $Self:ty, $EdgeTy:ty, [$($G:tt)*]) => {
+        impl<NV, $($G)* ER: graph::Edge> BitAnd<$EdgeTy> for $Self {
             type Output = UndirPending<Self, $EdgeTy>;
             fn bitand(self, edge: $EdgeTy) -> Self::Output {
                 UndirPending(self, edge)
@@ -1167,42 +1157,28 @@ macro_rules! impl_bitand_neg_undir_pending {
     };
 }
 
-impl_bitand_neg_undir_pending!(Free<NV, V, ER>, edge::NegEdge<(), NV, ER>, V);
-impl_bitand_neg_undir_pending!(Free<NV, V, ER>, edge::NegEdge<HasVal<ER::Val>, NV, ER>, V);
-impl_bitand_neg_undir_pending!(Free<NV, V, ER>, edge::NegEdge<HasPred, NV, ER>, V);
-impl_bitand_neg_undir_pending!(FreeRef<NV, ER>, edge::NegEdge<(), NV, ER>);
-impl_bitand_neg_undir_pending!(FreeRef<NV, ER>, edge::NegEdge<HasVal<ER::Val>, NV, ER>);
-impl_bitand_neg_undir_pending!(FreeRef<NV, ER>, edge::NegEdge<HasPred, NV, ER>);
-impl_bitand_neg_undir_pending!(Context<NV, V, ER>, edge::NegEdge<(), NV, ER>, V);
-impl_bitand_neg_undir_pending!(Context<NV, V, ER>, edge::NegEdge<HasVal<ER::Val>, NV, ER>, V);
-impl_bitand_neg_undir_pending!(Context<NV, V, ER>, edge::NegEdge<HasPred, NV, ER>, V);
-impl_bitand_neg_undir_pending!(ContextRef<NV, ER>, edge::NegEdge<(), NV, ER>);
-impl_bitand_neg_undir_pending!(ContextRef<NV, ER>, edge::NegEdge<HasVal<ER::Val>, NV, ER>);
-impl_bitand_neg_undir_pending!(ContextRef<NV, ER>, edge::NegEdge<HasPred, NV, ER>);
-impl_bitand_neg_undir_pending!(NegFree<NV, V, ER>, edge::NegEdge<(), NV, ER>, V);
-impl_bitand_neg_undir_pending!(NegFree<NV, V, ER>, edge::NegEdge<HasVal<ER::Val>, NV, ER>, V);
-impl_bitand_neg_undir_pending!(NegFree<NV, V, ER>, edge::NegEdge<HasPred, NV, ER>, V);
-impl_bitand_neg_undir_pending!(NegContext<NV, V, ER>, edge::NegEdge<(), NV, ER>, V);
-impl_bitand_neg_undir_pending!(NegContext<NV, V, ER>, edge::NegEdge<HasVal<ER::Val>, NV, ER>, V);
-impl_bitand_neg_undir_pending!(NegContext<NV, V, ER>, edge::NegEdge<HasPred, NV, ER>, V);
+impl_bitand_neg_undir_pending!(Free<NV, V, ER>, V);
+impl_bitand_neg_undir_pending!(FreeRef<NV, ER>);
+impl_bitand_neg_undir_pending!(Context<NV, V, ER>, V);
+impl_bitand_neg_undir_pending!(ContextRef<NV, ER>);
+impl_bitand_neg_undir_pending!(NegFree<NV, V, ER>, V);
+impl_bitand_neg_undir_pending!(NegContext<NV, V, ER>, V);
 
 // =============================================================================
 // Operator macros: resolve negated undirected pending
 // =============================================================================
 
 macro_rules! impl_neg_undir_op {
-    ($NodeTy:ty, $V:ident, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
-        impl<NV, $V, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
+    ($NodeTy:ty, $V:ident, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, $V, EV: EdgeTerm<InSlot<ER, $SlotDir>>, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
             $Op<RHS> for UndirPending<$NodeTy, edge::NegEdge<EV, NV, ER>>
-        where
-            ER::Val: Default,
         {
             type Output = $NodeTy;
             fn $op(self, rhs: RHS) -> $NodeTy {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: true,
@@ -1213,18 +1189,16 @@ macro_rules! impl_neg_undir_op {
             }
         }
     };
-    ($NodeTy:ty, $Dir:ident, $_SlotDir:ident, $Op:ident, $op:ident) => {
-        impl<NV, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
+    ($NodeTy:ty, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, EV: EdgeTerm<InSlot<ER, $SlotDir>>, ER: graph::Edge + $Dir, RHS: IntoOp<NV, ER>>
             $Op<RHS> for UndirPending<$NodeTy, edge::NegEdge<EV, NV, ER>>
-        where
-            ER::Val: Default,
         {
             type Output = $NodeTy;
             fn $op(self, rhs: RHS) -> $NodeTy {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: <ER as $Dir>::SLOT,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: true,
@@ -1251,13 +1225,12 @@ for_each_dir!(impl_neg_undir_op!(NegContext<NV, V, ER>, V));
 macro_rules! impl_any_edge_op {
     ($Self:ty, $V:ident) => {
         impl<NV, $V, ER: graph::Edge, RHS: IntoOp<NV, ER>> Rem<RHS> for $Self
-        where ER::Val: Default,
-        {
+                {
             type Output = Self;
             fn rem(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: rhs.into_op(),
                     negated: false,
@@ -1270,13 +1243,12 @@ macro_rules! impl_any_edge_op {
     };
     ($Self:ty) => {
         impl<NV, ER: graph::Edge, RHS: IntoOp<NV, ER>> Rem<RHS> for $Self
-        where ER::Val: Default,
-        {
+                {
             type Output = Self;
             fn rem(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: rhs.into_op(),
                     negated: false,
@@ -1299,8 +1271,7 @@ macro_rules! impl_any_path_op {
     ($Self:ty, $V:ident) => {
         impl<NV, $V, ER: graph::Edge, RHS: IntoOp<NV, ER>, Mode>
             Rem<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>> for $Self
-        where ER::Val: Default,
-        {
+                {
             type Output = Self;
             fn rem(mut self, rhs: std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>) -> Self {
                 let cfg = rhs.end;
@@ -1311,7 +1282,7 @@ macro_rules! impl_any_path_op {
                 };
                 self.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: cfg.target.into_op(),
                     negated: false,
@@ -1325,8 +1296,7 @@ macro_rules! impl_any_path_op {
     ($Self:ty) => {
         impl<NV, ER: graph::Edge, RHS: IntoOp<NV, ER>, Mode>
             Rem<std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>> for $Self
-        where ER::Val: Default,
-        {
+                {
             type Output = Self;
             fn rem(mut self, rhs: std::ops::RangeTo<crate::search::path::Config<RHS, Mode, ER::Val>>) -> Self {
                 let cfg = rhs.end;
@@ -1337,7 +1307,7 @@ macro_rules! impl_any_path_op {
                 };
                 self.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: cfg.target.into_op(),
                     negated: false,
@@ -1362,13 +1332,12 @@ impl_any_path_op!(ContextRef<NV, ER>);
 macro_rules! impl_neg_any_edge_op {
     ($Self:ty, $V:ident) => {
         impl<NV, $V, ER: graph::Edge, RHS: IntoOp<NV, ER>> Rem<RHS> for $Self
-        where ER::Val: Default,
-        {
+                {
             type Output = Self;
             fn rem(mut self, rhs: RHS) -> Self {
                 self.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: ER::Val::default(),
+                    parts: Parts::none(),
                     edge_pred: None,
                     target: rhs.into_op(),
                     negated: true,
@@ -1390,7 +1359,7 @@ impl_neg_any_edge_op!(NegContext<NV, V, ER>, V);
 
 macro_rules! impl_undir_any_op {
     ($NodeTy:ty, $V:ident) => {
-        impl<NV, $V, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge, RHS: IntoOp<NV, ER>>
+        impl<NV, $V, EV: EdgeTerm<InSlot<ER, AnySlot>>, ER: graph::Edge, RHS: IntoOp<NV, ER>>
             Rem<RHS> for UndirPending<$NodeTy, edge::Edge<EV, NV, ER>>
         {
             type Output = $NodeTy;
@@ -1398,7 +1367,7 @@ macro_rules! impl_undir_any_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: false,
@@ -1410,7 +1379,7 @@ macro_rules! impl_undir_any_op {
         }
     };
     ($NodeTy:ty) => {
-        impl<NV, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge, RHS: IntoOp<NV, ER>>
+        impl<NV, EV: EdgeTerm<InSlot<ER, AnySlot>>, ER: graph::Edge, RHS: IntoOp<NV, ER>>
             Rem<RHS> for UndirPending<$NodeTy, edge::Edge<EV, NV, ER>>
         {
             type Output = $NodeTy;
@@ -1418,7 +1387,7 @@ macro_rules! impl_undir_any_op {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: false,
@@ -1442,16 +1411,15 @@ impl_undir_any_op!(ContextRef<NV, ER>);
 
 macro_rules! impl_neg_undir_any_op {
     ($NodeTy:ty, $V:ident) => {
-        impl<NV, $V, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge, RHS: IntoOp<NV, ER>>
+        impl<NV, $V, EV: EdgeTerm<InSlot<ER, AnySlot>>, ER: graph::Edge, RHS: IntoOp<NV, ER>>
             Rem<RHS> for UndirPending<$NodeTy, edge::NegEdge<EV, NV, ER>>
-        where ER::Val: Default,
-        {
+                {
             type Output = $NodeTy;
             fn rem(self, rhs: RHS) -> $NodeTy {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: true,
@@ -1463,16 +1431,15 @@ macro_rules! impl_neg_undir_any_op {
         }
     };
     ($NodeTy:ty) => {
-        impl<NV, EV: IntoVal<ER::Val> + super::IsValEdge, ER: graph::Edge, RHS: IntoOp<NV, ER>>
+        impl<NV, EV: EdgeTerm<InSlot<ER, AnySlot>>, ER: graph::Edge, RHS: IntoOp<NV, ER>>
             Rem<RHS> for UndirPending<$NodeTy, edge::NegEdge<EV, NV, ER>>
-        where ER::Val: Default,
-        {
+                {
             type Output = $NodeTy;
             fn rem(self, rhs: RHS) -> $NodeTy {
                 let mut node = self.0;
                 node.edges.push(EdgeOp {
                     slot: ER::SLOT_MIN,
-                    val: self.1 .0.into_val(),
+                    parts: self.1 .0.into_parts(),
                     edge_pred: self.1 .2,
                     target: rhs.into_op(),
                     negated: true,

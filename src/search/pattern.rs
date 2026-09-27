@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::graph::{self, dsl::LocalId};
 use crate::search::dsl::ClusterOps;
 use crate::search::{error, query, Query, Search};
@@ -20,14 +22,23 @@ impl Names {
 }
 
 pub struct Pattern<NV, ER: graph::Edge> {
-    query: Query<NV, ER>,
+    query: Arc<Query<NV, ER>>,
     names: Names,
 }
 
+impl<NV, ER: graph::Edge> Clone for Pattern<NV, ER> {
+    fn clone(&self) -> Self {
+        Pattern { query: Arc::clone(&self.query), names: self.names }
+    }
+}
+
 impl<NV, ER: graph::Edge> Pattern<NV, ER> {
-    pub fn from_clusters(clusters: Vec<ClusterOps<NV, ER>>, names: Names) -> Result<Self, error::Search> {
+    pub fn from_clusters(clusters: Vec<ClusterOps<NV, ER>>, names: Names) -> Result<Self, error::Search>
+    where
+        ER::Val: 'static,
+    {
         match query::compile(clusters)? {
-            Search::Resolved(r) => Ok(Pattern { query: r.into_query(), names }),
+            Search::Resolved(r) => Ok(Pattern { query: Arc::new(r.into_query()), names }),
             Search::Unresolved(u) => {
                 let ids = u.translated_indices().iter().map(|&i| u.query().node_local_id(i)).collect();
                 Err(error::Search::ContextInPattern(ids))
@@ -47,8 +58,8 @@ impl<NV, ER: graph::Edge> Pattern<NV, ER> {
         self.names.lid(name).ok_or_else(|| error::Search::UnknownName(name.to_string()))
     }
 
-    pub fn into_parts(self) -> (Query<NV, ER>, Names) {
-        (self.query, self.names)
+    pub(crate) fn query_arc(&self) -> Arc<Query<NV, ER>> {
+        Arc::clone(&self.query)
     }
 }
 
@@ -78,6 +89,14 @@ mod tests {
         let clusters: Vec<ClusterOps<i32, edge::Undir<()>>> = vec![get(Mono, vec![(X(0) ^ N(1)).into()])];
         let err = Pattern::from_clusters(clusters, Names::new(&T)).err().unwrap();
         assert!(matches!(err, error::Search::ContextInPattern(ref ids) if ids == &[LocalId(0)]));
+    }
+
+    #[test]
+    fn cloning_a_pattern_shares_the_compiled_query() {
+        static T: [(&str, LocalId); 2] = [("a", LocalId(0)), ("b", LocalId(1))];
+        let p1 = Pattern::from_clusters(two_node_clusters(), Names::new(&T)).unwrap();
+        let p2 = p1.clone();
+        assert!(std::ptr::eq(p1.query(), p2.query()));
     }
 
     #[test]

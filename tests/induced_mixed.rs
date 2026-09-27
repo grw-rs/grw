@@ -13,49 +13,49 @@ use grw::search::{self, Morphism, RevCsr, Search, Seq, Par};
 use grw::Graph as _;
 use rayon::iter::ParallelIterator;
 
-type GER = grw::graph::edge::Undir<()>;
+type Ger = grw::graph::edge::Undir<()>;
 
 /// Two nodes joined by one undirected edge.
 fn target_edge() -> grw::graph::MUndir0 {
-    grw::mgraph![<(), GER>; N(0) ^ N(1)].unwrap()
+    grw::mgraph![<(), Ger>; N(0) ^ N(1)].unwrap()
 }
 
 /// Path `0 — 1 — 2`.
 fn target_path3() -> grw::graph::MUndir0 {
-    grw::mgraph![<(), GER>; N(0) ^ N(1), n(1) ^ N(2)].unwrap()
+    grw::mgraph![<(), Ger>; N(0) ^ N(1), n(1) ^ N(2)].unwrap()
 }
 
 /// Triangle `0 — 1 — 2 — 0`.
 fn target_triangle() -> grw::graph::MUndir0 {
-    grw::mgraph![<(), GER>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap()
+    grw::mgraph![<(), Ger>; N(0) ^ N(1), n(1) ^ N(2), n(2) ^ n(0)].unwrap()
 }
 
 /// Runs the query through every engine path and asserts all four agree, then
 /// returns the sorted binding vectors.
 fn run(
     g: &grw::graph::MUndir0,
-    clusters: Vec<dsl::ClusterOps<(), GER>>,
+    clusters: Vec<dsl::ClusterOps<(), Ger>>,
     pattern_n: usize,
 ) -> Vec<Vec<u32>> {
     let t = g.index(RevCsr);
-    let Search::Resolved(r) = search::compile::<(), GER>(clusters).unwrap() else {
+    let Search::Resolved(r) = search::compile::<(), Ger>(clusters).unwrap() else {
         panic!("query did not resolve")
     };
     let query = r.query();
 
     let mut out = Vec::new();
-    for m in Seq::search(&query, &t).unwrap() {
+    for m in Seq::search(query, &t).unwrap() {
         let mut v = vec![u32::MAX; pattern_n];
-        for i in 0..pattern_n {
-            v[i] = *m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound") as u32;
+        for (i, slot) in v.iter_mut().enumerate() {
+            *slot = *m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound");
         }
         out.push(v);
     }
     out.sort();
 
-    let seq_count = Seq::search(&query, &t).unwrap().count();
-    let par_enum: usize = Par::search(&query, &t).unwrap().map(|_| 1usize).sum();
-    let par_count = Par::search(&query, &t).unwrap().count();
+    let seq_count = Seq::search(query, &t).unwrap().count();
+    let par_enum: usize = Par::search(query, &t).unwrap().map(|_| 1usize).sum();
+    let par_count = Par::search(query, &t).unwrap().count();
     assert_eq!(seq_count, out.len(), "Seq count path disagrees with Seq enumeration");
     assert_eq!(par_enum, out.len(), "Par enumeration disagrees with Seq enumeration");
     assert_eq!(par_count, out.len(), "Par count path disagrees with Seq enumeration");
@@ -63,12 +63,12 @@ fn run(
     out
 }
 
-fn n(i: u32) -> dsl::Op<(), GER> {
-    dsl::N::<(), GER>(i).into()
+fn n(i: u32) -> dsl::Op<(), Ger> {
+    dsl::N::<(), Ger>(i).into()
 }
 
-fn e(a: u32, b: u32) -> dsl::Op<(), GER> {
-    (dsl::n::<(), GER>(a) ^ dsl::n::<(), GER>(b)).into()
+fn e(a: u32, b: u32) -> dsl::Op<(), Ger> {
+    (dsl::n::<(), Ger>(a) ^ dsl::n::<(), Ger>(b)).into()
 }
 
 fn empty() -> Vec<Vec<u32>> {
@@ -189,42 +189,42 @@ fn mono_then_subiso_accepts_mirrored_edge() {
 
 // --- directed edges exercise the multi-slot `is_feasible` arm --------------
 
-type DER = grw::graph::edge::Dir<()>;
+type Der = grw::graph::edge::Dir<()>;
 
 fn run_dir(
     g: &grw::graph::MDir0,
-    clusters: Vec<dsl::ClusterOps<(), DER>>,
+    clusters: Vec<dsl::ClusterOps<(), Der>>,
     pattern_n: usize,
 ) -> Vec<Vec<u32>> {
     let t = g.index(RevCsr);
-    let Search::Resolved(r) = search::compile::<(), DER>(clusters).unwrap() else {
+    let Search::Resolved(r) = search::compile::<(), Der>(clusters).unwrap() else {
         panic!("query did not resolve")
     };
     let query = r.query();
 
     let mut out = Vec::new();
-    for m in Seq::search(&query, &t).unwrap() {
+    for m in Seq::search(query, &t).unwrap() {
         let mut v = vec![u32::MAX; pattern_n];
-        for i in 0..pattern_n {
-            v[i] = *m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound") as u32;
+        for (i, slot) in v.iter_mut().enumerate() {
+            *slot = *m.get(grw::graph::dsl::LocalId(i as u32)).expect("bound");
         }
         out.push(v);
     }
     out.sort();
 
-    assert_eq!(Seq::search(&query, &t).unwrap().count(), out.len());
-    assert_eq!(Par::search(&query, &t).unwrap().map(|_| 1usize).sum::<usize>(), out.len());
-    assert_eq!(Par::search(&query, &t).unwrap().count(), out.len());
+    assert_eq!(Seq::search(query, &t).unwrap().count(), out.len());
+    assert_eq!(Par::search(query, &t).unwrap().map(|_| 1usize).sum::<usize>(), out.len());
+    assert_eq!(Par::search(query, &t).unwrap().count(), out.len());
 
     out
 }
 
-fn dn(i: u32) -> dsl::Op<(), DER> {
-    dsl::N::<(), DER>(i).into()
+fn dn(i: u32) -> dsl::Op<(), Der> {
+    dsl::N::<(), Der>(i).into()
 }
 
-fn de(a: u32, b: u32) -> dsl::Op<(), DER> {
-    (dsl::n::<(), DER>(a) >> dsl::n::<(), DER>(b)).into()
+fn de(a: u32, b: u32) -> dsl::Op<(), Der> {
+    (dsl::n::<(), Der>(a) >> dsl::n::<(), Der>(b)).into()
 }
 
 #[test]

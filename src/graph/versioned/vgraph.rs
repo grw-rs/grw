@@ -2,16 +2,19 @@ use std::sync::Arc;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeSet;
-use std::io;
 use std::path::Path;
 
 use super::pmap::VIndices;
 use super::trie::PVec;
 use crate::graph::node::Adjacents;
-use crate::graph::{self, AdjIds, Edge, HasRel, MGraph, layout};
-use crate::modify::apply::{EdgeOp, FlatOps, check_duplicate_keys, flatten_node, resolve_endpoint, validate_edge_ops};
+use crate::graph::{self, AdjIds, Edge, HasRel, MGraph, layout, persist};
+use crate::modify::apply::{
+    EdgeOp, FlatOps, PartsPending, check_duplicate_keys, flatten_node, resolve_endpoint, resolve_part_edges,
+    validate_edge_ops,
+};
 use crate::modify::error::{self, Apply, Modify, apply};
 use crate::modify::{Fragment, LocalId, Modification};
+use crate::composite::Composite;
 use crate::{Id, NR, id};
 
 type RawNodeRef<'a, NV> = (u32, u64, &'a NV, Vec<(u32, u32)>);
@@ -60,11 +63,11 @@ where
 type FreeSet = PVec<()>;
 
 fn nslot(n: id::N) -> u32 {
-    *n as u32
+    *n
 }
 
 fn eslot(e: id::E) -> u32 {
-    *e as u32
+    *e
 }
 
 fn nid(slot: u32) -> id::N {
@@ -177,6 +180,11 @@ impl<NV, E: Edge> VGraph<NV, E> {
         self.edges.get(eslot(e)).map(|rec| rec.r#gen)
     }
 
+    pub fn edge_id(&self, e: E::Def) -> Option<id::E> {
+        let (nr, slot) = e.into();
+        edge_id_with_slot(&self.nodes, &self.edges, *nr.n1(), *nr.n2(), slot)
+    }
+
     pub fn catalogue(&self) -> graph::index::Catalogue {
         self.indices.catalogue()
     }
@@ -275,11 +283,11 @@ impl<NV, E: Edge> VGraph<NV, E> {
         (node_free, edge_free, self.next_node, self.next_edge, self.version)
     }
 
-    pub(crate) fn index_unique_entries(&self) -> graph::persist::UniqueEntries {
+    pub(crate) fn index_unique_entries(&self) -> persist::UniqueEntries {
         self.indices.unique_entries()
     }
 
-    pub(crate) fn index_multi_entries(&self) -> graph::persist::MultiEntries {
+    pub(crate) fn index_multi_entries(&self) -> persist::MultiEntries {
         self.indices.multi_entries()
     }
 
@@ -291,8 +299,8 @@ impl<NV, E: Edge> VGraph<NV, E> {
         edges: Vec<RestoredEdge<E>>,
         free: FreeParts,
         decls: Vec<graph::index::IndexDecl<NV>>,
-        unique: graph::persist::UniqueEntries,
-        multi: graph::persist::MultiEntries,
+        unique: persist::UniqueEntries,
+        multi: persist::MultiEntries,
     ) -> Self {
         let (node_free, edge_free, next_node, next_edge, version) = free;
         let mut pnodes: PVec<Arc<VNode<NV>>> = PVec::new();
@@ -328,6 +336,75 @@ impl<NV, E: Edge> VGraph<NV, E> {
             version,
             indices: VIndices::from_tables(decls, unique, multi),
         }
+    }
+}
+
+impl<NV, E: Edge> VGraph<NV, E> {
+    pub fn map_filter_values<NV2, E2, X>(
+        &self,
+        decls: Vec<graph::index::IndexDecl<NV2>>,
+        mut node: impl FnMut(id::N, &NV) -> Result<Option<NV2>, X>,
+        mut edge: impl FnMut(id::E, &E::Val) -> Result<Option<E2::Val>, X>,
+    ) -> Result<VGraph<NV2, E2>, graph::error::Map<X>>
+    where
+        E2: Edge<Slot = E::Slot>,
+        X: std::fmt::Debug + std::fmt::Display,
+    {
+        let mut kept: Vec<(u32, &VNode<NV>, NV2)> = Vec::new();
+        let mut dropped_nodes: FxHashSet<u32> = FxHashSet::default();
+        let mut node_free = self.node_free.clone();
+        for (slot, held) in self.nodes.iter() {
+            match node(nid(slot), &held.val).map_err(graph::error::Map::Value)? {
+                Some(val) => kept.push((slot, held.as_ref(), val)),
+                None => {
+                    dropped_nodes.insert(slot);
+                    node_free = release_slot(&node_free, slot);
+                }
+            }
+        }
+
+        let mut edges: PVec<Arc<VEdge<E2>>> = PVec::new();
+        let mut dropped_edges: FxHashSet<u32> = FxHashSet::default();
+        let mut edge_free = self.edge_free.clone();
+        for (slot, rec) in self.edges.iter() {
+            let orphaned = dropped_nodes.contains(&nslot(rec.lo)) || dropped_nodes.contains(&nslot(rec.hi));
+            let mapped = match orphaned {
+                true => None,
+                false => edge(eid(slot), &rec.val).map_err(graph::error::Map::Value)?,
+            };
+            match mapped {
+                Some(val) => {
+                    edges = edges.set(slot, Arc::new(VEdge { r#gen: rec.r#gen, slot_kind: rec.slot_kind, val, lo: rec.lo, hi: rec.hi }));
+                }
+                None => {
+                    dropped_edges.insert(slot);
+                    edge_free = release_slot(&edge_free, slot);
+                }
+            }
+        }
+
+        let mut nodes: PVec<Arc<VNode<NV2>>> = PVec::new();
+        for (slot, held, val) in kept {
+            let mut adj = Adjacents::new();
+            for (n, e) in held.adj.entries_iter() {
+                if !dropped_edges.contains(&eslot(e)) {
+                    adj.insert(n, e);
+                }
+            }
+            nodes = nodes.set(slot, Arc::new(VNode { val, r#gen: held.r#gen, adj }));
+        }
+
+        let mapped = VGraph {
+            nodes,
+            edges,
+            node_free,
+            edge_free,
+            next_node: self.next_node,
+            next_edge: self.next_edge,
+            version: self.version,
+            indices: VIndices::new(),
+        };
+        mapped.with_indices(decls).map_err(graph::error::Map::Index)
     }
 }
 
@@ -397,7 +474,7 @@ where
 
     /// M-as-V: a file saved by `MGraph::save` starts every node and edge at
     /// generation 0 and the graph at version 0.
-    pub fn load(path: &Path) -> io::Result<Self>
+    pub fn load(path: &Path) -> Result<Self, persist::Error>
     where
         NV: ::serde::de::DeserializeOwned + layout::Val,
         E::Slot: ::serde::de::DeserializeOwned,
@@ -406,36 +483,74 @@ where
         Self::load_with(path, Vec::new())
     }
 
-    pub fn load_with(path: &Path, decls: Vec<graph::index::IndexDecl<NV>>) -> io::Result<Self>
+    pub fn load_with(path: &Path, decls: Vec<graph::index::IndexDecl<NV>>) -> Result<Self, persist::Error>
     where
         NV: ::serde::de::DeserializeOwned + layout::Val,
         E::Slot: ::serde::de::DeserializeOwned,
         E::Val: ::serde::de::DeserializeOwned + layout::Val,
     {
-        let snap = graph::persist::read_snapshot(path)?;
-        graph::persist::check_edge_kind::<E>(&snap.header)?;
-        graph::persist::check_layout_hashes::<NV, E>(&snap.header)?;
-        let (decls, unique, multi) = graph::persist::verify_and_split_indices(&snap.indices, decls)?;
+        persist::at(path, || {
+            let snap = persist::read_snapshot(path)?;
+            persist::check_edge_kind::<E>(&snap.header)?;
+            persist::check_layout_hashes::<NV, E>(&snap.header)?;
+            Self::restore(snap, decls, persist::codec::decode::<E::Val>)
+        })
+    }
+
+    pub fn load_promoting(path: &Path) -> Result<Self, persist::Error>
+    where
+        NV: ::serde::de::DeserializeOwned + layout::Val,
+        E::Slot: ::serde::de::DeserializeOwned,
+        E::Val: Composite + ::serde::de::DeserializeOwned + layout::Val,
+        <E::Val as Composite>::Part: ::serde::de::DeserializeOwned + layout::Val,
+    {
+        Self::load_promoting_with(path, Vec::new())
+    }
+
+    pub fn load_promoting_with(path: &Path, decls: Vec<graph::index::IndexDecl<NV>>) -> Result<Self, persist::Error>
+    where
+        NV: ::serde::de::DeserializeOwned + layout::Val,
+        E::Slot: ::serde::de::DeserializeOwned,
+        E::Val: Composite + ::serde::de::DeserializeOwned + layout::Val,
+        <E::Val as Composite>::Part: ::serde::de::DeserializeOwned + layout::Val,
+    {
+        persist::at(path, || {
+            let snap = persist::read_snapshot(path)?;
+            persist::check_edge_kind::<E>(&snap.header)?;
+            persist::check_node_layout::<NV>(&snap.header)?;
+            let held = persist::promotion::held::<E::Val>(&snap.header)?;
+            Self::restore(snap, decls, |bytes| persist::promotion::value::<E::Val>(held, bytes))
+        })
+    }
+
+    fn restore(
+        snap: persist::SnapshotRead,
+        decls: Vec<graph::index::IndexDecl<NV>>,
+        edge_value: impl Fn(&[u8]) -> Result<E::Val, bincode::Error>,
+    ) -> Result<Self, persist::Reason>
+    where
+        NV: ::serde::de::DeserializeOwned,
+    {
+        let (decls, unique, multi) = persist::verify_and_split_indices(&snap.indices, decls)?;
 
         let nodes = snap
             .nodes
             .into_iter()
             .map(|raw| {
-                let val: NV = bincode::deserialize(&raw.val_bytes)
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                let val: NV = persist::codec::decode(&raw.val_bytes)
+                    .map_err(persist::Reason::value(persist::Site::Node(raw.slot)))?;
                 Ok((raw.slot, raw.r#gen, val, raw.adj))
             })
-            .collect::<io::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>, persist::Reason>>()?;
 
         let edges = snap
             .edges
             .into_iter()
             .map(|raw| {
-                let val: E::Val = bincode::deserialize(&raw.val_bytes)
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                let val = edge_value(&raw.val_bytes).map_err(persist::Reason::value(persist::Site::Edge(raw.slot)))?;
                 Ok((raw.slot, raw.r#gen, raw.n1, raw.n2, E::slot_from_byte(raw.slot_kind), val))
             })
-            .collect::<io::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>, persist::Reason>>()?;
 
         Ok(Self::from_restored(
             nodes,
@@ -447,61 +562,58 @@ where
         ))
     }
 
-    pub fn save(&self, path: &Path) -> io::Result<()>
+    pub fn save(&self, path: &Path) -> Result<(), persist::Error>
     where
         NV: ::serde::Serialize + layout::Val,
         E::Slot: ::serde::Serialize,
         E::Val: ::serde::Serialize + layout::Val,
     {
-        let nodes = self
-            .raw_nodes()
-            .into_iter()
-            .map(|(slot, r#gen, val, adj)| {
-                let val_bytes = bincode::serialize(val).map_err(io::Error::other)?;
-                Ok(graph::persist::RawNode { slot, r#gen, adj, val_bytes })
-            })
-            .collect::<io::Result<Vec<_>>>()?;
-
-        let edges = self
-            .raw_edges()
-            .into_iter()
-            .map(|(slot, r#gen, n1, n2, slot_kind, val)| {
-                let val_bytes = bincode::serialize(val).map_err(io::Error::other)?;
-                Ok(graph::persist::RawEdge {
-                    slot,
-                    r#gen,
-                    n1,
-                    n2,
-                    slot_kind: E::slot_to_byte(slot_kind),
-                    val_bytes,
+        persist::at(path, || {
+            let nodes = self
+                .raw_nodes()
+                .into_iter()
+                .map(|(slot, r#gen, val, adj)| {
+                    let val_bytes =
+                        persist::codec::encode(val).map_err(persist::Reason::value(persist::Site::Node(slot)))?;
+                    Ok(persist::RawNode { slot, r#gen, adj, val_bytes })
                 })
-            })
-            .collect::<io::Result<Vec<_>>>()?;
+                .collect::<Result<Vec<_>, persist::Reason>>()?;
 
-        let (node_free, edge_free, next_node, next_edge, version) = self.raw_free();
-        let decls = graph::Graph::index_decls(self);
-        let indices =
-            graph::persist::build_index_tables(&decls, self.index_unique_entries(), self.index_multi_entries())?;
+            let edges = self
+                .raw_edges()
+                .into_iter()
+                .map(|(slot, r#gen, n1, n2, slot_kind, val)| {
+                    let val_bytes =
+                        persist::codec::encode(val).map_err(persist::Reason::value(persist::Site::Edge(slot)))?;
+                    Ok(persist::RawEdge { slot, r#gen, n1, n2, slot_kind: E::slot_to_byte(slot_kind), val_bytes })
+                })
+                .collect::<Result<Vec<_>, persist::Reason>>()?;
 
-        graph::persist::write_snapshot(
-            path,
-            graph::persist::SnapshotWrite {
-                graph_kind: 1,
-                edge_kind: E::EDGE_KIND,
-                nv_type: std::any::type_name::<NV>().to_string(),
-                ev_type: std::any::type_name::<E::Val>().to_string(),
-                nv_hash: NV::layout_hash(),
-                ev_hash: <E::Val as layout::Val>::layout_hash(),
-                nodes,
-                edges,
-                node_free,
-                edge_free,
-                next_node,
-                next_edge,
-                version,
-                indices,
-            },
-        )
+            let (node_free, edge_free, next_node, next_edge, version) = self.raw_free();
+            let decls = graph::Graph::index_decls(self);
+            let indices =
+                persist::build_index_tables(&decls, self.index_unique_entries(), self.index_multi_entries())?;
+
+            persist::write_snapshot(
+                path,
+                persist::SnapshotWrite {
+                    graph_kind: 1,
+                    edge_kind: E::EDGE_KIND,
+                    nv_type: std::any::type_name::<NV>().to_string(),
+                    ev_type: std::any::type_name::<E::Val>().to_string(),
+                    nv_hash: NV::layout_hash(),
+                    ev_hash: <E::Val as layout::Val>::layout_hash(),
+                    nodes,
+                    edges,
+                    node_free,
+                    edge_free,
+                    next_node,
+                    next_edge,
+                    version,
+                    indices,
+                },
+            )
+        })
     }
 
     pub fn modify(
@@ -544,7 +656,7 @@ where
             version: _,
         } = self;
 
-        let mut flat: FlatOps<NV, E> = FlatOps::default();
+        let mut flat: FlatOps<NV, E, PartsPending<E>> = FlatOps::pending();
 
         {
             let mut alloc = || nid(alloc_slot(&mut node_free, &mut next_node));
@@ -570,6 +682,10 @@ where
                 .entry(*local)
                 .or_insert_with(|| nid(alloc_slot(&mut node_free, &mut next_node)));
         });
+
+        let flat = resolve_part_edges(flat, &local_map, |n1, n2, slot| {
+            edges_between_in(&nodes, &edges, n1, n2).find(|(s, _)| *s == slot).map(|(_, val)| val)
+        })?;
 
         flat.remove_nodes
             .iter()
@@ -1140,8 +1256,9 @@ mod tests {
     fn multi_free_slot_reuse_matches_mgraph() {
         type ER = edge::Undir<()>;
         type Ops = Vec<crate::modify::Node<(), ER>>;
+        type Allocated = (Vec<(Id, Id)>, Vec<(Id, Id, Id)>);
 
-        fn allocated(m: &Modification<(), ER>) -> (Vec<(Id, Id)>, Vec<(Id, Id, Id)>) {
+        fn allocated(m: &Modification<(), ER>) -> Allocated {
             let mut nodes: Vec<(Id, Id)> =
                 m.new_node_ids.iter().map(|(l, n)| (l.0, **n)).collect();
             nodes.sort_unstable();

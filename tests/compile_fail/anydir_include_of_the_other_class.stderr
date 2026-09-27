@@ -1,0 +1,17 @@
+error[E0277]: the trait bound `Tie: From<Signs>` is not satisfied
+  --> tests/compile_fail/anydir_include_of_the_other_class.rs:23:61
+   |
+23 |     let _ = g.modify(grw::modify![x(0) & E().include(Signs) ^ x(1)]);
+   |                                                             ^ unsatisfied trait bound
+   |
+help: the trait `From<Signs>` is not implemented for `Tie`
+      but trait `From<Knows>` is implemented for it
+  --> tests/compile_fail/anydir_include_of_the_other_class.rs:11:39
+   |
+11 | #[derive(Debug, Clone, PartialEq, Eq, Part)]
+   |                                       ^^^^
+   = help: for that trait implementation, expected `Knows`, found `Signs`
+   = note: required for `Signs` to implement `Into<Tie>`
+   = note: required for `PendingInclude<Signs>` to implement `PartTerm<Anydir<TypeSet<Tie>, TypeSet<Rel>>, UndirSlot>`
+   = note: required for `grw::modify::UndirPending<grw::modify::node::exist::Ref<(), Anydir<TypeSet<Tie>, TypeSet<Rel>>>, grw::modify::edge::new::Edge<PendingInclude<Signs>, (), Anydir<TypeSet<Tie>, TypeSet<Rel>>>>` to implement `BitXor<grw::modify::node::exist::Ref<(), Anydir<TypeSet<Tie>, TypeSet<Rel>>>>`
+   = note: this error originates in the derive macro `Part` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -100,6 +100,10 @@ impl<E: Edge> Edges<E> {
         self.count
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
     pub(crate) fn get_by_id(&self, eid: id::E) -> Option<&EdgeRec<E::Slot, E::Val>> {
         self.store.get(*eid as usize).and_then(|opt| opt.as_ref())
     }

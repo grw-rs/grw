@@ -158,6 +158,7 @@ pub trait SlotVal<Dir>: Edge {
 
 pub struct UndirSlot;
 pub struct DirSlot;
+pub struct AnySlot;
 
 #[inline]
 pub(crate) fn normalized_val<X>(ns: [id::N; 2], norm_order: X, rev_order: X) -> (NR<id::N>, X) {
@@ -249,6 +250,12 @@ pub mod undir {
     }
 
     impl<V> super::SlotVal<super::UndirSlot> for super::Undir<V> {
+        type SlotType = V;
+        fn extract_slot_val(val: &V) -> Option<&V> { Some(val) }
+        fn wrap_slot_val(v: V) -> V { v }
+    }
+
+    impl<V> super::SlotVal<super::AnySlot> for super::Undir<V> {
         type SlotType = V;
         fn extract_slot_val(val: &V) -> Option<&V> { Some(val) }
         fn wrap_slot_val(v: V) -> V { v }
@@ -411,8 +418,8 @@ pub mod dir {
         }
 
         fn csr_any_match(store: &CsrStore<V>, pred: &dyn Fn(&V) -> bool) -> bool {
-            store.0.as_ref().is_some_and(|v| pred(v))
-                || store.1.as_ref().is_some_and(|v| pred(v))
+            store.0.as_ref().is_some_and(pred)
+                || store.1.as_ref().is_some_and(pred)
         }
 
         fn csr_occupied_slots(store: &CsrStore<V>) -> smallvec::SmallVec<[Slot; 3]> {
@@ -424,6 +431,12 @@ pub mod dir {
     }
 
     impl<V> super::SlotVal<super::DirSlot> for super::Dir<V> {
+        type SlotType = V;
+        fn extract_slot_val(val: &V) -> Option<&V> { Some(val) }
+        fn wrap_slot_val(v: V) -> V { v }
+    }
+
+    impl<V> super::SlotVal<super::AnySlot> for super::Dir<V> {
         type SlotType = V;
         fn extract_slot_val(val: &V) -> Option<&V> { Some(val) }
         fn wrap_slot_val(v: V) -> V { v }
@@ -645,9 +658,9 @@ pub mod anydir {
         }
 
         fn csr_any_match(store: &CsrStore<U, D>, pred: &dyn Fn(&super::AnyVal<U, D>) -> bool) -> bool {
-            store.0.as_ref().is_some_and(|v| pred(v))
-                || store.1.as_ref().is_some_and(|v| pred(v))
-                || store.2.as_ref().is_some_and(|v| pred(v))
+            store.0.as_ref().is_some_and(pred)
+                || store.1.as_ref().is_some_and(pred)
+                || store.2.as_ref().is_some_and(pred)
         }
 
         fn csr_occupied_slots(store: &CsrStore<U, D>) -> smallvec::SmallVec<[Slot; 3]> {

@@ -29,7 +29,7 @@ fn by_bucket() -> IndexDecl<u32> {
 }
 
 fn by_even() -> IndexDecl<u32> {
-    IndexDecl::new(BY_EVEN, Cardinality::Unique, |v: &u32| (*v % 2 == 0).then_some(*v))
+    IndexDecl::new(BY_EVEN, Cardinality::Unique, |v: &u32| (*v).is_multiple_of(2).then_some(*v))
 }
 
 const ZETA: IndexName = IndexName("zeta");
@@ -59,7 +59,7 @@ fn base() -> VG {
 }
 
 fn view(g: &VG) -> Vec<(u32, u32)> {
-    let mut v: Vec<(u32, u32)> = g.iter_node_ids().map(|n| (*n as u32, *g.node_val(n).unwrap())).collect();
+    let mut v: Vec<(u32, u32)> = g.iter_node_ids().map(|n| ((*n), *g.node_val(n).unwrap())).collect();
     v.sort_unstable();
     v
 }
@@ -145,7 +145,7 @@ fn duplicate_key_in_batch_refused_leaves_value_untouched() {
     assert_eq!(view(&g), before);
 
     let (g2, m) = g.modify(vec![N::<u32, ER>(20).val(200u32).into()]).unwrap();
-    assert_eq!(*m.new_node_ids[&grw::graph::dsl::LocalId(20)] as u32, 4, "id space must not have leaked");
+    assert_eq!(*m.new_node_ids[&grw::graph::dsl::LocalId(20)], 4, "id space must not have leaked");
     let _ = g2;
 }
 

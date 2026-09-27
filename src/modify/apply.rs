@@ -3,18 +3,21 @@ use crate::modify::Node;
 use crate::modify::edge::{self, Edge};
 use crate::modify::error::{Apply, apply};
 use crate::modify::node::{Bind, Exist, New};
+use crate::modify::part::{Link, Part, Present};
 use crate::graph::{self, MGraph, EdgeRec, index};
 use crate::{Id, NR, id};
 use std::collections::BTreeSet;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+pub(crate) type EdgeChange<ER> = (id::E, NR<id::N>, <ER as graph::Edge>::Slot, <ER as graph::Edge>::Val);
+
 pub struct Modification<NV, ER: graph::Edge> {
     pub new_node_ids: FxHashMap<LocalId, id::N>,
     pub added_edges: Vec<(id::E, id::N, id::N, ER::Slot)>,
     pub removed_nodes: Vec<(id::N, NV)>,
-    pub removed_edges: Vec<(id::E, NR<id::N>, ER::Slot, ER::Val)>,
+    pub removed_edges: Vec<EdgeChange<ER>>,
     pub swapped_node_vals: Vec<(id::N, NV)>,
-    pub swapped_edge_vals: Vec<(id::E, NR<id::N>, ER::Slot, ER::Val)>,
+    pub swapped_edge_vals: Vec<EdgeChange<ER>>,
 }
 
 impl<NV, ER: graph::Edge> Default for Modification<NV, ER> {
@@ -59,6 +62,13 @@ pub(crate) struct SwapEdge<ER: graph::Edge> {
 pub(crate) struct RemoveEdge<ER: graph::Edge> {
     pub(crate) source: Endpoint,
     pub(crate) slot: ER::Slot,
+    pub(crate) target: Endpoint,
+}
+
+pub(crate) struct PartEdge<ER: graph::Edge> {
+    pub(crate) source: Endpoint,
+    pub(crate) slot: ER::Slot,
+    pub(crate) op: Part<ER::Val>,
     pub(crate) target: Endpoint,
 }
 
@@ -115,19 +125,25 @@ macro_rules! impl_edge_op {
 impl_edge_op!(AddEdge);
 impl_edge_op!(SwapEdge);
 impl_edge_op!(RemoveEdge);
+impl_edge_op!(PartEdge);
 
-pub(crate) struct FlatOps<NV, ER: graph::Edge> {
+pub(crate) struct PartsPending<ER: graph::Edge>(Vec<PartEdge<ER>>);
+
+pub(crate) struct PartsResolved;
+
+pub(crate) struct FlatOps<NV, ER: graph::Edge, Parts> {
     pub(crate) new_named: Vec<(LocalId, NV)>,
     pub(crate) new_anon: Vec<(id::N, NV)>,
     pub(crate) exist_nodes: Vec<(id::N, Option<NV>)>,
     pub(crate) add_edges: Vec<AddEdge<ER>>,
     pub(crate) swap_edges: Vec<SwapEdge<ER>>,
     pub(crate) remove_edges: Vec<RemoveEdge<ER>>,
+    pub(crate) parts: Parts,
     pub(crate) remove_nodes: Vec<id::N>,
 }
 
-impl<NV, ER: graph::Edge> Default for FlatOps<NV, ER> {
-    fn default() -> Self {
+impl<NV, ER: graph::Edge> FlatOps<NV, ER, PartsPending<ER>> {
+    pub(crate) fn pending() -> Self {
         Self {
             new_named: Vec::new(),
             new_anon: Vec::new(),
@@ -135,6 +151,7 @@ impl<NV, ER: graph::Edge> Default for FlatOps<NV, ER> {
             add_edges: Vec::new(),
             swap_edges: Vec::new(),
             remove_edges: Vec::new(),
+            parts: PartsPending(Vec::new()),
             remove_nodes: Vec::new(),
         }
     }
@@ -142,7 +159,7 @@ impl<NV, ER: graph::Edge> Default for FlatOps<NV, ER> {
 
 pub(crate) fn flatten_node<NV, ER: graph::Edge>(
     node: Node<NV, ER>,
-    flat: &mut FlatOps<NV, ER>,
+    flat: &mut FlatOps<NV, ER, PartsPending<ER>>,
     alloc: &mut impl FnMut() -> id::N,
 ) -> Endpoint {
     match node {
@@ -176,7 +193,9 @@ pub(crate) fn flatten_node<NV, ER: graph::Edge>(
                     Bind::Swap(v) => {
                         flat.exist_nodes.push((id, Some(v)));
                     }
-                    Bind::Ref => {}
+                    Bind::Ref => {
+                        flat.exist_nodes.push((id, None));
+                    }
                 }
                 let ep = Endpoint::Exist(id);
                 edges
@@ -198,7 +217,7 @@ pub(crate) fn flatten_node<NV, ER: graph::Edge>(
 fn flatten_edge<NV, ER: graph::Edge>(
     edge: Edge<NV, ER>,
     source: Endpoint,
-    flat: &mut FlatOps<NV, ER>,
+    flat: &mut FlatOps<NV, ER, PartsPending<ER>>,
     alloc: &mut impl FnMut() -> id::N,
 ) {
     match edge {
@@ -228,6 +247,15 @@ fn flatten_edge<NV, ER: graph::Edge>(
                 }),
             }
         }
+        Edge::Part { slot, op, target } => {
+            let target_ep = flatten_node(target, flat, alloc);
+            flat.parts.0.push(PartEdge {
+                source,
+                slot,
+                op,
+                target: target_ep,
+            });
+        }
     }
 }
 
@@ -239,12 +267,180 @@ pub(crate) fn resolve_endpoint(ep: Endpoint, local_map: &FxHashMap<LocalId, id::
     }
 }
 
+mod parts {
+    use super::{
+        AddEdge, EdgeOp, Endpoint, FlatOps, LocalId, Link, Part, PartEdge, PartsPending, PartsResolved, Present,
+        RemoveEdge, SwapEdge,
+    };
+    use crate::graph;
+    use crate::modify::error::{Apply, apply};
+    use crate::modify::part::Refused;
+    use crate::{NR, id};
+    use rustc_hash::{FxHashMap, FxHashSet};
+
+    struct Folded<V> {
+        a: id::N,
+        b: id::N,
+        op: Part<V>,
+    }
+
+    enum Start {
+        Held,
+        Vacant,
+    }
+
+    struct Pair<ER: graph::Edge> {
+        source: Endpoint,
+        slot: ER::Slot,
+        target: Endpoint,
+        n1: id::N,
+        n2: id::N,
+        stored_slot: ER::Slot,
+        ops: Vec<Folded<ER::Val>>,
+    }
+
+    pub(crate) fn resolve<'g, NV, ER: graph::Edge>(
+        pending: FlatOps<NV, ER, PartsPending<ER>>,
+        local_map: &FxHashMap<LocalId, id::N>,
+        held: impl Fn(id::N, id::N, ER::Slot) -> Option<&'g ER::Val>,
+    ) -> Result<FlatOps<NV, ER, PartsResolved>, Apply>
+    where
+        ER::Val: 'g,
+    {
+        let FlatOps {
+            new_named,
+            new_anon,
+            exist_nodes,
+            add_edges,
+            swap_edges,
+            remove_edges,
+            parts: PartsPending(part_edges),
+            remove_nodes,
+        } = pending;
+        let mut flat = FlatOps {
+            new_named,
+            new_anon,
+            exist_nodes,
+            add_edges,
+            swap_edges,
+            remove_edges,
+            parts: PartsResolved,
+            remove_nodes,
+        };
+        for pair in grouped(part_edges, &flat, local_map)? {
+            let stored = held(pair.n1, pair.n2, pair.stored_slot);
+            let (start, link) = match stored {
+                Some(val) => (Start::Held, Link::Present(Present::Held(val))),
+                None => (Start::Vacant, Link::Vacant),
+            };
+            let Pair { source, slot, target, ops, .. } = pair;
+            let link = folded(link, stored, ops)?;
+            emit(&mut flat, start, link, source, slot, target);
+        }
+        Ok(flat)
+    }
+
+    fn grouped<NV, ER: graph::Edge>(
+        part_edges: Vec<PartEdge<ER>>,
+        flat: &FlatOps<NV, ER, PartsResolved>,
+        local_map: &FxHashMap<LocalId, id::N>,
+    ) -> Result<Vec<Pair<ER>>, Apply> {
+        let whole: FxHashSet<(NR<id::N>, ER::Slot)> = flat
+            .add_edges
+            .iter()
+            .map(|e| e.key(local_map))
+            .chain(flat.swap_edges.iter().map(|e| e.key(local_map)))
+            .chain(flat.remove_edges.iter().map(|e| e.key(local_map)))
+            .map(|key| (key.nr, key.slot))
+            .collect();
+
+        let mut at: FxHashMap<(NR<id::N>, ER::Slot), usize> = FxHashMap::default();
+        let mut pairs: Vec<Pair<ER>> = Vec::new();
+        for part_edge in part_edges {
+            let key = part_edge.key(local_map);
+            if whole.contains(&(key.nr, key.slot)) {
+                return Err(Apply::Edge(apply::Edge::PartConflict(key.source, key.target)));
+            }
+            let folded = Folded { a: key.source, b: key.target, op: part_edge.op };
+            match at.get(&(key.nr, key.slot)) {
+                Some(&i) => pairs[i].ops.push(folded),
+                None => {
+                    at.insert((key.nr, key.slot), pairs.len());
+                    pairs.push(Pair {
+                        source: part_edge.source,
+                        slot: part_edge.slot,
+                        target: part_edge.target,
+                        n1: key.n1(),
+                        n2: key.n2(),
+                        stored_slot: key.slot,
+                        ops: vec![folded],
+                    });
+                }
+            }
+        }
+        Ok(pairs)
+    }
+
+    fn folded<'g, V>(start: Link<'g, V>, stored: Option<&'g V>, ops: Vec<Folded<V>>) -> Result<Link<'g, V>, Apply> {
+        let mut link = start;
+        for Folded { a, b, op } in ops {
+            link = stepped(link, stored, op, a, b)?;
+        }
+        Ok(link)
+    }
+
+    fn stepped<'g, V>(
+        link: Link<'g, V>,
+        stored: Option<&'g V>,
+        op: Part<V>,
+        a: id::N,
+        b: id::N,
+    ) -> Result<Link<'g, V>, Apply> {
+        match op {
+            Part::Include(include) => include.0.onto(link, stored).map(Link::Present).map_err(|refused| match refused {
+                Refused::Part(refused) => Apply::Edge(apply::Edge::PartRejected { a, b, refused }),
+                Refused::SlotClass(expected) => Apply::Edge(apply::Edge::SlotClass(apply::SlotClass { a, b, expected })),
+            }),
+            Part::Exclude(exclude) => match link {
+                Link::Vacant => Err(Apply::Edge(apply::Edge::NotFound(a, b))),
+                Link::Present(present) => exclude.0.off(present, stored).map_err(|refused| match refused {
+                    Refused::Part(refused) => Apply::Edge(apply::Edge::PartNotHeld { a, b, refused }),
+                    Refused::SlotClass(expected) => Apply::Edge(apply::Edge::SlotClass(apply::SlotClass { a, b, expected })),
+                }),
+            },
+        }
+    }
+
+    fn emit<NV, ER: graph::Edge>(
+        flat: &mut FlatOps<NV, ER, PartsResolved>,
+        start: Start,
+        link: Link<'_, ER::Val>,
+        source: Endpoint,
+        slot: ER::Slot,
+        target: Endpoint,
+    ) {
+        match (start, link) {
+            (_, Link::Present(Present::Held(_))) => {}
+            (Start::Held, Link::Present(Present::Staged(val))) => {
+                flat.swap_edges.push(SwapEdge { source, slot, val, target })
+            }
+            (Start::Vacant, Link::Present(Present::Staged(val))) => {
+                flat.add_edges.push(AddEdge { source, slot, val, target })
+            }
+            (Start::Held, Link::Vacant) => flat.remove_edges.push(RemoveEdge { source, slot, target }),
+            (Start::Vacant, Link::Vacant) => {}
+        }
+    }
+}
+
+pub(crate) use parts::resolve as resolve_part_edges;
+
 /// Must replay the mutation phase's remove → swap → add order over a
 /// multiplicity overlay on the pre-batch graph: any divergence changes which
 /// batches are accepted. `slot_count` reports the pre-batch graph's edge count
 /// for a canonical `(n1, n2, slot)` key.
 pub(crate) fn validate_edge_ops<NV, ER: graph::Edge>(
-    flat: &FlatOps<NV, ER>,
+    flat: &FlatOps<NV, ER, PartsResolved>,
     local_map: &FxHashMap<LocalId, id::N>,
     slot_count: impl Fn(id::N, id::N, ER::Slot) -> usize,
 ) -> Result<(), Apply> {
@@ -291,7 +487,7 @@ pub(crate) fn validate_edge_ops<NV, ER: graph::Edge>(
 pub(crate) fn check_duplicate_keys<NV, ER: graph::Edge>(
     decls: &[index::IndexDecl<NV>],
     unique_lookup: impl Fn(usize, &index::KeyBytes) -> Option<id::N>,
-    flat: &FlatOps<NV, ER>,
+    flat: &FlatOps<NV, ER, PartsResolved>,
     local_map: &FxHashMap<LocalId, id::N>,
 ) -> Result<(), Apply> {
     if decls.is_empty() {
@@ -375,7 +571,7 @@ impl<NV: Sync, ER: graph::Edge> MGraph<NV, ER> {
         ops: Vec<Node<NV, ER>>,
         allocated: &mut Vec<Id>,
     ) -> Result<Modification<NV, ER>, Apply> {
-        let mut flat = FlatOps::default();
+        let mut flat = FlatOps::pending();
 
         {
             let free_ids = &mut self.nodes.free_ids;
@@ -413,6 +609,10 @@ impl<NV: Sync, ER: graph::Edge> MGraph<NV, ER> {
                 });
             });
         }
+
+        let flat = resolve_part_edges(flat, &local_map, |n1, n2, slot| {
+            self.edges_between(n1, n2).find(|(s, _)| *s == slot).map(|(_, val)| val)
+        })?;
 
         flat.remove_nodes
             .iter()

@@ -246,6 +246,12 @@ impl<NV, E: Edge> MGraph<NV, E> {
             .unwrap_or(false)
     }
 
+    pub fn edge_id(&self, e: E::Def) -> Option<id::E> {
+        let (nr, slot) = e.into();
+        self.edge_ids_between(*nr.n1(), *nr.n2())
+            .find(|eid| self.edges.get_by_id(*eid).is_some_and(|rec| rec.slot == slot))
+    }
+
     pub(crate) fn get_edge_val(&self, e: E::Def) -> Option<&E::Val> {
         let (nr, slot) = e.into();
         self.edges_between(*nr.n1(), *nr.n2())
@@ -511,6 +517,8 @@ impl<NV, E: Edge> super::Graph<NV, E> for MGraph<NV, E> {
     }
 }
 
+pub(crate) type ToVecs<NV, E> = (Vec<(Id, NV)>, Vec<(<E as Edge>::Def, <E as Edge>::Val)>);
+
 impl<NV: Clone, E: Edge> MGraph<NV, E>
 where
     E::Val: Clone,
@@ -566,7 +574,7 @@ where
         }
     }
 
-    pub fn to_vecs(&self) -> (Vec<(Id, NV)>, Vec<(E::Def, E::Val)>) {
+    pub fn to_vecs(&self) -> ToVecs<NV, E> {
         let nodes = self.nodes.iter().map(|(n, v)| (*n, v.clone())).collect();
         let edges = self.edges.iter().map(|(def, val)| (def, val.clone())).collect();
         (nodes, edges)

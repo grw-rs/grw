@@ -18,6 +18,7 @@ use grw::search::{self, Morphism, RevCsr, Search, Seq};
 type ER = graph::edge::Undir<()>;
 type MU = graph::MUndirN<u32>;
 type VU = graph::VUndirN<u32>;
+type KeptSnapshots = Vec<(VU, Vec<(u32, Vec<u32>)>)>;
 
 const UNIQUE: IndexName = IndexName("u_mod97");
 const MULTI: IndexName = IndexName("m_mod7");
@@ -45,9 +46,9 @@ impl Rng {
 
 fn view<G: graph::Graph<u32, ER>>(g: &G) -> Vec<(u32, Vec<u32>)> {
     let mut out: Vec<(u32, Vec<u32>)> = g.iter_node_ids().map(|nd| {
-        let mut adj: Vec<u32> = g.neighbors(nd).unwrap().map(|(m, _, _)| *m as u32).collect();
+        let mut adj: Vec<u32> = g.neighbors(nd).unwrap().map(|(m, _, _)| *m).collect();
         adj.sort_unstable();
-        (*nd as u32, adj)
+        ((*nd), adj)
     }).collect();
     out.sort_unstable();
     out
@@ -188,10 +189,10 @@ fn differential_oracle() {
     for case in 0..200 {
         let mut m: MU = grw::mgraph![N(0).val(0u32)].unwrap().with_indices(decls()).unwrap();
         let mut v: VU = VU::from_mgraph(&m);
-        let mut kept: Vec<(VU, Vec<(u32, Vec<u32>)>)> = Vec::new();
+        let mut kept: KeptSnapshots = Vec::new();
         let mut gens: HashMap<u32, u64> = HashMap::new();
         for nd in v.iter_node_ids() {
-            gens.insert(*nd as u32, v.node_gen(nd).unwrap());
+            gens.insert(*nd, v.node_gen(nd).unwrap());
         }
 
         for step in 0..60 {
@@ -200,13 +201,12 @@ fn differential_oracle() {
             let mut rng2 = Rng(seed_before);
             let mut ops2 = random_ops(&mut rng2, &m);
 
-            if rng.chance(15, 100) {
-                if let Some(p) = choose_poison(&mut rng, &m) {
+            if rng.chance(15, 100)
+                && let Some(p) = choose_poison(&mut rng, &m) {
                     poisoned_batches += 1;
                     ops.push(poison_node(p));
                     ops2.push(poison_node(p));
                 }
-            }
 
             let before_m = view(&m);
             let mut m_next = m.clone();
@@ -224,7 +224,7 @@ fn differential_oracle() {
                     index_parity_check(&m, &v);
 
                     for (_, id) in v_mod.new_node_ids.iter() {
-                        let slot = **id as u32;
+                        let slot = **id;
                         let node_gen = v.node_gen(*id).unwrap();
                         assert_eq!(node_gen, v.version(), "case {case} step {step}: new node gen mismatch");
                         if let Some(&prior) = gens.get(&slot) {
@@ -343,10 +343,10 @@ fn search_parity_vs_vgraph() {
             let vi = vg.index(RevCsr);
 
             let m_set: BTreeSet<Vec<u32>> = Seq::search(query, &mi).unwrap()
-                .map(|mm| (0..n_pattern).map(|i| *mm.get(i).expect("bound") as u32).collect::<Vec<u32>>())
+                .map(|mm| (0..n_pattern).map(|i| *mm.get(i).expect("bound")).collect::<Vec<u32>>())
                 .collect();
             let v_set: BTreeSet<Vec<u32>> = Seq::search(query, &vi).unwrap()
-                .map(|mm| (0..n_pattern).map(|i| *mm.get(i).expect("bound") as u32).collect::<Vec<u32>>())
+                .map(|mm| (0..n_pattern).map(|i| *mm.get(i).expect("bound")).collect::<Vec<u32>>())
                 .collect();
 
             assert_eq!(m_set, v_set, "case {case} pattern {name}: binding sets differ");
@@ -519,6 +519,6 @@ fn collect_triples<I: Iterator<Item = search::Match>>(
         .map(|i| query.node_local_id(i))
         .filter(|lid| lid.0 < 3)
         .collect();
-    it.map(|m| lids.iter().map(|lid| *m.get(*lid).expect("bound") as u32).collect::<Vec<u32>>())
+    it.map(|m| lids.iter().map(|lid| *m.get(*lid).expect("bound")).collect::<Vec<u32>>())
         .collect()
 }

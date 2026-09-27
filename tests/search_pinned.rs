@@ -1,9 +1,11 @@
 use grw::graph::{edge, MGraph};
 use grw::search::error;
 use grw::search::Search;
+use grw::search::{BindError, PinnedNode};
 use grw::{mgraph, search};
+use std::marker::PhantomData;
 
-type UER = edge::Undir<()>;
+type Uer = edge::Undir<()>;
 
 fn triangle() -> MGraph<u8, edge::Undir<()>> {
     mgraph![N(0).val(10u8) ^ (N(1).val(20u8) ^ (N(2).val(30u8) ^ n(0)))].unwrap()
@@ -42,9 +44,23 @@ fn pin_to_missing_node_is_error() {
 }
 
 #[test]
+fn pinning_the_same_context_node_twice_is_one_error() {
+    let g = triangle();
+    let (one, two) = (grw::id::N(1), grw::id::N(0));
+    let err = search![&g,
+        get(Mono) { X(c = one) ^ N(o) },
+        get(Mono) { X(c = two) ^ n(o) }
+    ]
+    .err()
+    .unwrap();
+    assert!(matches!(err, error::Search::Bind(BindError::Duplicate(PinnedNode::Local(_)))));
+}
+
+#[test]
 fn unpinned_context_in_session_still_rejected() {
     let g = triangle();
-    let err = search![&g, get(Mono) { X(c) ^ N(o) }].err().unwrap();
+    let unresolved = search![get(Mono) { X(c) ^ N(o) }].unwrap();
+    let err = grw::search::Session::from_search(unresolved, &g).err().unwrap();
     assert!(matches!(err, error::Search::BoundPatternInSession));
 }
 
@@ -60,13 +76,13 @@ fn explicit_types_head_does_not_shadow_caller_edge_module() {
 
 #[test]
 fn graph_head_is_an_arbitrary_expression() {
-    let gs = vec![triangle()];
+    let gs = [triangle()];
     let one = grw::id::N(1);
     let s = search![&gs[0], get(Mono) { X(c = one) ^ N(o) }].unwrap();
     assert_eq!(s.iter().count(), 2);
 }
 
-fn pick<A, B>(g: &MGraph<u8, UER>) -> &MGraph<u8, UER> {
+fn pick<A, B>(g: &MGraph<u8, Uer>, _a: PhantomData<A>, _b: PhantomData<B>) -> &MGraph<u8, Uer> {
     g
 }
 
@@ -74,13 +90,13 @@ fn pick<A, B>(g: &MGraph<u8, UER>) -> &MGraph<u8, UER> {
 fn graph_head_may_contain_a_top_level_comma() {
     let g = triangle();
     let one = grw::id::N(1);
-    let s = search![pick::<u8, ()>(&g), get(Mono) { X(c = one) ^ N(o) }].unwrap();
+    let s = search![pick::<u8, ()>(&g, PhantomData, PhantomData), get(Mono) { X(c = one) ^ N(o) }].unwrap();
     assert_eq!(s.iter().count(), 2);
 }
 
 #[test]
 fn inline_mgraph_head_still_works() {
-    let count = search![mgraph![<u8, UER>; N(0).val(10u8) ^ N(1).val(20u8)],
+    let count = search![mgraph![<u8, Uer>; N(0).val(10u8) ^ N(1).val(20u8)],
         get(Mono) { N(0) ^ N(1) }
     ]
     .unwrap()

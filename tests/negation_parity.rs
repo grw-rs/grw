@@ -1,9 +1,9 @@
 use grw::*;
 use grw::search::{self, Session};
 
-type UER = grw::graph::edge::Undir<()>;
-type DER = grw::graph::edge::Dir<()>;
-type AER = grw::graph::edge::Anydir<()>;
+type Uer = grw::graph::edge::Undir<()>;
+type Der = grw::graph::edge::Dir<()>;
+type Aer = grw::graph::edge::Anydir<()>;
 
 fn count<NV: Clone, ER: graph::Edge + 'static>(
     g: &graph::MGraph<NV, ER>,
@@ -57,11 +57,11 @@ fn parity_result(label: &str, neg_get: Result<usize, String>, ban_equiv: Result<
 fn all_negated_nonempty_graph() {
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         ban(Mono) { N_() }
     ].unwrap());
 
@@ -70,13 +70,13 @@ fn all_negated_nonempty_graph() {
 
 #[test]
 fn all_negated_empty_graph() {
-    let g: graph::MUndir0 = mgraph![<(), UER>;].unwrap();
+    let g: graph::MUndir0 = mgraph![<(), Uer>;].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         ban(Mono) { N_() }
     ].unwrap());
 
@@ -87,11 +87,11 @@ fn all_negated_empty_graph() {
 fn all_negated_with_test_no_match() {
     let g: graph::MUndir<i32, ()> = mgraph![N(0).val(1) ^ N(1).val(2)].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { !N_().test(|v: &i32| *v > 100) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         ban(Mono) { N_().test(|v: &i32| *v > 100) }
     ].unwrap());
 
@@ -102,11 +102,11 @@ fn all_negated_with_test_no_match() {
 fn all_negated_with_test_has_match() {
     let g: graph::MUndir<i32, ()> = mgraph![N(0).val(1) ^ N(1).val(200)].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { !N_().test(|v: &i32| *v > 100) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         ban(Mono) { N_().test(|v: &i32| *v > 100) }
     ].unwrap());
 
@@ -121,11 +121,11 @@ fn all_negated_with_test_has_match() {
 fn negated_freestanding_isolated_exists() {
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_() }
     ].unwrap());
@@ -137,11 +137,11 @@ fn negated_freestanding_isolated_exists() {
 fn negated_freestanding_no_isolated() {
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_() }
     ].unwrap());
@@ -156,11 +156,11 @@ fn negated_freestanding_val() {
         N(2).val(30)
     ].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1), !N_().val(30) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_().val(30) }
     ].unwrap());
@@ -175,11 +175,11 @@ fn negated_freestanding_test() {
         N(2).val(30)
     ].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1), !N_().test(|v: &i32| *v > 25) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_().test(|v: &i32| *v > 25) }
     ].unwrap());
@@ -198,11 +198,11 @@ fn negated_connected_neighbor() {
         n(1) ^ N(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) ^ !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N_() }
     ].unwrap());
@@ -218,11 +218,11 @@ fn negated_connected_neighbor_triangle() {
         n(0) ^ n(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1) ^ !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1) },
         ban(Homo) { n(1) ^ N_() }
     ].unwrap());
@@ -241,11 +241,11 @@ fn negated_edge_different_slot_anydir() {
         N(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), AER>;
+    let neg_get = count(&g, search![<(), Aer>;
         get(Mono) { N(0) >> N(1), n(0) & !E() << n(1) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), AER>;
+    let ban_equiv = count(&g, search![<(), Aer>;
         get(Mono) { N(0) >> N(1) },
         ban(Mono) { n(0) << n(1) }
     ].unwrap());
@@ -257,11 +257,11 @@ fn negated_edge_different_slot_anydir() {
 fn negated_edge_undir_no_edge() {
     let g: graph::MUndir0 = mgraph![N(0), N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0), N(1), n(0) & !E() ^ n(1) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0), N(1) },
         ban(Mono) { n(0) ^ n(1) }
     ].unwrap());
@@ -273,11 +273,11 @@ fn negated_edge_undir_no_edge() {
 fn negated_edge_undir_edge_exists() {
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0), N(1), n(0) & !E() ^ n(1) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0), N(1) },
         ban(Mono) { n(0) ^ n(1) }
     ].unwrap());
@@ -296,11 +296,11 @@ fn negated_node_and_negated_edge() {
         n(1) ^ N(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N(2) & !E() ^ n(1) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N(2) ^ n(1) }
     ].unwrap());
@@ -320,11 +320,11 @@ fn negated_context_val() {
         n(0) ^ n(2)
     ].unwrap();
 
-    let neg_get = count_result(&g, search![<i32, UER>;
+    let neg_get = count_result(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1), !X(2).val(30) }
     ]);
 
-    let ban_equiv = count_result(&g, search![<i32, UER>;
+    let ban_equiv = count_result(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { X(2).val(30) }
     ]);
@@ -340,11 +340,11 @@ fn negated_context_test() {
         n(0) ^ n(2)
     ].unwrap();
 
-    let neg_get = count_result(&g, search![<i32, UER>;
+    let neg_get = count_result(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1), !X(2).test(|v: &i32| *v > 25) }
     ]);
 
-    let ban_equiv = count_result(&g, search![<i32, UER>;
+    let ban_equiv = count_result(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { X(2).test(|v: &i32| *v > 25) }
     ]);
@@ -358,7 +358,7 @@ fn negated_context_test() {
 
 #[test]
 fn ban_negated_edge_shared_contradicts() {
-    let result = search![<(), UER>;
+    let result = search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(0) & !E() ^ n(1) }
     ];
@@ -373,7 +373,7 @@ fn ban_negated_freestanding_node() {
         N(2)
     ].unwrap();
 
-    let ban_neg_node = count(&g, search![<(), UER>;
+    let ban_neg_node = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(0) ^ !N_() }
     ].unwrap());
@@ -388,7 +388,7 @@ fn ban_negated_edge_to_new_node() {
         N(2)
     ].unwrap();
 
-    let ban_neg_edge_new = count(&g, search![<(), UER>;
+    let ban_neg_edge_new = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(0) & !E() ^ N(2) }
     ].unwrap());
@@ -402,13 +402,13 @@ fn ban_negated_edge_to_new_node() {
 
 #[test]
 fn all_negated_iso() {
-    let g: graph::MUndir0 = mgraph![<(), UER>;].unwrap();
+    let g: graph::MUndir0 = mgraph![<(), Uer>;].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Iso) { !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         ban(Iso) { N_() }
     ].unwrap());
 
@@ -419,11 +419,11 @@ fn all_negated_iso() {
 fn all_negated_homo() {
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Homo) { !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         ban(Homo) { N_() }
     ].unwrap());
 
@@ -438,11 +438,11 @@ fn negated_freestanding_subiso() {
         n(0) ^ n(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(SubIso) { N(0) ^ N(1), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(SubIso) { N(0) ^ N(1) },
         ban(SubIso) { N_() }
     ].unwrap());
@@ -458,11 +458,11 @@ fn negated_freestanding_subiso() {
 fn negated_freestanding_dir() {
     let g: graph::MDir0 = mgraph![N(0) >> N(1), N(2)].unwrap();
 
-    let neg_get = count(&g, search![<(), DER>;
+    let neg_get = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), DER>;
+    let ban_equiv = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1) },
         ban(Mono) { N_() }
     ].unwrap());
@@ -474,11 +474,11 @@ fn negated_freestanding_dir() {
 fn negated_edge_dir_reverse() {
     let g: graph::MDir0 = mgraph![N(0) >> N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), DER>;
+    let neg_get = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1), n(0) & !E() << n(1) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), DER>;
+    let ban_equiv = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1) },
         ban(Mono) { n(0) << n(1) }
     ].unwrap());
@@ -490,11 +490,11 @@ fn negated_edge_dir_reverse() {
 fn negated_edge_dir_bidirectional() {
     let g: graph::MDir0 = mgraph![N(0) >> (N(1) >> n(0))].unwrap();
 
-    let neg_get = count(&g, search![<(), DER>;
+    let neg_get = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1), n(0) & !E() << n(1) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), DER>;
+    let ban_equiv = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1) },
         ban(Mono) { n(0) << n(1) }
     ].unwrap());
@@ -510,11 +510,11 @@ fn negated_edge_dir_bidirectional() {
 fn all_negated_val_nonempty_match() {
     let g: graph::MUndir<i32, ()> = mgraph![N(0).val(10) ^ N(1).val(20)].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { !N_().val(10) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         ban(Mono) { N_().val(10) }
     ].unwrap());
 
@@ -525,11 +525,11 @@ fn all_negated_val_nonempty_match() {
 fn all_negated_val_nonempty_no_match() {
     let g: graph::MUndir<i32, ()> = mgraph![N(0).val(10) ^ N(1).val(20)].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { !N_().val(99) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         ban(Mono) { N_().val(99) }
     ].unwrap());
 
@@ -547,12 +547,12 @@ fn ban_negated_freestanding_node_proxy() {
         N(2)
     ].unwrap();
 
-    let ban_neg_node = count(&g, search![<(), UER>;
+    let ban_neg_node = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(0) ^ !N_() }
     ].unwrap());
 
-    let get_equiv = count(&g, search![<(), UER>;
+    let get_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) ^ N_() }
     ].unwrap());
 
@@ -566,12 +566,12 @@ fn ban_negated_edge_to_new_node_proxy() {
         N(2)
     ].unwrap();
 
-    let ban_neg_edge = count(&g, search![<(), UER>;
+    let ban_neg_edge = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(0) & !E() ^ N(2) }
     ].unwrap());
 
-    let get_equiv = count(&g, search![<(), UER>;
+    let get_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         get(Mono) { n(0) ^ N(2) }
     ].unwrap());
@@ -591,7 +591,7 @@ fn ban_negated_edge_to_new_node_proxy() {
 
 #[test]
 fn same_slot_positive_and_negated_contradicts() {
-    let result = search![<(), UER>;
+    let result = search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), n(0) & !E() ^ n(1) }
     ];
     assert!(result.is_err(), "same-slot positive + negated edge should be contradictory");
@@ -610,11 +610,11 @@ fn negated_freestanding_homo_3node() {
         n(0) ^ n(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1) },
         ban(Homo) { N_() }
     ].unwrap());
@@ -626,11 +626,11 @@ fn negated_freestanding_homo_3node() {
 fn negated_freestanding_homo_2node() {
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1) },
         ban(Homo) { N_() }
     ].unwrap());
@@ -657,11 +657,11 @@ fn connected_neg_pair_found() {
         n(2) ^ N(3)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N(2) ^ !N(3) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N(2) ^ N(3) }
     ].unwrap());
@@ -676,11 +676,11 @@ fn connected_neg_pair_not_found() {
     // graph has NO extra pair of connected nodes → should survive
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N(2) ^ !N(3) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N(2) ^ N(3) }
     ].unwrap());
@@ -695,11 +695,11 @@ fn connected_neg_pair_partial_no_edge() {
     // two unmapped nodes exist but NOT connected → shadow ban unsatisfied → survive
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2), N(3)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N(2) ^ !N(3) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N(2) ^ N(3) }
     ].unwrap());
@@ -719,11 +719,11 @@ fn connected_neg_triangle() {
         n(3) ^ n(4)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N(2) ^ (!N(3) ^ !N(4)), n(2) ^ n(4) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N(2) ^ (N(3) ^ N(4)), n(2) ^ n(4) }
     ].unwrap());
@@ -742,11 +742,11 @@ fn connected_neg_triangle_not_found() {
         n(3) ^ N(4)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N(2) ^ (!N(3) ^ !N(4)), n(2) ^ n(4) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N(2) ^ (N(3) ^ N(4)), n(2) ^ n(4) }
     ].unwrap());
@@ -772,11 +772,11 @@ fn neg_two_islands_both_found() {
         N(3) ^ N(4)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N_(), !N(3) ^ !N(4) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_(), N(3) ^ N(4) }
     ].unwrap());
@@ -794,11 +794,11 @@ fn neg_two_islands_one_missing() {
         N(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N_(), !N(3) ^ !N(4) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_(), N(3) ^ N(4) }
     ].unwrap());
@@ -817,11 +817,11 @@ fn neg_two_freestanding_islands_both_found() {
         N(3)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N_(), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_(), N_() }
     ].unwrap());
@@ -839,11 +839,11 @@ fn neg_two_freestanding_islands_one_short() {
         N(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), !N_(), !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_(), N_() }
     ].unwrap());
@@ -866,7 +866,7 @@ fn separate_bans_or_first_fires() {
         N(2)
     ].unwrap();
 
-    let result = count(&g, search![<(), UER>;
+    let result = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_() },
         ban(Mono) { N(3) ^ N(4) }
@@ -884,7 +884,7 @@ fn separate_bans_or_neither_fires() {
     // OR: neither fires → survive
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let result = count(&g, search![<(), UER>;
+    let result = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_() },
         ban(Mono) { N(3) ^ N(4) }
@@ -908,7 +908,7 @@ fn and_vs_or_single_ban_and() {
         N(2)
     ].unwrap();
 
-    let single_ban = count(&g, search![<(), UER>;
+    let single_ban = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_(), N(3) ^ N(4) }
     ].unwrap());
@@ -928,7 +928,7 @@ fn and_vs_or_separate_bans_or() {
         N(2)
     ].unwrap();
 
-    let separate_bans = count(&g, search![<(), UER>;
+    let separate_bans = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_() },
         ban(Mono) { N(3) ^ N(4) }
@@ -953,11 +953,11 @@ fn neg_connected_to_positive_found() {
         n(2) ^ N(3)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) ^ !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N_() }
     ].unwrap());
@@ -972,11 +972,11 @@ fn neg_connected_to_positive_not_found() {
     // under Mono, only candidate for !N_() neighbor of 1 is node 0, but it's mapped → no violation
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) ^ !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N_() }
     ].unwrap());
@@ -996,11 +996,11 @@ fn neg_chain_from_positive() {
         n(3) ^ N(4)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), n(1) ^ !N(2) ^ !N(3) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N(2) ^ N(3) }
     ].unwrap());
@@ -1018,11 +1018,11 @@ fn neg_chain_from_positive_too_short() {
         n(1) ^ N(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1), n(1) ^ !N(2) ^ !N(3) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N(2) ^ N(3) }
     ].unwrap());
@@ -1041,7 +1041,7 @@ fn multi_ban_first_fires_second_doesnt() {
     // OR → reject
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1), N(2)].unwrap();
 
-    let result = count(&g, search![<(), UER>;
+    let result = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_() },
         ban(Mono) { N(3) ^ N(4) }
@@ -1061,7 +1061,7 @@ fn multi_ban_second_fires_first_doesnt() {
         N(2).val(30)
     ].unwrap();
 
-    let result = count(&g, search![<i32, UER>;
+    let result = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N_().val(99) },
         ban(Mono) { N_() }
@@ -1081,7 +1081,7 @@ fn multi_ban_none_fires() {
         N(2).val(30)
     ].unwrap();
 
-    let result = count(&g, search![<i32, UER>;
+    let result = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { N(3) ^ N(4) },
         ban(Mono) { N_().val(99) }
@@ -1105,11 +1105,11 @@ fn connected_neg_with_val_found() {
         n(1) ^ N(2).val(30)
     ].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) ^ !N_().val(30) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N_().val(30) }
     ].unwrap());
@@ -1127,11 +1127,11 @@ fn connected_neg_with_val_not_found() {
         n(1) ^ N(2).val(30)
     ].unwrap();
 
-    let neg_get = count(&g, search![<i32, UER>;
+    let neg_get = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) ^ !N_().val(99) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<i32, UER>;
+    let ban_equiv = count(&g, search![<i32, Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N_().val(99) }
     ].unwrap());
@@ -1153,11 +1153,11 @@ fn connected_neg_dir_outgoing_found() {
         n(1) >> N(2)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), DER>;
+    let neg_get = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> (N(1) >> !N_()) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), DER>;
+    let ban_equiv = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1) },
         ban(Mono) { n(1) >> N_() }
     ].unwrap());
@@ -1172,11 +1172,11 @@ fn connected_neg_dir_outgoing_not_found() {
     // no outgoing from 1 → survive
     let g: graph::MDir0 = mgraph![N(0) >> N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), DER>;
+    let neg_get = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> (N(1) >> !N_()) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), DER>;
+    let ban_equiv = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1) },
         ban(Mono) { n(1) >> N_() }
     ].unwrap());
@@ -1194,11 +1194,11 @@ fn connected_neg_dir_incoming_only() {
         N(2) >> n(1)
     ].unwrap();
 
-    let neg_get = count(&g, search![<(), DER>;
+    let neg_get = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> (N(1) >> !N_()) }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), DER>;
+    let ban_equiv = count(&g, search![<(), Der>;
         get(Mono) { N(0) >> N(1) },
         ban(Mono) { n(1) >> N_() }
     ].unwrap());
@@ -1218,11 +1218,11 @@ fn connected_neg_homo_reuses_mapped() {
     // ban fires → reject
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1) ^ !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Homo) { N(0) ^ N(1) },
         ban(Homo) { n(1) ^ N_() }
     ].unwrap());
@@ -1236,11 +1236,11 @@ fn connected_neg_mono_doesnt_reuse_mapped() {
     // only neighbor of 1 is 0, which is already mapped → survive
     let g: graph::MUndir0 = mgraph![N(0) ^ N(1)].unwrap();
 
-    let neg_get = count(&g, search![<(), UER>;
+    let neg_get = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) ^ !N_() }
     ].unwrap());
 
-    let ban_equiv = count(&g, search![<(), UER>;
+    let ban_equiv = count(&g, search![<(), Uer>;
         get(Mono) { N(0) ^ N(1) },
         ban(Mono) { n(1) ^ N_() }
     ].unwrap());

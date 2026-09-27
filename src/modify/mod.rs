@@ -1,8 +1,10 @@
 pub mod dsl;
 pub mod error;
+pub mod part;
 pub(crate) mod apply;
 
 pub use apply::Modification;
+pub use part::{ExcludePart, IncludePart, Part};
 
 pub use dsl::{Node, edge, node};
 pub use dsl::{E, N, N_, T, X, e, n, t, x};
@@ -112,6 +114,9 @@ fn resolve_edge<NV, ER: graph::Edge>(
         }
         edge::Edge::Exist { slot, op, target } => {
             edge::Edge::Exist { slot, op, target: resolve_node(target, bindings) }
+        }
+        edge::Edge::Part { slot, op, target } => {
+            edge::Edge::Part { slot, op, target: resolve_node(target, bindings) }
         }
     }
 }

@@ -1,4 +1,5 @@
 mod compile;
+mod constraint;
 
 use crate::graph;
 use crate::graph::dsl::LocalId;
@@ -106,20 +107,24 @@ pub(crate) struct BanCluster {
     pub(crate) morphism: Morphism,
 }
 
+pub(crate) type QueryAdjEntry<ER> = (usize, <ER as graph::Edge>::Slot, bool, usize);
+pub(crate) type QueryAdjCheckEntry<ER> = (usize, <ER as graph::Edge>::Slot, bool, bool);
+pub(crate) type QueryEdgePred<ER> = Option<Box<dyn Fn(&<ER as graph::Edge>::Val) -> bool + Send + Sync>>;
+
 pub struct Query<NV, ER: graph::Edge> {
     pub(crate) nodes: Vec<PatternNode>,
     pub(crate) edges: Vec<PatternEdge<ER>>,
     pub(crate) has_paths: bool,
-    pub(crate) adj: Vec<Vec<(usize, ER::Slot, bool, usize)>>,
-    pub(crate) adj_check: Vec<Vec<(usize, ER::Slot, bool, bool)>>,
-    pub(crate) adj_pred: Vec<Vec<(usize, ER::Slot, bool, usize)>>,
+    pub(crate) adj: Vec<Vec<QueryAdjEntry<ER>>>,
+    pub(crate) adj_check: Vec<Vec<QueryAdjCheckEntry<ER>>>,
+    pub(crate) adj_pred: Vec<Vec<QueryAdjEntry<ER>>>,
     pub(crate) clusters: Vec<Cluster>,
     pub(crate) exist_indices: Vec<usize>,
     pub(crate) translated_indices: Vec<usize>,
     pub(crate) node_morphism: Vec<Morphism>,
     pub(crate) node_preds: Vec<Option<NodePred<NV>>>,
     pub(crate) node_has_key: Vec<bool>,
-    pub(crate) edge_preds: Vec<Option<Box<dyn Fn(&ER::Val) -> bool + Send + Sync>>>,
+    pub(crate) edge_preds: Vec<QueryEdgePred<ER>>,
     pub(crate) ban_clusters: Vec<BanCluster>,
     pub(crate) search_order: Vec<usize>,
     pub(crate) pattern_degrees: Vec<usize>,
@@ -250,10 +255,7 @@ impl<NV, ER: graph::Edge> Unresolved<NV, ER> {
             match ti {
                 None => return Err(BindError::NotFound(local)),
                 Some(&ti) => {
-                    if bindings[ti].is_some() {
-                        return Err(BindError::Duplicate(local));
-                    }
-                    bindings[ti] = Some(id::N(target));
+                    bind_pin(&mut bindings, ti, PinnedNode::Local(local), id::N(target))?;
                     mapped_count += 1;
                 }
             }
@@ -284,9 +286,37 @@ impl<NV, ER: graph::Edge> Bound<'_, NV, ER> {
 }
 
 #[derive(Debug)]
+pub enum PinnedNode {
+    Named { name: String, lid: Id },
+    Local(Id),
+}
+
+impl std::fmt::Display for PinnedNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Named { name, lid } => write!(f, "{name:?} (local id {lid})"),
+            Self::Local(lid) => write!(f, "local id {lid}"),
+        }
+    }
+}
+
+pub(crate) fn bind_pin(
+    bindings: &mut [Option<id::N>],
+    idx: usize,
+    node: PinnedNode,
+    target: id::N,
+) -> Result<(), BindError> {
+    if bindings[idx].is_some() {
+        return Err(BindError::Duplicate(node));
+    }
+    bindings[idx] = Some(target);
+    Ok(())
+}
+
+#[derive(Debug)]
 pub enum BindError {
     NotFound(Id),
-    Duplicate(Id),
+    Duplicate(PinnedNode),
     Missing(Vec<Id>),
     Collision { n1: Id, n2: Id, target: Id },
 }
@@ -295,7 +325,7 @@ impl std::fmt::Display for BindError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotFound(id) => write!(f, "no translated node with local id {id}"),
-            Self::Duplicate(id) => write!(f, "duplicate binding for local id {id}"),
+            Self::Duplicate(node) => write!(f, "duplicate binding for {node}"),
             Self::Missing(ids) => write!(f, "missing bindings for: {ids:?}"),
             Self::Collision { n1, n2, target } => write!(f, "injectivity collision: nodes {n1} and {n2} both map to {target}"),
         }
@@ -378,6 +408,17 @@ mod tests {
         ].unwrap() else { panic!("expected context nodes") };
         assert_eq!(u.query().node_count(), 2);
         assert_eq!(u.translated_indices.len(), 1);
+    }
+
+    #[test]
+    fn bind_duplicate_local_pin_is_one_error() {
+        let Search::Unresolved(u): Search<(), ER> = crate::search![
+            get(Morphism::Mono) {
+                X(10) ^ N(1)
+            }
+        ].unwrap() else { panic!("expected context nodes") };
+        let err = u.bind(&[(10, 0), (10, 1)]).err().unwrap();
+        assert!(matches!(err, BindError::Duplicate(PinnedNode::Local(lid)) if lid == 10));
     }
 
     #[test]
@@ -602,7 +643,7 @@ mod tests {
         let result: Result<Search<(), ER>, error::Search> = crate::search![<(), ER>;
             get(Morphism::Mono) {
                 N(0) % N(1),
-                n(0) & !E() % n(1)
+                n(0) & (!E() % n(1))
             }
         ];
         assert!(matches!(
@@ -625,11 +666,11 @@ mod tests {
         ));
     }
 
-    type DER = crate::edge::Dir<()>;
+    type Der = crate::edge::Dir<()>;
 
     #[test]
     fn any_edge_valid_with_neg_specific_dir() {
-        let result: Result<Search<(), DER>, error::Search> = crate::search![<(), DER>;
+        let result: Result<Search<(), Der>, error::Search> = crate::search![<(), Der>;
             get(Morphism::Mono) {
                 N(0) % N(1),
                 n(0) & !E() << n(1)
@@ -638,11 +679,11 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    type AER = crate::edge::Anydir<()>;
+    type Aer = crate::edge::Anydir<()>;
 
     #[test]
     fn any_edge_valid_with_neg_specific_anydir() {
-        let result: Result<Search<(), AER>, error::Search> = crate::search![<(), AER>;
+        let result: Result<Search<(), Aer>, error::Search> = crate::search![<(), Aer>;
             get(Morphism::Mono) {
                 N(0) % N(1),
                 n(0) & !E() ^ n(1)
@@ -653,10 +694,10 @@ mod tests {
 
     #[test]
     fn specific_contradicts_neg_any_dir() {
-        let result: Result<Search<(), DER>, error::Search> = crate::search![<(), DER>;
+        let result: Result<Search<(), Der>, error::Search> = crate::search![<(), Der>;
             get(Morphism::Mono) {
                 N(0) >> N(1),
-                n(0) & !E() % n(1)
+                n(0) & (!E() % n(1))
             }
         ];
         assert!(matches!(
@@ -670,7 +711,7 @@ mod tests {
         let result: Result<Search<(), ER>, error::Search> = crate::search![<(), ER>;
             get(Morphism::Mono) {
                 N(0) ^ N(1),
-                n(0) & !E() % n(1)
+                n(0) & (!E() % n(1))
             }
         ];
         assert!(matches!(
@@ -681,7 +722,7 @@ mod tests {
 
     #[test]
     fn any_contradicts_all_specific_negated_dir() {
-        let result: Result<Search<(), DER>, error::Search> = crate::search![<(), DER>;
+        let result: Result<Search<(), Der>, error::Search> = crate::search![<(), Der>;
             get(Morphism::Mono) {
                 N(0) % N(1),
                 n(0) & !E() >> n(1),
@@ -696,7 +737,7 @@ mod tests {
 
     #[test]
     fn any_contradicts_all_specific_negated_anydir() {
-        let result: Result<Search<(), AER>, error::Search> = crate::search![<(), AER>;
+        let result: Result<Search<(), Aer>, error::Search> = crate::search![<(), Aer>;
             get(Morphism::Mono) {
                 N(0) % N(1),
                 n(0) & !E() >> n(1),
@@ -712,7 +753,7 @@ mod tests {
 
     #[test]
     fn any_valid_partial_negated_anydir() {
-        let result: Result<Search<(), AER>, error::Search> = crate::search![<(), AER>;
+        let result: Result<Search<(), Aer>, error::Search> = crate::search![<(), Aer>;
             get(Morphism::Mono) {
                 N(0) % N(1),
                 n(0) & !E() >> n(1),

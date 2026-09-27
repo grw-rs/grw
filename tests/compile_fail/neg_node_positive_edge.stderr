@@ -13,26 +13,9 @@ error[E0277]: no implementation for `NegFree<_, (), _> & grw::search::dsl::edge:
   |                   ^ no implementation for `NegFree<_, (), _> & grw::search::dsl::edge::Edge<(), _, _>`
   |
   = help: the trait `BitAnd<grw::search::dsl::edge::Edge<(), _, _>>` is not implemented for `NegFree<_, (), _>`
-help: `NegFree<NV, V, ER>` implements trait `BitAnd<Rhs>`
- --> src/search/dsl/node.rs
-  |
-  |         impl<NV, $V, ER: graph::Edge> BitAnd<edge::NegEdge<Connected<NV, ER>, NV, ER>> for $Self {
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `BitAnd<NegEdge<grw::search::dsl::edge::Connected<NV, ER>, NV, ER>>`
-...
-  | impl_bitand_neg_connected!(NegFree<NV, V, ER>, V);
-  | ------------------------------------------------- in this macro invocation
-...
-  |         impl<NV, $V, ER: graph::Edge> BitAnd<$EdgeTy> for $Self {
-  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |         |
-  |         `BitAnd<NegEdge<(), NV, ER>>`
-  |         `BitAnd<NegEdge<HasPred, NV, ER>>`
-  |         `BitAnd<NegEdge<HasVal<<ER as grw::graph::Edge>::Val>, NV, ER>>`
-...
-  | impl_bitand_neg_undir_pending!(NegFree<NV, V, ER>, edge::NegEdge<(), NV, ER>, V);
-  | -------------------------------------------------------------------------------- in this macro invocation
-  | impl_bitand_neg_undir_pending!(NegFree<NV, V, ER>, edge::NegEdge<HasVal<ER::Val>, NV, ER>, V);
-  | --------------------------------------------------------------------------------------------- in this macro invocation
-  | impl_bitand_neg_undir_pending!(NegFree<NV, V, ER>, edge::NegEdge<HasPred, NV, ER>, V);
-  | ------------------------------------------------------------------------------------- in this macro invocation
-  = note: this error originates in the macro `impl_bitand_neg_connected` which comes from the expansion of the macro `impl_bitand_neg_undir_pending` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = help: `NegFree<NV, V, ER>` implements trait `BitAnd<Rhs>`:
+            BitAnd<NegEdge<(), NV, ER>>
+            BitAnd<NegEdge<Focus<P, F>, NV, ER>>
+            BitAnd<NegEdge<HasPred, NV, ER>>
+            BitAnd<NegEdge<HasVal<<ER as grw::graph::Edge>::Val>, NV, ER>>
+            BitAnd<NegEdge<grw::search::dsl::edge::Connected<NV, ER>, NV, ER>>

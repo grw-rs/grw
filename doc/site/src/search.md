@@ -17,6 +17,10 @@
 | `N(id).val(v)` | Node value — exact match |
 | `N(id).test(\|v\| ...)` | Node value predicate |
 | `E().val(v)` | Edge value — exact match |
+| `E().test(\|v\| ...)` | Edge value predicate |
+| `E().has::<T>()` / `E().has_kind(k)` | The link holds a part of that kind (composite edge values) |
+| `E().has::<T>().test(\|t: &T\| ...)` | Predicate on the part just named |
+| `!E().has::<T>()` | No link holding that part — unlike `!E()`, another part may still link the pair |
 | `X(id)` | Context node — pinned to a specific graph node |
 | `N(name)` / `n(name)` | Named pattern node / reference — names lower to ids; `pattern.lid("name")` |
 | `N(id: pattern)` | Node value must match a Rust pattern (`Some(1)`, `Kind::A { .. }`, `1..=5`, `A \| B`) |
@@ -142,6 +146,14 @@ let session = search![&g,
 ].unwrap();
 ```
 
+## Parts of a Composite Link
+
+When the edge value is a composite, a pattern edge asks the link for the
+parts it must hold: `E().has::<T>()`, chained `.has::<A>().has::<B>()`, a
+`.test` on the part just named, and `!E().has::<T>()`. Terms on one pair and
+slot merge into one constraint, and a pattern that could never match is a
+typed error of the query. See [Composite Values](./composite-values.md).
+
 ## Context Nodes
 
 `X(name = node_id)` pins a pattern node to a specific graph node, named on the left and given its target on the right:
@@ -182,7 +194,7 @@ let and_form: Pattern<(), edge::Undir<()>> = pattern![
     ban(Mono) { n(p) ^ N(c), n(q) ^ n(c) }
 ].unwrap();
 let and_session =
-    Session::from_pattern(and_form, &g, &[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
+    Session::from_pattern(&and_form, &g, &[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
 assert_eq!(and_session.iter().count(), 1); // only p—5 holds, so the ban can't fire
 
 // "none of these": two separate bans, each pinned to the same node 5.
@@ -192,7 +204,7 @@ let or_form: Pattern<(), edge::Undir<()>> = pattern![
     ban(Mono) { n(q) ^ N(c2) }
 ].unwrap();
 let or_session =
-    Session::from_pattern(or_form, &g, &[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
+    Session::from_pattern(&or_form, &g, &[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)]).unwrap();
 assert_eq!(or_session.iter().count(), 0); // p—5 alone is enough to fire the first ban
 ```
 
@@ -362,7 +374,7 @@ session's query — it never panics on an out-of-range index.
 
 ## Stored Patterns And Pinning
 
-A `Pattern` from `pattern![..]` is consumed by the search it is handed to: `search![&g, p]` runs it as written, and `search![&g, p with X(a = id), X(b = id), ..]` pins named nodes to concrete graph ids first. A `Pattern` holds boxed predicates, so it is not `Clone`; to run the same shape more than once, build it in a constructor function and call that per search — `search![&g, cif_incident()]`. A pin on a node inside a ban cluster restricts the ban to that one node; see [Negation, Bans And Pins](#negation-bans-and-pins).
+A `Pattern` from `pattern![..]` compiles its query once and shares it: `search![&g, p]` runs it as written and borrows `p`, so `search![&g, p]` again — over the same graph or a different one — runs the same compiled query with no rebuild, and `search![&g, p with X(a = id), X(b = id), ..]` pins named nodes to concrete graph ids first. `Pattern` is `Clone`: cloning shares the compiled query behind an `Arc` rather than recompiling it. A pin on a node inside a ban cluster restricts the ban to that one node; see [Negation, Bans And Pins](#negation-bans-and-pins).
 
 ```rust
 use grw::graph::{edge, MGraph};
@@ -376,4 +388,4 @@ let s = search![&g, p with X(a = middle)].unwrap();
 assert_eq!(s.iter().count(), 2);
 ```
 
-Pinning the same name twice, literally, in one `with` clause is a compile error (``node `a` pinned twice``). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is `error::Search::UnknownName`, pinning the same name twice through the manual `Session::from_pattern` API is `error::Search::DuplicatePin`, pinning to a graph node that doesn't exist is `error::Search::TargetMissing`, and two different pins landing on the same target node under an injective morphism is `error::Search::Bind` (`BindError::Collision`).
+Pinning the same name twice, literally, in one `with` clause is a compile error (``node `a` pinned twice``). Everything downstream of that is checked at runtime once the target ids are known: an unknown name is `error::Search::UnknownName`, pinning the same name twice through the manual `Session::from_pattern` API is `error::Search::Bind` (`BindError::Duplicate`, naming the pinned node), pinning to a graph node that doesn't exist is `error::Search::TargetMissing`, and two different pins landing on the same target node under an injective morphism is `error::Search::Bind` (`BindError::Collision`).

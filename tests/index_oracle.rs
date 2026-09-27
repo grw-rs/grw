@@ -46,7 +46,7 @@ fn decls() -> Vec<IndexDecl<u32>> {
 }
 
 fn view(g: &MG) -> Vec<(u32, u32)> {
-    let mut v: Vec<(u32, u32)> = g.iter_node_ids().map(|n| (*n as u32, *g.node_val(n).unwrap())).collect();
+    let mut v: Vec<(u32, u32)> = g.iter_node_ids().map(|n| ((*n), *g.node_val(n).unwrap())).collect();
     v.sort_unstable();
     v
 }
@@ -58,7 +58,7 @@ fn expected_maps(g: &MG) -> (HashMap<u32, u32>, HashMap<u32, BTreeSet<u32>>) {
     let mut multi: HashMap<u32, BTreeSet<u32>> = HashMap::new();
     for n in g.iter_node_ids() {
         let val = *g.node_val(n).unwrap();
-        let id = *n as u32;
+        let id = *n;
         assert!(
             unique.insert(val % UNIQUE_MOD, id).is_none(),
             "two live nodes share unique key {}",
@@ -77,7 +77,7 @@ fn check(g: &MG) {
         let expected = unique.get(&key).copied();
         let hit = g.index_hit(UNIQUE, &KeyBytes::of(&key), tag).unwrap();
         let actual = match hit {
-            IndexHit::One(n) => Some(*n as u32),
+            IndexHit::One(n) => Some(*n),
             IndexHit::None => None,
             IndexHit::Many(_) => panic!("unique index returned Many for key {key}"),
         };

@@ -5,7 +5,7 @@ const FAN: usize = 32;
 const MASK: u32 = FAN as u32 - 1;
 
 enum TrieNode<T> {
-    Internal([Option<Arc<TrieNode<T>>>; FAN]),
+    Internal(Box<[Option<Arc<TrieNode<T>>>; FAN]>),
     Leaf([Option<T>; FAN]),
 }
 
@@ -57,7 +57,7 @@ fn set_rec<T: Clone>(
                 TrieNode::Internal(c) => c.clone(),
                 TrieNode::Leaf(_) => unreachable!("nonzero shift must be internal"),
             },
-            None => empty_children(),
+            None => Box::new(empty_children()),
         };
         let idx = ((slot >> shift) & MASK) as usize;
         let (new_child, was_present) = set_rec(children[idx].as_ref(), slot, shift - BITS, value);
@@ -139,7 +139,7 @@ impl<T> PVec<T> {
         }
         let mut root = self.root.clone();
         for _ in self.levels..levels {
-            let mut children = empty_children();
+            let mut children = Box::new(empty_children());
             children[0] = root.take();
             root = Some(Arc::new(TrieNode::Internal(children)));
         }
@@ -166,6 +166,10 @@ impl<T> PVec<T> {
 
     pub fn len(&self) -> usize {
         self.len as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     /// Lowest occupied slot. `remove` does not prune emptied subtrees, so the

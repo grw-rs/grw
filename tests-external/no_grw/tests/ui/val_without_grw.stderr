@@ -1,0 +1,7 @@
+error: grw_derive needs `grw` as a dependency of this crate: add it to [dependencies] (Could not find `grw` in `dependencies` or `dev-dependencies` in `$WORKSPACE/target/tests/trybuild/no_grw/Cargo.toml`!)
+ --> tests/ui/val_without_grw.rs:1:10
+  |
+1 | #[derive(grw_derive::Val)]
+  |          ^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the derive macro `grw_derive::Val` (in Nightly builds, run with -Z macro-backtrace for more info)

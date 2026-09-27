@@ -8,9 +8,11 @@ GRW is an embedded graph rewriting system that runs inside a Rust process. It pr
 - **`modify!`** — transactional graph mutation: add/remove/change nodes and edges atomically
 - **`search!`** — graph pattern matching iterator with morphism control
 
+A link between two nodes can hold a [composite value](./composite-values.md): several typed parts, included, excluded and searched for one at a time.
+
 All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying `from_fragment()` / `modify()` / `compile()` functions directly.
 
-These DSLs are built with `macro_rules!` — no procedural macros — by overloading Rust operators (`^`, `>>`, `<<`, `&`, `!`) to express graph edge semantics.
+The graph and modify DSLs — `mgraph!`, `vgraph!` and `modify!` — are `macro_rules!` macros that overload Rust operators (`^`, `>>`, `<<`, `&`, `!`) to express graph edge semantics. `search!` and `pattern!` are procedural macros whose pattern grammar lives in the [`grw_pattern`](https://github.com/grw-rs/grw_pattern) crate; they, the `#[grw::repl]` attribute, `#[derive(Val)]` and `#[derive(Part)]` come from [`grw_derive`](https://github.com/grw-rs/grw_derive), a required dependency of grw.
 
 ## Quick Example
 

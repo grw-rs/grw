@@ -5,7 +5,6 @@
 
 use grw::edge::anydir;
 use grw::graph::edge::{AnyVal, End};
-use grw::modify::dsl::*;
 use grw::search::path::{Config, PathConstraint, Dijkstra};
 use grw::graph::dsl::LocalId;
 use grw::Graph as _;

@@ -25,7 +25,7 @@ fn by_bucket() -> IndexDecl<u32> {
 }
 
 fn by_even() -> IndexDecl<u32> {
-    IndexDecl::new(BY_EVEN, Cardinality::Unique, |v: &u32| (*v % 2 == 0).then_some(*v))
+    IndexDecl::new(BY_EVEN, Cardinality::Unique, |v: &u32| (*v).is_multiple_of(2).then_some(*v))
 }
 
 const ZETA: IndexName = IndexName("zeta");
@@ -49,7 +49,7 @@ fn base() -> MG {
 }
 
 fn view(g: &MG) -> Vec<(u32, u32)> {
-    let mut v: Vec<(u32, u32)> = g.iter_node_ids().map(|n| (*n as u32, *g.node_val(n).unwrap())).collect();
+    let mut v: Vec<(u32, u32)> = g.iter_node_ids().map(|n| ((*n), *g.node_val(n).unwrap())).collect();
     v.sort_unstable();
     v
 }

@@ -11,6 +11,7 @@
 - [search! — Pattern Matching](./search.md)
 - [Variable-Length Paths](./paths.md)
 - [Mixing Clusters & Morphisms](./mixed-morphisms.md)
+- [Composite Values](./composite-values.md)
 - [Versioned Graphs](./versioned-graph.md)
 - [Indices](./indices.md)
 - [Morphisms](./morphisms.md)

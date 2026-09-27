@@ -24,7 +24,7 @@ pub struct KeyBytes(Box<[u8]>);
 
 impl KeyBytes {
     pub fn of<K: serde::Serialize>(key: &K) -> Self {
-        KeyBytes(bincode::serialize(key).expect("index key serializes with bincode").into_boxed_slice())
+        KeyBytes(super::persist::codec::encode(key).expect("index key serializes with bincode").into_boxed_slice())
     }
 
     pub(crate) fn as_bytes(&self) -> &[u8] {

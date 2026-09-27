@@ -882,7 +882,7 @@ impl<'g, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot
             let CostEntry { g, node: cur, depth, .. } = entry;
 
             // Skip entries superseded by a cheaper route already settled.
-            if let Some(&b) = best.get(&cur) { if g > b { continue; } }
+            if let Some(&b) = best.get(&cur) && g > b { continue; }
 
             // Goal: `to` reached via >=1 edge. With dominance it is settled once,
             // so the first valid arrival is the single cheapest path.
@@ -902,9 +902,8 @@ impl<'g, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot
 
             if depth >= *max_len { continue; }
             // Prefix guard prune — lazy predecessor walk, only when a guard is set.
-            if let Some(gd) = guard_fn {
-                if !gd(&PathView::walk(cur, prev)) { continue; }
-            }
+            if let Some(gd) = guard_fn
+                && !gd(&PathView::walk(cur, prev)) { continue; }
 
             let Some(nbs) = graph.neighbors(cur) else { continue };
             for (nb, slot, ev) in nbs {
@@ -984,16 +983,23 @@ impl<'g, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot
 
 // ── Construction helpers ───────────────────────────────────────────
 
-fn build_path_iter<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool>(
+struct PathBase<'a, G, F> {
     graph: &'a G,
-    from: id::N, to: id::N,
+    from: id::N,
+    to: id::N,
     edge_pred: F,
-    min_len: usize, max_len: usize,
+    min_len: usize,
+    max_len: usize,
+    constraint: &'a PathConstraint,
+}
+
+fn build_path_iter<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool>(
+    base: PathBase<'a, G, F>,
     guard: Option<Arc<GuardFn>>,
     drive: Option<Arc<dyn Fn(u8) -> Option<Explore> + Send + Sync>>,
     is_bfs: bool,
-    constraint: &'a PathConstraint,
 ) -> PathIter<'a, NV, E, G, F> {
+    let PathBase { graph, from, to, edge_pred, min_len, max_len, constraint } = base;
     let algo = if is_bfs {
         AlgoState::Bfs(BfsState {
             queue: VecDeque::from([(from, 0, 0)]),
@@ -1019,15 +1025,12 @@ fn build_path_iter<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>,
 }
 
 fn build_cost_path_iter<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>, F: Fn(E::Slot, &E::Val) -> bool>(
-    graph: &'a G,
-    from: id::N, to: id::N,
-    edge_pred: F,
-    min_len: usize, max_len: usize,
+    base: PathBase<'a, G, F>,
     guard: Option<Arc<GuardFn>>,
     nav: NavRef<'a, E::Val>,
     mode: NavMode,
-    constraint: &'a PathConstraint,
 ) -> CostPathIter<'a, NV, E, G, F> {
+    let PathBase { graph, from, to, edge_pred, min_len, max_len, constraint } = base;
     let mut heap = std::collections::BinaryHeap::new();
     let zero = NotNan::new(0.0).unwrap();
     heap.push(std::cmp::Reverse(CostEntry {
@@ -1048,13 +1051,15 @@ fn build_cost_path_iter<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV
 
 // ── Public dispatch (called from MGraph methods) ─────────────────────
 
+pub(crate) type EdgePredFn<'a, E> = &'a dyn Fn(<E as crate::graph::Edge>::Slot, &<E as crate::graph::Edge>::Val) -> bool;
+
 pub(crate) fn execute<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, E>>(
     graph: &'a G,
     from: id::N, to: id::N,
-    edge_pred: &'a dyn Fn(E::Slot, &E::Val) -> bool,
+    edge_pred: EdgePredFn<'a, E>,
     config: &Config<()>,
     constraint: &'a PathConstraint,
-) -> PathIter<'a, NV, E, G, &'a dyn Fn(E::Slot, &E::Val) -> bool> {
+) -> PathIter<'a, NV, E, G, EdgePredFn<'a, E>> {
     let max_len = config.max_len.unwrap_or(graph.node_count() + 1);
     let (is_bfs, drive) = match &config.driver {
         Driver::Stack(d) => (false, d.clone()),
@@ -1062,10 +1067,8 @@ pub(crate) fn execute<'a, NV, E: crate::graph::Edge, G: crate::graph::Graph<NV, 
         Driver::Navigate(..) => panic!("Navigate driver in traversal execute — use execute_nav"),
     };
     build_path_iter(
-        graph, from, to, edge_pred,
-        config.min_len, max_len,
-        config.guard.clone(), drive,
-        is_bfs, constraint,
+        PathBase { graph, from, to, edge_pred, min_len: config.min_len, max_len, constraint },
+        config.guard.clone(), drive, is_bfs,
     )
 }
 
@@ -1084,10 +1087,8 @@ pub(crate) fn execute_owned<'a, NV, E: crate::graph::Edge, G: crate::graph::Grap
         Driver::Navigate(..) => unreachable!(),
     };
     build_path_iter(
-        graph, from, to, edge_pred,
-        config.min_len, max_len,
-        config.guard, drive,
-        is_bfs, constraint,
+        PathBase { graph, from, to, edge_pred, min_len: config.min_len, max_len, constraint },
+        config.guard, drive, is_bfs,
     )
 }
 
@@ -1101,9 +1102,8 @@ pub(crate) fn execute_nav_owned<'a, NV, E: crate::graph::Edge, G: crate::graph::
     let max_len = config.max_len.unwrap_or(graph.node_count() + 1);
     let Driver::Navigate(nav, mode) = config.driver else { unreachable!() };
     build_cost_path_iter(
-        graph, from, to, edge_pred,
-        config.min_len, max_len,
-        config.guard, NavRef::Owned(nav), mode, constraint,
+        PathBase { graph, from, to, edge_pred, min_len: config.min_len, max_len, constraint },
+        config.guard, NavRef::Owned(nav), mode,
     )
 }
 
@@ -1114,23 +1114,23 @@ pub(crate) fn execute_nav_owned<'a, NV, E: crate::graph::Edge, G: crate::graph::
 pub(crate) fn execute_paths<'a, NV: 'a, E: crate::graph::Edge + 'a, G: crate::graph::Graph<NV, E>>(
     graph: &'a G,
     from: id::N, to: id::N,
-    edge_pred: &'a dyn Fn(E::Slot, &E::Val) -> bool,
+    edge_pred: EdgePredFn<'a, E>,
     config: &'a Config<(), Unset, E::Val>,
     constraint: &'a PathConstraint,
 ) -> Box<dyn Iterator<Item = Vec<id::N>> + 'a> {
     let max_len = config.max_len.unwrap_or(graph.node_count() + 1);
     match &config.driver {
         Driver::Stack(d) => Box::new(build_path_iter(
-            graph, from, to, edge_pred, config.min_len, max_len,
-            config.guard.clone(), d.clone(), false, constraint,
+            PathBase { graph, from, to, edge_pred, min_len: config.min_len, max_len, constraint },
+            config.guard.clone(), d.clone(), false,
         )),
         Driver::Queue(d) => Box::new(build_path_iter(
-            graph, from, to, edge_pred, config.min_len, max_len,
-            config.guard.clone(), d.clone(), true, constraint,
+            PathBase { graph, from, to, edge_pred, min_len: config.min_len, max_len, constraint },
+            config.guard.clone(), d.clone(), true,
         )),
         Driver::Navigate(nav, mode) => Box::new(build_cost_path_iter(
-            graph, from, to, edge_pred, config.min_len, max_len,
-            config.guard.clone(), NavRef::Borrowed(&**nav), *mode, constraint,
+            PathBase { graph, from, to, edge_pred, min_len: config.min_len, max_len, constraint },
+            config.guard.clone(), NavRef::Borrowed(&**nav), *mode,
         ).map(|(_cost, path)| path)),
     }
 }
@@ -1160,7 +1160,7 @@ mod repro_tests {
 
         eprintln!("paths from 0 to 0:");
         for p in &paths {
-            eprintln!("  {:?}", p.iter().map(|n| *n).collect::<Vec<_>>());
+            eprintln!("  {:?}", p.to_vec());
         }
 
         // A simple cycle must have at least 3 distinct nodes (length >= 4 incl. closing).
@@ -1168,7 +1168,7 @@ mod repro_tests {
         assert!(
             degenerate.is_empty(),
             "degenerate (edge-reusing) cycles returned: {:?}",
-            degenerate.iter().map(|p| p.iter().map(|n| *n).collect::<Vec<_>>()).collect::<Vec<_>>()
+            degenerate.iter().map(|p| p.to_vec()).collect::<Vec<_>>()
         );
 
         // The real square cycle must be found.
@@ -1191,7 +1191,7 @@ mod repro_tests {
             .collect();
         assert!(with_trivial.iter().any(|p| p == &[id::N(0)]),
             "len(0..) should yield the trivial [0], got {:?}",
-            with_trivial.iter().map(|p| p.iter().map(|n| *n).collect::<Vec<_>>()).collect::<Vec<_>>());
+            with_trivial.iter().map(|p| p.to_vec()).collect::<Vec<_>>());
 
         // default (len 1..): trivial [0] rejected, real triangle still found, no degenerate.
         let default: Vec<Vec<id::N>> = g
@@ -1199,7 +1199,7 @@ mod repro_tests {
             .collect();
         assert!(!default.iter().any(|p| p.len() < 4),
             "default len rejects trivial and degenerate cycles, got {:?}",
-            default.iter().map(|p| p.iter().map(|n| *n).collect::<Vec<_>>()).collect::<Vec<_>>());
+            default.iter().map(|p| p.to_vec()).collect::<Vec<_>>());
         assert!(default.iter().any(|p| p.len() == 4), "triangle cycle should be found");
     }
 
@@ -1207,8 +1207,8 @@ mod repro_tests {
     /// so it must NOT be suppressed by the undirected U-turn guard.
     #[test]
     fn directed_two_cycle_preserved() {
-        type DER = crate::graph::edge::Dir<()>;
-        let g = crate::mgraph![<(), DER>;
+        type Der = crate::graph::edge::Dir<()>;
+        let g = crate::mgraph![<(), Der>;
             N(0) >> N(1), n(1) >> n(0)
         ].unwrap();
 
@@ -1220,7 +1220,7 @@ mod repro_tests {
 
         let two_cycle = paths.iter().any(|p| p == &[id::N(0), id::N(1), id::N(0)]);
         assert!(two_cycle, "directed 2-cycle [0,1,0] via distinct edges must be found, got {:?}",
-            paths.iter().map(|p| p.iter().map(|n| *n).collect::<Vec<_>>()).collect::<Vec<_>>());
+            paths.iter().map(|p| p.to_vec()).collect::<Vec<_>>());
     }
 
     /// Navigated (Dijkstra) cycle search from a node back to itself.
@@ -1242,12 +1242,12 @@ mod repro_tests {
 
         eprintln!("navigated paths from 0 to 0:");
         for (c, p) in &paths {
-            eprintln!("  cost={} {:?}", c, p.iter().map(|n| *n).collect::<Vec<_>>());
+            eprintln!("  cost={} {:?}", c, p.to_vec());
         }
 
         let degenerate: Vec<_> = paths.iter().filter(|(_, p)| p.len() < 4).collect();
         assert!(degenerate.is_empty(), "degenerate navigated cycles: {:?}",
-            degenerate.iter().map(|(_, p)| p.iter().map(|n| *n).collect::<Vec<_>>()).collect::<Vec<_>>());
+            degenerate.iter().map(|(_, p)| p.to_vec()).collect::<Vec<_>>());
 
         let has_triangle = paths.iter().any(|(_, p)| p.len() == 4);
         assert!(has_triangle, "navigated cycle should close around the triangle");

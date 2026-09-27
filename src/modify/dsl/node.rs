@@ -351,6 +351,60 @@ for_each_dir!(impl_rawval_undir_new_op!(new::Ref<NV, ER>));
 for_each_dir!(impl_rawval_undir_new_op!(exist::Ref<NV, ER>));
 for_each_dir!(impl_rawval_undir_new_op!(translated::Ref<NV, ER>));
 
+macro_rules! impl_undir_part_op {
+    ($Pending:ident, $NodeTy:ty, $V:ident, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, $V, X, ER: graph::Edge + $Dir, RHS: IntoNode<NV, ER>>
+            $Op<RHS> for UndirPending<$NodeTy, edge::new::Edge<edge::new::$Pending<X>, NV, ER>>
+        where
+            edge::new::$Pending<X>: edge::PartTerm<ER, $SlotDir>,
+        {
+            type Output = $NodeTy;
+            fn $op(self, rhs: RHS) -> $NodeTy {
+                let mut node = self.0;
+                node.edges.push(Edge::Part {
+                    slot: <ER as $Dir>::SLOT,
+                    op: edge::PartTerm::into_part((self.1).0),
+                    target: rhs.into_node(),
+                });
+                node
+            }
+        }
+    };
+    ($Pending:ident, $NodeTy:ty, $Dir:ident, $SlotDir:ident, $Op:ident, $op:ident) => {
+        impl<NV, X, ER: graph::Edge + $Dir, RHS: IntoNode<NV, ER>>
+            $Op<RHS> for UndirPending<$NodeTy, edge::new::Edge<edge::new::$Pending<X>, NV, ER>>
+        where
+            edge::new::$Pending<X>: edge::PartTerm<ER, $SlotDir>,
+        {
+            type Output = $NodeTy;
+            fn $op(self, rhs: RHS) -> $NodeTy {
+                let mut node = self.0;
+                node.edges.push(Edge::Part {
+                    slot: <ER as $Dir>::SLOT,
+                    op: edge::PartTerm::into_part((self.1).0),
+                    target: rhs.into_node(),
+                });
+                node
+            }
+        }
+    };
+}
+
+macro_rules! impl_undir_part_ops {
+    ($($node:tt)+) => {
+        for_each_dir!(impl_undir_part_op!(PendingInclude, $($node)+));
+        for_each_dir!(impl_undir_part_op!(PendingExclude, $($node)+));
+        for_each_dir!(impl_undir_part_op!(PendingExcludeKind, $($node)+));
+    };
+}
+
+impl_undir_part_ops!(new::Node<NV, V, ER>, V);
+impl_undir_part_ops!(exist::Node<NV, V, ER>, V);
+impl_undir_part_ops!(translated::Node<NV, V, ER>, V);
+impl_undir_part_ops!(new::Ref<NV, ER>);
+impl_undir_part_ops!(exist::Ref<NV, ER>);
+impl_undir_part_ops!(translated::Ref<NV, ER>);
+
 // With an exist::Edge — uses into_optional() to produce Pass or Swap.
 
 macro_rules! impl_undir_exist_op {

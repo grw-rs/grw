@@ -1,6 +1,5 @@
-use grw::graph::{self, MGraph, edge};
-use grw::{id, modify};
-use grw::modify::*;
+use grw::graph::{MGraph, edge};
+use grw::modify;
 
 #[test]
 fn add_two_nodes() {

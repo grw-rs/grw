@@ -1,7 +1,6 @@
 //! Path search correctness tests using petgraph as oracle.
 
-use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::cmp::Reverse;
+use std::collections::HashSet;
 
 use grw::edge::anydir;
 use grw::graph::edge::{AnyVal, End};
@@ -345,7 +344,7 @@ fn astar_with_heuristic() {
     // A* with admissible heuristic should find same cost as Dijkstra.
     // Use node ID difference as a trivial admissible heuristic.
     for seed in 0..20 {
-        let (grw_g, pg) = build_weighted_digraph(seed, 15, 35);
+        let (grw_g, _pg) = build_weighted_digraph(seed, 15, 35);
         let n = 15;
         for from in 0..n as u32 {
             for to in 0..n as u32 {
@@ -406,8 +405,6 @@ fn undirected_dense_graphs() {
 // ═══════════════════════════════════════════════════════════════════
 
 use grw::search::path::{self, PathConstraint};
-use grw::search::dsl::{self as sdsl, IntoPathConfig};
-use grw::search::Search;
 
 fn exec_dfs_config() -> path::Config<(), path::Traversal> {
     path::Config::new(()).dfs()
@@ -428,7 +425,7 @@ fn exec_navigate_config() -> path::Config<(), path::Navigated, AnyVal<u8>> {
 #[test]
 fn executor_dfs_matches_graph_method() {
     for seed in 0..50 {
-        let (grw_g, pg_di, _) = build_random_graphs(seed, 8, 15);
+        let (grw_g, _pg_di, _) = build_random_graphs(seed, 8, 15);
         let n = 8;
         for from in 0..n as u32 {
             for to in 0..n as u32 {
@@ -488,7 +485,7 @@ fn executor_drive_all_matches_dfs() {
 #[test]
 fn executor_navigate_dijkstra_finds_paths() {
     for seed in 0..30 {
-        let (grw_g, pg_di, _) = build_random_graphs(seed, 8, 15);
+        let (grw_g, _pg_di, _) = build_random_graphs(seed, 8, 15);
         let n = 8;
         for from in 0..n as u32 {
             for to in 0..n as u32 {
@@ -511,7 +508,7 @@ fn executor_navigate_dijkstra_finds_paths() {
 #[test]
 fn executor_bfs_shortest_first() {
     for seed in 0..30 {
-        let (grw_g, pg_di, _) = build_random_graphs(seed, 8, 15);
+        let (grw_g, _pg_di, _) = build_random_graphs(seed, 8, 15);
         let n = 8;
         for from in 0..n as u32 {
             for to in 0..n as u32 {
@@ -546,7 +543,7 @@ fn executor_len_bounds() {
                 ).collect();
                 for p in &paths {
                     let edges = p.len() - 1;
-                    assert!(edges >= 2 && edges < 4,
+                    assert!((2..4).contains(&edges),
                         "len_bounds seed={seed} {from}->{to}: edge count {edges} not in 2..4");
                 }
             }
@@ -833,7 +830,7 @@ fn dsl_path_with_len() {
         let p = m.path(0);
         if !p.is_empty() {
             let edges = p.len() - 1;
-            assert!(edges >= 2 && edges < 4, "edge count {edges} not in 2..4");
+            assert!((2..4).contains(&edges), "edge count {edges} not in 2..4");
         }
     }
 }
@@ -1088,7 +1085,7 @@ fn weighted_dijkstra_extracts_from_edge_value() {
             ).map(|(_, p)| p).collect();
 
             // petgraph: A* with zero heuristic = Dijkstra
-            let pg_result = astar(
+            let _pg_result = astar(
                 &pg, NodeIndex::new(from as usize),
                 |n| n == NodeIndex::new(to as usize),
                 |e| *e.weight() as u32,
@@ -1101,7 +1098,7 @@ fn weighted_dijkstra_extracts_from_edge_value() {
                 assert!(all.contains(p), "seed=42 {from}->{to} navigator found invalid path {p:?}");
             }
             // And existence should match petgraph
-            let pg_exists = astar(
+            let _pg_exists = astar(
                 &pg, NodeIndex::new(from as usize),
                 |n| n == NodeIndex::new(to as usize),
                 |e| *e.weight() as u32, |_| 0,

@@ -1,0 +1,5 @@
+error: context node `a` is not pinned to a graph node: write `X(a = <expr>)`
+ --> tests/compile_fail/search_unpinned_context.rs:6:51
+  |
+6 |     let _ = search![&g, get(Mono) { X(c = zero) ^ X(a) ^ N(b) }];
+  |                                                   ^

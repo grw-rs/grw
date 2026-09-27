@@ -300,7 +300,7 @@ fn story_negation_bans_and_pins_and_form_vs_or_form() {
     ]
     .unwrap();
     let and_session =
-        Session::from_pattern(and_form, &g, &[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
+        Session::from_pattern(&and_form, &g, &[("p", p_id), ("q", q_id), ("c", five)]).unwrap();
     assert_eq!(and_session.iter().count(), 1); // only p—5 holds, so the ban can't fire
 
     // "none of these": two separate bans, each pinned to the same node 5.
@@ -311,7 +311,7 @@ fn story_negation_bans_and_pins_and_form_vs_or_form() {
     ]
     .unwrap();
     let or_session =
-        Session::from_pattern(or_form, &g, &[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)])
+        Session::from_pattern(&or_form, &g, &[("p", p_id), ("q", q_id), ("c1", five), ("c2", five)])
             .unwrap();
     assert_eq!(or_session.iter().count(), 0); // p—5 alone is enough to fire the first ban
 }
@@ -559,6 +559,22 @@ fn persistence_indices_round_trip() {
     )
     .unwrap();
     assert_eq!(g2.catalogue().len(), 1);
+
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
+fn persistence_errors_are_typed() {
+    use grw::graph::persist::{Layout, Reason, Side};
+    use grw::graph::{edge, MGraph};
+
+    let g: MGraph<u32, edge::Undir<u32>> = grw::mgraph![N(0).val(10u32)].unwrap();
+    let path = std::env::temp_dir().join(format!("grw_site_story_u32_{}.grw", std::process::id()));
+    g.save(&path).unwrap();
+
+    let Err(err) = MGraph::<i64, edge::Undir<i64>>::load(&path) else { panic!("a u32 file is refused as i64") };
+    assert_eq!(err.path, path);
+    assert!(matches!(err.reason, Reason::Layout(Layout { side: Side::Node, .. })));
 
     std::fs::remove_file(&path).unwrap();
 }

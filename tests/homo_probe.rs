@@ -24,15 +24,15 @@ fn probe_mixed_homo_mono_symmetry() {
         get(Morphism::Homo) { N(0) ^ n(2), N(1) ^ n(2) }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let ms: Vec<[u32; 4]> = Seq::search(&r.query(), &t).unwrap()
-        .map(|m| [ *m[0] as u32, *m[1] as u32, *m[2] as u32, *m[3] as u32 ])
+    let ms: Vec<[u32; 4]> = Seq::search(r.query(), &t).unwrap()
+        .map(|m| [ (*m[0]), (*m[1]), (*m[2]), (*m[3]) ])
         .collect();
 
     println!("PROBE1 matches ({}):", ms.len());
     for m in &ms { println!("  0->{} 1->{} 2->{} 3->{}", m[0], m[1], m[2], m[3]); }
 
     // symmetry check: swapping pattern nodes 0,1 must preserve the set
-    let mut set: std::collections::BTreeSet<[u32;4]> = ms.iter().cloned().collect();
+    let set: std::collections::BTreeSet<[u32;4]> = ms.iter().cloned().collect();
     let swapped: std::collections::BTreeSet<[u32;4]> =
         ms.iter().map(|m| [m[1], m[0], m[2], m[3]]).collect();
     assert_eq!(set, swapped, "match set not symmetric under homo-node swap 0<->1");
@@ -63,14 +63,14 @@ fn probe_mono_two_paths_shared_interior() {
         }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let ms: Vec<_> = Seq::search(&r.query(), &t).unwrap().collect();
+    let ms: Vec<_> = Seq::search(r.query(), &t).unwrap().collect();
     println!("PROBE2 matches: {}", ms.len());
     for m in &ms {
         println!("  0->{:?} 2->{:?} 3->{:?} path0={:?} path1={:?}",
             m.get(LocalId(0)), m.get(LocalId(2)), m.get(LocalId(3)),
             m.path(0), m.path(1));
     }
-    for mut m in Seq::search(&r.query(), &t).unwrap() {
+    for mut m in Seq::search(r.query(), &t).unwrap() {
         let mut inj = 0usize;
         loop {
             if m.paths_are_injective() { inj += 1; }
@@ -93,7 +93,7 @@ fn probe_homo_adjacent_merge_selfloop() {
         get(Morphism::Homo) { N(0) ^ N(1) }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let merged = Seq::search(&r.query(), &t).unwrap()
+    let merged = Seq::search(r.query(), &t).unwrap()
         .filter(|m| m.get(LocalId(0)) == m.get(LocalId(1)))
         .count();
     println!("PROBE3 merged-adjacent matches on loop-free target: {merged}");
@@ -122,8 +122,8 @@ fn probe_mixed_homo_mono_order_flipped() {
         }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let ms: Vec<[u32; 4]> = Seq::search(&r.query(), &t).unwrap()
-        .map(|m| [ *m[0] as u32, *m[1] as u32, *m[2] as u32, *m[3] as u32 ])
+    let ms: Vec<[u32; 4]> = Seq::search(r.query(), &t).unwrap()
+        .map(|m| [ (*m[0]), (*m[1]), (*m[2]), (*m[3]) ])
         .collect();
     println!("PROBE1b matches ({}):", ms.len());
     for m in &ms { println!("  0->{} 1->{} 2->{} 3->{}", m[0], m[1], m[2], m[3]); }
@@ -150,7 +150,7 @@ fn probe_homo_two_paths_shared_interior() {
         }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let n = Seq::search(&r.query(), &t).unwrap().count();
+    let n = Seq::search(r.query(), &t).unwrap().count();
     println!("PROBE2b homo shared-interior matches: {n}");
 }
 
@@ -167,7 +167,7 @@ fn probe_homo_adjacent_merge_with_selfloop() {
         get(Morphism::Homo) { N(0) ^ N(1) }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let merged = Seq::search(&r.query(), &t).unwrap()
+    let merged = Seq::search(r.query(), &t).unwrap()
         .filter(|m| m.get(LocalId(0)) == m.get(LocalId(1)))
         .count();
     println!("PROBE3b merged-adjacent with self-loop present: {merged}");
@@ -188,7 +188,7 @@ fn probe_epi_path_interior_coverage() {
         get(Morphism::Epi) { N(0) ^ ..N(1).dfs().len(2..3) }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let n = Seq::search(&r.query(), &t).unwrap().count();
+    let n = Seq::search(r.query(), &t).unwrap().count();
     println!("PROBE4 epi-with-path matches (interior covers x?): {n}");
 }
 
@@ -204,7 +204,7 @@ fn probe_pigeonhole_counts_homo_nodes() {
         get(Morphism::Homo) { N(1) ^ N(2) }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let n = Seq::search(&r.query(), &t).unwrap().count();
+    let n = Seq::search(r.query(), &t).unwrap().count();
     println!("PROBE5 matches: {n}");
     assert_eq!(n, 4, "1 mono free node (2) x homo adjacent pair without self-loop (2)");
 }
@@ -228,8 +228,8 @@ fn probe_mixed_order_flipped_padded() {
         }
     ];
     let Search::Resolved(r) = p.unwrap() else { panic!() };
-    let ms: Vec<[u32; 4]> = Seq::search(&r.query(), &t).unwrap()
-        .map(|m| [ *m[0] as u32, *m[1] as u32, *m[2] as u32, *m[3] as u32 ])
+    let ms: Vec<[u32; 4]> = Seq::search(r.query(), &t).unwrap()
+        .map(|m| [ (*m[0]), (*m[1]), (*m[2]), (*m[3]) ])
         .collect();
     println!("PROBE1c matches ({}):", ms.len());
     for m in &ms { println!("  0->{} 1->{} 2->{} 3->{}", m[0], m[1], m[2], m[3]); }

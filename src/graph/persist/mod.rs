@@ -45,22 +45,41 @@
 //! the section table are parsed before that check, so corruption there
 //! surfaces as a structural error instead ("invalid magic", "unsupported
 //! version", "unknown section tag", a truncated or out-of-range section
-//! range). Every reader wraps its errors with the file's path.
+//! range). Every reader answers a `persist::Error` naming the file and a typed
+//! `Reason`; a value, free section or index set with bytes left over after
+//! its decode is refused.
+//!
+//! An edge value is written as its own bincode-1 bytes; a composite value
+//! (`TypeSet<P>`) is its parts in canonical kind order, and reading one out
+//! of that order is an error. The header's `ev_hash` tells a composite-valued
+//! file from a part-valued one, since a composite's layout hash is its own.
+//! `load`/`load_with` accept only a file naming the graph's own edge value;
+//! `load_promoting`/`load_promoting_with` also accept a file naming the
+//! composite's part (a snapshot written before composite values), reading
+//! each edge value as a one-part composite.
 //!
 //! A v2 file (the pre-v3 whole-struct bincode dump) is rejected by `load`/
 //! `load_with`/`read_header` with a message naming `convert`, which reads
 //! it and writes it out in this format.
+
+
+pub(crate) mod codec;
+mod error;
+
+pub use error::{Catalogue, Error, Format, Layout, Promotion, Reason, Side, Site, V2};
+pub(crate) use error::at;
 
 use super::layout;
 use super::node::Adjacents;
 use super::{index, Edge, EdgeRec, Edges, FxHashMap, IdSpace, Node, Nodes};
 
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
 
+use crate::composite::Composite;
 use crate::{id, Id};
 
 const MAGIC: [u8; 4] = *b"GRW\0";
@@ -110,7 +129,7 @@ impl SectionTag {
         }
     }
 
-    fn from_u8(byte: u8) -> io::Result<Self> {
+    fn from_u8(byte: u8) -> Result<Self, Format> {
         match byte {
             0 => Ok(SectionTag::Nodes),
             1 => Ok(SectionTag::Edges),
@@ -119,7 +138,7 @@ impl SectionTag {
             4 => Ok(SectionTag::Free),
             5 => Ok(SectionTag::Indices),
             6 => Ok(SectionTag::Trailer),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidData, format!("unknown section tag {byte}"))),
+            _ => Err(Format::SectionTag(byte)),
         }
     }
 }
@@ -164,11 +183,11 @@ fn cardinality_to_u8(c: index::Cardinality) -> u8 {
     }
 }
 
-fn cardinality_from_u8(byte: u8) -> io::Result<index::Cardinality> {
+fn cardinality_from_u8(byte: u8) -> Result<index::Cardinality, Format> {
     match byte {
         0 => Ok(index::Cardinality::Unique),
         1 => Ok(index::Cardinality::Multi),
-        _ => Err(io::Error::new(io::ErrorKind::InvalidData, format!("unknown index cardinality {byte}"))),
+        _ => Err(Format::Cardinality(byte)),
     }
 }
 
@@ -248,44 +267,30 @@ impl<'a> Reader<'a> {
         Reader { data, pos: 0 }
     }
 
-    fn need(&self, n: usize) -> io::Result<()> {
-        if self.pos + n > self.data.len() {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "file truncated"));
-        }
-        Ok(())
+    fn array<const N: usize>(&mut self) -> Result<[u8; N], Format> {
+        let chunk = self.data.get(self.pos..).and_then(<[u8]>::first_chunk::<N>).ok_or(Format::Truncated)?;
+        self.pos += N;
+        Ok(*chunk)
     }
 
-    fn u8(&mut self) -> io::Result<u8> {
-        self.need(1)?;
-        let v = self.data[self.pos];
-        self.pos += 1;
-        Ok(v)
+    fn u8(&mut self) -> Result<u8, Format> {
+        self.array::<1>().map(|[b]| b)
     }
 
-    fn u16(&mut self) -> io::Result<u16> {
-        self.need(2)?;
-        let v = u16::from_le_bytes(self.data[self.pos..self.pos + 2].try_into().unwrap());
-        self.pos += 2;
-        Ok(v)
+    fn u16(&mut self) -> Result<u16, Format> {
+        self.array().map(u16::from_le_bytes)
     }
 
-    fn u32(&mut self) -> io::Result<u32> {
-        self.need(4)?;
-        let v = u32::from_le_bytes(self.data[self.pos..self.pos + 4].try_into().unwrap());
-        self.pos += 4;
-        Ok(v)
+    fn u32(&mut self) -> Result<u32, Format> {
+        self.array().map(u32::from_le_bytes)
     }
 
-    fn u64(&mut self) -> io::Result<u64> {
-        self.need(8)?;
-        let v = u64::from_le_bytes(self.data[self.pos..self.pos + 8].try_into().unwrap());
-        self.pos += 8;
-        Ok(v)
+    fn u64(&mut self) -> Result<u64, Format> {
+        self.array().map(u64::from_le_bytes)
     }
 
-    fn bytes(&mut self, n: usize) -> io::Result<&'a [u8]> {
-        self.need(n)?;
-        let s = &self.data[self.pos..self.pos + n];
+    fn bytes(&mut self, n: usize) -> Result<&'a [u8], Format> {
+        let s = span(self.data, self.pos, n)?;
         self.pos += n;
         Ok(s)
     }
@@ -295,8 +300,18 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn utf8(bytes: &[u8]) -> io::Result<String> {
-    std::str::from_utf8(bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)).map(str::to_owned)
+fn span(data: &[u8], start: usize, len: usize) -> Result<&[u8], Format> {
+    let end = start.checked_add(len).ok_or(Format::Truncated)?;
+    data.get(start..end).ok_or(Format::Truncated)
+}
+
+fn value_span(values: &[u8], off: u64, len: u32) -> Result<&[u8], Format> {
+    let start = usize::try_from(off).map_err(|_| Format::Truncated)?;
+    span(values, start, len as usize)
+}
+
+fn utf8(bytes: &[u8]) -> Result<String, Format> {
+    std::str::from_utf8(bytes).map(str::to_owned).map_err(Format::Utf8)
 }
 
 struct FixedHeader {
@@ -311,25 +326,16 @@ struct FixedHeader {
     ev_type: String,
 }
 
-fn read_fixed_header(r: &mut Reader) -> io::Result<FixedHeader> {
-    let magic = r.bytes(4)?;
-    if magic != MAGIC {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid magic"));
+fn read_fixed_header(r: &mut Reader) -> Result<FixedHeader, Reason> {
+    if r.array::<4>()? != MAGIC {
+        return Err(Format::Magic.into());
     }
     let version = r.u16()?;
     if version == VERSION_V2 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "unsupported version: {version} (expected {VERSION}); this is a v2 file, convert it first with `grw::graph::persist::convert`"
-            ),
-        ));
+        return Err(V2::Unconverted.into());
     }
     if version != VERSION {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("unsupported version: {version} (expected {VERSION})"),
-        ));
+        return Err(Format::Version { found: version, expected: VERSION }.into());
     }
     let graph_kind = r.u8()?;
     let edge_kind = r.u8()?;
@@ -344,7 +350,7 @@ fn read_fixed_header(r: &mut Reader) -> io::Result<FixedHeader> {
     Ok(FixedHeader { version, graph_kind, edge_kind, node_count, edge_count, nv_hash, ev_hash, nv_type, ev_type })
 }
 
-fn read_section_table(r: &mut Reader) -> io::Result<Vec<SectionInfo>> {
+fn read_section_table(r: &mut Reader) -> Result<Vec<SectionInfo>, Format> {
     let count = r.u16()? as usize;
     let mut sections = Vec::with_capacity(count);
     for _ in 0..count {
@@ -356,54 +362,30 @@ fn read_section_table(r: &mut Reader) -> io::Result<Vec<SectionInfo>> {
     Ok(sections)
 }
 
-fn section_slice<'a>(data: &'a [u8], sections: &[SectionInfo], tag: SectionTag) -> io::Result<&'a [u8]> {
-    let s = sections
-        .iter()
-        .find(|s| s.tag == tag)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, format!("missing section {tag:?}")))?;
-    // `offset`/`len` come straight out of the file's section table: a
-    // corrupt table can name a range that overflows `usize` or runs past the
-    // end of the mapping, so both are checked before the slice is taken.
-    let start = usize::try_from(s.offset)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, format!("section {tag:?} offset out of range")))?;
-    let len = usize::try_from(s.len)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, format!("section {tag:?} length out of range")))?;
-    let end = start
-        .checked_add(len)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, format!("section {tag:?} range overflows")))?;
-    if end > data.len() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "file truncated"));
-    }
-    Ok(&data[start..end])
+fn section_range(sections: &[SectionInfo], tag: SectionTag) -> Result<(usize, usize), Format> {
+    let s = sections.iter().find(|s| s.tag == tag).ok_or(Format::MissingSection(tag))?;
+    let start = usize::try_from(s.offset).map_err(|_| Format::SectionRange(tag))?;
+    let len = usize::try_from(s.len).map_err(|_| Format::SectionRange(tag))?;
+    let end = start.checked_add(len).ok_or(Format::SectionRange(tag))?;
+    Ok((start, end))
 }
 
-fn verify_trailer(data: &[u8], sections: &[SectionInfo]) -> io::Result<()> {
-    let trailer = sections
-        .iter()
-        .find(|s| s.tag == SectionTag::Trailer)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing trailer section"))?;
-    // Same untrusted arithmetic as `section_slice`, and this is the check
-    // that would otherwise have caught the corruption, so it cannot panic.
-    let start = usize::try_from(trailer.offset)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "trailer offset out of range"))?;
-    let len = usize::try_from(trailer.len)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "trailer length out of range"))?;
-    let end = start
-        .checked_add(len)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "trailer range overflows"))?;
-    if trailer.len != 32 || end > data.len() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "file truncated in trailer"));
-    }
-    let mut hasher = Sha256::new();
-    hasher.update(&data[..start]);
-    let actual = hasher.finalize();
-    if actual.as_slice() != &data[start..end] {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "trailer hash mismatch: file is corrupted"));
+fn section_slice<'a>(data: &'a [u8], sections: &[SectionInfo], tag: SectionTag) -> Result<&'a [u8], Format> {
+    let (start, end) = section_range(sections, tag)?;
+    data.get(start..end).ok_or(Format::Truncated)
+}
+
+fn verify_trailer(data: &[u8], sections: &[SectionInfo]) -> Result<(), Format> {
+    let (start, end) = section_range(sections, SectionTag::Trailer)?;
+    let stored = data.get(start..end).filter(|t| t.len() == 32).ok_or(Format::Truncated)?;
+    let actual = Sha256::digest(&data[..start]);
+    if actual.as_slice() != stored {
+        return Err(Format::TrailerHash);
     }
     Ok(())
 }
 
-fn read_catalogue_header(r: &mut Reader) -> io::Result<Vec<(String, u8, u64)>> {
+fn read_catalogue_header(r: &mut Reader) -> Result<Vec<(String, u8, u64)>, Format> {
     let count = r.u16()? as usize;
     let mut out = Vec::with_capacity(count);
     for _ in 0..count {
@@ -416,7 +398,7 @@ fn read_catalogue_header(r: &mut Reader) -> io::Result<Vec<(String, u8, u64)>> {
     Ok(out)
 }
 
-fn read_index_tables(r: &mut Reader, headers: Vec<(String, u8, u64)>) -> io::Result<Vec<RawIndexTable>> {
+fn read_index_tables(r: &mut Reader, headers: Vec<(String, u8, u64)>) -> Result<Vec<RawIndexTable>, Format> {
     let mut out = Vec::with_capacity(headers.len());
     for (name, cardinality, tag) in headers {
         let entry_count = r.u32()? as usize;
@@ -437,7 +419,7 @@ fn read_index_tables(r: &mut Reader, headers: Vec<(String, u8, u64)>) -> io::Res
     Ok(out)
 }
 
-fn catalogue_entries(headers: &[(String, u8, u64)]) -> io::Result<Vec<CatalogueEntry>> {
+fn catalogue_entries(headers: &[(String, u8, u64)]) -> Result<Vec<CatalogueEntry>, Format> {
     headers
         .iter()
         .map(|(name, cardinality, tag)| {
@@ -450,7 +432,7 @@ fn catalogue_entries(headers: &[(String, u8, u64)]) -> io::Result<Vec<CatalogueE
         .collect()
 }
 
-fn read_node_rows(data: &[u8], count: u64) -> io::Result<Vec<NodeRow>> {
+fn read_node_rows(data: &[u8], count: u64) -> Result<Vec<NodeRow>, Format> {
     let mut r = Reader::new(data);
     let mut out = Vec::with_capacity(count as usize);
     for _ in 0..count {
@@ -465,32 +447,24 @@ fn read_node_rows(data: &[u8], count: u64) -> io::Result<Vec<NodeRow>> {
     Ok(out)
 }
 
-fn resolve_nodes(
-    rows: Vec<NodeRow>,
-    adjacency: &[u8],
-    values: &[u8],
-) -> io::Result<Vec<RawNode>> {
+fn resolve_nodes(rows: Vec<NodeRow>, adjacency: &[u8], values: &[u8]) -> Result<Vec<RawNode>, Format> {
     rows.into_iter()
         .map(|(slot, r#gen, adj_off, adj_len, val_off, val_len)| {
             let mut ar = Reader::new(adjacency);
-            ar.seek(adj_off as usize);
+            ar.seek(usize::try_from(adj_off).map_err(|_| Format::Truncated)?);
             let mut adj = Vec::with_capacity(adj_len as usize);
             for _ in 0..adj_len {
                 let n = ar.u32()?;
                 let e = ar.u32()?;
                 adj.push((n, e));
             }
-            let start = val_off as usize;
-            let end = start + val_len as usize;
-            if end > values.len() {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "file truncated"));
-            }
-            Ok(RawNode { slot, r#gen, adj, val_bytes: values[start..end].to_vec() })
+            let val_bytes = value_span(values, val_off, val_len)?.to_vec();
+            Ok(RawNode { slot, r#gen, adj, val_bytes })
         })
         .collect()
 }
 
-fn read_edge_rows(data: &[u8], count: u64) -> io::Result<Vec<EdgeRow>> {
+fn read_edge_rows(data: &[u8], count: u64) -> Result<Vec<EdgeRow>, Format> {
     let mut r = Reader::new(data);
     let mut out = Vec::with_capacity(count as usize);
     for _ in 0..count {
@@ -506,31 +480,16 @@ fn read_edge_rows(data: &[u8], count: u64) -> io::Result<Vec<EdgeRow>> {
     Ok(out)
 }
 
-fn resolve_edges(rows: Vec<EdgeRow>, values: &[u8]) -> io::Result<Vec<RawEdge>> {
+fn resolve_edges(rows: Vec<EdgeRow>, values: &[u8]) -> Result<Vec<RawEdge>, Format> {
     rows.into_iter()
         .map(|(slot, r#gen, n1, n2, slot_kind, val_off, val_len)| {
-            let start = val_off as usize;
-            let end = start + val_len as usize;
-            if end > values.len() {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "file truncated"));
-            }
-            Ok(RawEdge { slot, r#gen, n1, n2, slot_kind, val_bytes: values[start..end].to_vec() })
+            let val_bytes = value_span(values, val_off, val_len)?.to_vec();
+            Ok(RawEdge { slot, r#gen, n1, n2, slot_kind, val_bytes })
         })
         .collect()
 }
 
-/// Prefixes an error with the file it came from. Every reader that opens a
-/// path wraps its whole body in this once, so no snapshot error reaches a
-/// caller without naming the file that produced it.
-fn named(path: &Path, e: io::Error) -> io::Error {
-    io::Error::new(e.kind(), format!("{}: {e}", path.display()))
-}
-
-pub(crate) fn read_snapshot(path: &Path) -> io::Result<SnapshotRead> {
-    read_snapshot_inner(path).map_err(|e| named(path, e))
-}
-
-fn read_snapshot_inner(path: &Path) -> io::Result<SnapshotRead> {
+pub(crate) fn read_snapshot(path: &Path) -> Result<SnapshotRead, Reason> {
     let file = File::open(path)?;
     let mmap = unsafe { memmap2::Mmap::map(&file)? };
     let data: &[u8] = &mmap;
@@ -553,8 +512,7 @@ fn read_snapshot_inner(path: &Path) -> io::Result<SnapshotRead> {
     let edge_rows = read_edge_rows(edges_slice, fixed.edge_count)?;
     let edges = resolve_edges(edge_rows, values_slice)?;
 
-    let free: FreeSectionBody =
-        bincode::deserialize(free_slice).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let free: FreeSectionBody = codec::decode(free_slice).map_err(Reason::value(Site::Free))?;
     let node_free: Vec<u32> = free.node_free.iter().map(raw_u32).collect();
     let edge_free: Vec<u32> = free.edge_free.iter().map(raw_u32).collect();
 
@@ -597,40 +555,38 @@ fn read_snapshot_inner(path: &Path) -> io::Result<SnapshotRead> {
 /// catalogue it reports is the catalogue the bytes claim, not one checked
 /// against the file's hash. `load`/`load_with` verify the trailer before
 /// parsing any section body.
-pub fn read_header(path: &Path) -> io::Result<Header> {
-    read_header_inner(path).map_err(|e| named(path, e))
-}
+pub fn read_header(path: &Path) -> Result<Header, Error> {
+    at(path, || {
+        let file = File::open(path)?;
+        let mmap = unsafe { memmap2::Mmap::map(&file)? };
+        let data: &[u8] = &mmap;
 
-fn read_header_inner(path: &Path) -> io::Result<Header> {
-    let file = File::open(path)?;
-    let mmap = unsafe { memmap2::Mmap::map(&file)? };
-    let data: &[u8] = &mmap;
+        let mut r = Reader::new(data);
+        let fixed = read_fixed_header(&mut r)?;
+        let sections = read_section_table(&mut r)?;
 
-    let mut r = Reader::new(data);
-    let fixed = read_fixed_header(&mut r)?;
-    let sections = read_section_table(&mut r)?;
+        let indices_slice = section_slice(data, &sections, SectionTag::Indices)?;
+        let mut ir = Reader::new(indices_slice);
+        let cat_headers = read_catalogue_header(&mut ir)?;
+        let catalogue = catalogue_entries(&cat_headers)?;
 
-    let indices_slice = section_slice(data, &sections, SectionTag::Indices)?;
-    let mut ir = Reader::new(indices_slice);
-    let cat_headers = read_catalogue_header(&mut ir)?;
-    let catalogue = catalogue_entries(&cat_headers)?;
-
-    Ok(Header {
-        version: fixed.version,
-        graph_kind: fixed.graph_kind,
-        edge_kind: fixed.edge_kind,
-        node_count: fixed.node_count,
-        edge_count: fixed.edge_count,
-        nv_layout_hash: fixed.nv_hash,
-        ev_layout_hash: fixed.ev_hash,
-        nv_type: fixed.nv_type,
-        ev_type: fixed.ev_type,
-        sections,
-        catalogue,
+        Ok(Header {
+            version: fixed.version,
+            graph_kind: fixed.graph_kind,
+            edge_kind: fixed.edge_kind,
+            node_count: fixed.node_count,
+            edge_count: fixed.edge_count,
+            nv_layout_hash: fixed.nv_hash,
+            ev_layout_hash: fixed.ev_hash,
+            nv_type: fixed.nv_type,
+            ev_type: fixed.ev_type,
+            sections,
+            catalogue,
+        })
     })
 }
 
-pub(crate) fn write_snapshot(path: &Path, mut snap: SnapshotWrite) -> io::Result<()> {
+pub(crate) fn write_snapshot(path: &Path, mut snap: SnapshotWrite) -> Result<(), Reason> {
     snap.nodes.sort_by_key(|n| n.slot);
     snap.edges.sort_by_key(|e| e.slot);
     snap.indices.sort_by(|a, b| a.name.cmp(&b.name));
@@ -691,8 +647,7 @@ pub(crate) fn write_snapshot(path: &Path, mut snap: SnapshotWrite) -> io::Result
         next_edge: snap.next_edge,
         version: snap.version,
     };
-    let free_bytes =
-        bincode::serialize(&free_body).map_err(io::Error::other)?;
+    let free_bytes = codec::encode(&free_body).map_err(Reason::value(Site::Free))?;
 
     let mut indices_bytes = Vec::new();
     indices_bytes.extend_from_slice(&(snap.indices.len() as u16).to_le_bytes());
@@ -783,7 +738,8 @@ pub(crate) fn write_snapshot(path: &Path, mut snap: SnapshotWrite) -> io::Result
     buf.extend_from_slice(&digest);
 
     let mut file = File::create(path)?;
-    file.write_all(&buf)
+    file.write_all(&buf)?;
+    Ok(())
 }
 
 /// Verifies `decls` against the file's catalogue (order independent) and
@@ -794,25 +750,24 @@ pub(crate) fn write_snapshot(path: &Path, mut snap: SnapshotWrite) -> io::Result
 pub(crate) fn verify_and_split_indices<NV>(
     file_catalogue: &[RawIndexTable],
     decls: Vec<index::IndexDecl<NV>>,
-) -> io::Result<IndexRestoreParts<NV>> {
-    let missing: Vec<&str> =
-        file_catalogue.iter().map(|t| t.name.as_str()).filter(|n| !decls.iter().any(|d| d.name().0 == *n)).collect();
-    if !missing.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("missing declarations for indices: {}", missing.join(", ")),
-        ));
+) -> Result<IndexRestoreParts<NV>, Reason> {
+    let undeclared: Vec<String> = file_catalogue
+        .iter()
+        .map(|t| t.name.as_str())
+        .filter(|n| !decls.iter().any(|d| d.name().0 == *n))
+        .map(str::to_owned)
+        .collect();
+    if !undeclared.is_empty() {
+        return Err(Catalogue::Undeclared(undeclared).into());
     }
-    let extra: Vec<&str> = decls
+    let unheld: Vec<String> = decls
         .iter()
         .map(|d| d.name().0)
         .filter(|n| !file_catalogue.iter().any(|t| t.name == *n))
+        .map(str::to_owned)
         .collect();
-    if !extra.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("declarations for indices not present in the file: {}", extra.join(", ")),
-        ));
+    if !unheld.is_empty() {
+        return Err(Catalogue::Unheld(unheld).into());
     }
 
     let mut unique = Vec::new();
@@ -821,20 +776,17 @@ pub(crate) fn verify_and_split_indices<NV>(
         let table = file_catalogue
             .iter()
             .find(|t| t.name == decl.name().0)
-            .expect("name presence verified by the missing-declarations check above");
+            .expect("name presence verified by the undeclared check above");
         let file_cardinality = cardinality_from_u8(table.cardinality)?;
         if file_cardinality != decl.cardinality() || table.tag != decl.tag().0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "index `{}` declaration mismatch: file has cardinality {:?} tag {}, declared cardinality {:?} tag {}",
-                    decl.name().0,
-                    file_cardinality,
-                    table.tag,
-                    decl.cardinality(),
-                    decl.tag().0,
-                ),
-            ));
+            return Err(Catalogue::Mismatch {
+                name: decl.name().0.to_string(),
+                file_cardinality,
+                file_tag: table.tag,
+                declared_cardinality: decl.cardinality(),
+                declared_tag: decl.tag().0,
+            }
+            .into());
         }
         match file_cardinality {
             index::Cardinality::Unique => {
@@ -855,10 +807,10 @@ pub(crate) fn verify_and_split_indices<NV>(
                     .map(|(k, v)| {
                         let RawIndexValue::Many(bytes) = v else { unreachable!("multi table entry must be Many") };
                         let set: index::IdSet<id::N> =
-                            bincode::deserialize(bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                            codec::decode(bytes).map_err(Reason::value(Site::Index(table.name.clone())))?;
                         Ok((index::KeyBytes::from_bytes(k.clone()), set))
                     })
-                    .collect::<io::Result<Vec<_>>>()?;
+                    .collect::<Result<Vec<_>, Reason>>()?;
                 multi.push(entries);
             }
         }
@@ -873,7 +825,7 @@ pub(crate) fn build_index_tables<NV>(
     decls: &[index::IndexDecl<NV>],
     unique: UniqueEntries,
     multi: MultiEntries,
-) -> io::Result<Vec<RawIndexTable>> {
+) -> Result<Vec<RawIndexTable>, Reason> {
     let mut unique_iter = unique.into_iter();
     let mut multi_iter = multi.into_iter();
     decls
@@ -895,10 +847,11 @@ pub(crate) fn build_index_tables<NV>(
                         .expect("multi table count matches decls")
                         .into_iter()
                         .map(|(k, set)| {
-                            let bytes = bincode::serialize(&set).map_err(io::Error::other)?;
+                            let bytes =
+                                codec::encode(&set).map_err(Reason::value(Site::Index(decl.name().0.to_string())))?;
                             Ok((k.as_bytes().to_vec(), RawIndexValue::Many(bytes)))
                         })
-                        .collect::<io::Result<Vec<_>>>()?;
+                        .collect::<Result<Vec<_>, Reason>>()?;
                     (index::Cardinality::Multi, entries)
                 }
             };
@@ -912,7 +865,7 @@ pub(crate) fn build_index_tables<NV>(
         .collect()
 }
 
-fn mgraph_index_tables<NV>(indices: &index::Indices<NV>) -> io::Result<Vec<RawIndexTable>> {
+fn mgraph_index_tables<NV>(indices: &index::Indices<NV>) -> Result<Vec<RawIndexTable>, Reason> {
     let unique: UniqueEntries = indices
         .unique_tables()
         .iter()
@@ -957,7 +910,7 @@ fn mgraph_edge_free<E: Edge>(edges: &Edges<E>) -> (Vec<u32>, u32) {
 /// `MGraph::save` only for sources whose edge store already has no gaps.
 /// `MGraph::save` keeps the direct path so previously written files stay
 /// byte-reproducible.
-pub fn save_graph<NV, E, G>(g: &G, path: &Path) -> io::Result<()>
+pub fn save_graph<NV, E, G>(g: &G, path: &Path) -> Result<(), Error>
 where
     NV: Clone + ::serde::Serialize + layout::Val,
     E: Edge,
@@ -971,64 +924,68 @@ where
 impl<NV, E: Edge> super::MGraph<NV, E> {
     /// Serialises this graph's own stores verbatim, tombstones and free lists
     /// included. `save_graph` is the trait-generic counterpart.
-    pub fn save(&self, path: &Path) -> io::Result<()>
+    pub fn save(&self, path: &Path) -> Result<(), Error>
     where
         NV: ::serde::Serialize + layout::Val,
         E::Slot: ::serde::Serialize,
         E::Val: ::serde::Serialize + layout::Val,
     {
-        let mut nodes = Vec::with_capacity(self.nodes.store.len());
-        for (i, opt) in self.nodes.store.iter().enumerate() {
-            let Some(node) = opt else { continue };
-            let val_bytes = bincode::serialize(&node.val).map_err(io::Error::other)?;
-            let adj = node.adj.entries_iter().map(|(n, e)| (raw_u32(n.0), raw_u32(e.0))).collect();
-            nodes.push(RawNode { slot: i as u32, r#gen: 0, adj, val_bytes });
-        }
+        at(path, || {
+            let mut nodes = Vec::with_capacity(self.nodes.store.len());
+            for (i, opt) in self.nodes.store.iter().enumerate() {
+                let Some(node) = opt else { continue };
+                let slot = i as u32;
+                let val_bytes = codec::encode(&node.val).map_err(Reason::value(Site::Node(slot)))?;
+                let adj = node.adj.entries_iter().map(|(n, e)| (raw_u32(n.0), raw_u32(e.0))).collect();
+                nodes.push(RawNode { slot, r#gen: 0, adj, val_bytes });
+            }
 
-        let mut edges = Vec::with_capacity(self.edges.store.len());
-        for (i, opt) in self.edges.store.iter().enumerate() {
-            let Some(rec) = opt else { continue };
-            let val_bytes = bincode::serialize(&rec.val).map_err(io::Error::other)?;
-            edges.push(RawEdge {
-                slot: i as u32,
-                r#gen: 0,
-                n1: raw_u32(rec.n1.0),
-                n2: raw_u32(rec.n2.0),
-                slot_kind: E::slot_to_byte(rec.slot),
-                val_bytes,
-            });
-        }
+            let mut edges = Vec::with_capacity(self.edges.store.len());
+            for (i, opt) in self.edges.store.iter().enumerate() {
+                let Some(rec) = opt else { continue };
+                let slot = i as u32;
+                let val_bytes = codec::encode(&rec.val).map_err(Reason::value(Site::Edge(slot)))?;
+                edges.push(RawEdge {
+                    slot,
+                    r#gen: 0,
+                    n1: raw_u32(rec.n1.0),
+                    n2: raw_u32(rec.n2.0),
+                    slot_kind: E::slot_to_byte(rec.slot),
+                    val_bytes,
+                });
+            }
 
-        let (node_free, next_node) = mgraph_free(&self.nodes);
-        let (edge_free, next_edge) = mgraph_edge_free(&self.edges);
-        let indices = mgraph_index_tables(&self.indices)?;
+            let (node_free, next_node) = mgraph_free(&self.nodes);
+            let (edge_free, next_edge) = mgraph_edge_free(&self.edges);
+            let indices = mgraph_index_tables(&self.indices)?;
 
-        write_snapshot(
-            path,
-            SnapshotWrite {
-                graph_kind: 0,
-                edge_kind: E::EDGE_KIND,
-                nv_type: std::any::type_name::<NV>().to_string(),
-                ev_type: std::any::type_name::<E::Val>().to_string(),
-                nv_hash: NV::layout_hash(),
-                ev_hash: <E::Val as layout::Val>::layout_hash(),
-                nodes,
-                edges,
-                node_free,
-                edge_free,
-                next_node,
-                next_edge,
-                version: 0,
-                indices,
-            },
-        )
+            write_snapshot(
+                path,
+                SnapshotWrite {
+                    graph_kind: 0,
+                    edge_kind: E::EDGE_KIND,
+                    nv_type: std::any::type_name::<NV>().to_string(),
+                    ev_type: std::any::type_name::<E::Val>().to_string(),
+                    nv_hash: NV::layout_hash(),
+                    ev_hash: <E::Val as layout::Val>::layout_hash(),
+                    nodes,
+                    edges,
+                    node_free,
+                    edge_free,
+                    next_node,
+                    next_edge,
+                    version: 0,
+                    indices,
+                },
+            )
+        })
     }
 
     /// Loads a file whose catalogue is empty. A file that carries a
     /// catalogue is **refused**, with an error naming every index that needs
     /// a declaration — use `load_with(path, decls)`, which verifies the
     /// catalogue against `decls` and restores the tables from the file.
-    pub fn load(path: &Path) -> io::Result<Self>
+    pub fn load(path: &Path) -> Result<Self, Error>
     where
         NV: ::serde::de::DeserializeOwned + layout::Val,
         E::Slot: ::serde::de::DeserializeOwned,
@@ -1041,15 +998,54 @@ impl<NV, E: Edge> super::MGraph<NV, E> {
     /// free section carries a real version (e.g. one written by
     /// `VGraph::save`) has both silently dropped, since `MGraph` has no
     /// generation or version fields to hold them.
-    pub fn load_with(path: &Path, decls: Vec<index::IndexDecl<NV>>) -> io::Result<Self>
+    pub fn load_with(path: &Path, decls: Vec<index::IndexDecl<NV>>) -> Result<Self, Error>
     where
         NV: ::serde::de::DeserializeOwned + layout::Val,
         E::Slot: ::serde::de::DeserializeOwned,
         E::Val: ::serde::de::DeserializeOwned + layout::Val,
     {
-        let snap = read_snapshot(path)?;
-        check_edge_kind::<E>(&snap.header)?;
-        check_layout_hashes::<NV, E>(&snap.header)?;
+        at(path, || {
+            let snap = read_snapshot(path)?;
+            check_edge_kind::<E>(&snap.header)?;
+            check_layout_hashes::<NV, E>(&snap.header)?;
+            Self::restore(snap, decls, codec::decode::<E::Val>)
+        })
+    }
+
+    pub fn load_promoting(path: &Path) -> Result<Self, Error>
+    where
+        NV: ::serde::de::DeserializeOwned + layout::Val,
+        E::Slot: ::serde::de::DeserializeOwned,
+        E::Val: Composite + ::serde::de::DeserializeOwned + layout::Val,
+        <E::Val as Composite>::Part: ::serde::de::DeserializeOwned + layout::Val,
+    {
+        Self::load_promoting_with(path, Vec::new())
+    }
+
+    pub fn load_promoting_with(path: &Path, decls: Vec<index::IndexDecl<NV>>) -> Result<Self, Error>
+    where
+        NV: ::serde::de::DeserializeOwned + layout::Val,
+        E::Slot: ::serde::de::DeserializeOwned,
+        E::Val: Composite + ::serde::de::DeserializeOwned + layout::Val,
+        <E::Val as Composite>::Part: ::serde::de::DeserializeOwned + layout::Val,
+    {
+        at(path, || {
+            let snap = read_snapshot(path)?;
+            check_edge_kind::<E>(&snap.header)?;
+            check_node_layout::<NV>(&snap.header)?;
+            let held = promotion::held::<E::Val>(&snap.header)?;
+            Self::restore(snap, decls, |bytes| promotion::value::<E::Val>(held, bytes))
+        })
+    }
+
+    fn restore(
+        snap: SnapshotRead,
+        decls: Vec<index::IndexDecl<NV>>,
+        edge_value: impl Fn(&[u8]) -> Result<E::Val, bincode::Error>,
+    ) -> Result<Self, Reason>
+    where
+        NV: ::serde::de::DeserializeOwned,
+    {
         let (decls, unique, multi) = verify_and_split_indices(&snap.indices, decls)?;
 
         let mut store: Vec<Option<Node<NV>>> = Vec::new();
@@ -1058,8 +1054,7 @@ impl<NV, E: Edge> super::MGraph<NV, E> {
             if store.len() <= idx {
                 store.resize_with(idx + 1, || None);
             }
-            let val: NV =
-                bincode::deserialize(&raw.val_bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            let val: NV = codec::decode(&raw.val_bytes).map_err(Reason::value(Site::Node(raw.slot)))?;
             let mut adj = Adjacents::new();
             for (n, e) in raw.adj {
                 adj.insert(id::N(n as Id), id::E(e as Id));
@@ -1082,8 +1077,7 @@ impl<NV, E: Edge> super::MGraph<NV, E> {
             if edge_store.len() <= idx {
                 edge_store.resize_with(idx + 1, || None);
             }
-            let val: E::Val =
-                bincode::deserialize(&raw.val_bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            let val = edge_value(&raw.val_bytes).map_err(Reason::value(Site::Edge(raw.slot)))?;
             edge_store[idx] = Some(EdgeRec {
                 n1: id::N(raw.n1 as Id),
                 n2: id::N(raw.n2 as Id),
@@ -1113,44 +1107,86 @@ impl<NV, E: Edge> super::MGraph<NV, E> {
     }
 }
 
-pub(crate) fn check_edge_kind<E: Edge>(header: &Header) -> io::Result<()> {
-    if header.edge_kind != E::EDGE_KIND {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("edge kind mismatch: file has {}, expected {}", header.edge_kind, E::EDGE_KIND),
-        ));
+pub(crate) fn check_edge_kind<E: Edge>(header: &Header) -> Result<(), Reason> {
+    edge_kind_is::<E>(header.edge_kind)
+}
+
+fn edge_kind_is<E: Edge>(file: u8) -> Result<(), Reason> {
+    if file != E::EDGE_KIND {
+        return Err(Reason::EdgeKind { file, expected: E::EDGE_KIND });
     }
     Ok(())
 }
 
-pub(crate) fn check_layout_hashes<NV, E: Edge>(header: &Header) -> io::Result<()>
+pub(crate) fn check_layout_hashes<NV, E: Edge>(header: &Header) -> Result<(), Layout>
 where
     NV: layout::Val,
     E::Val: layout::Val,
 {
-    let expected_nv = NV::layout_hash();
-    let expected_ev = <E::Val as layout::Val>::layout_hash();
-    if header.nv_layout_hash != expected_nv {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "node value layout mismatch: file has type `{}`, expected `{}`",
-                header.nv_type,
-                std::any::type_name::<NV>(),
-            ),
-        ));
-    }
-    if header.ev_layout_hash != expected_ev {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "edge value layout mismatch: file has type `{}`, expected `{}`",
-                header.ev_type,
-                std::any::type_name::<E::Val>(),
-            ),
-        ));
+    check_node_layout::<NV>(header)?;
+    check_edge_layout::<E>(header)
+}
+
+pub(crate) fn check_node_layout<NV: layout::Val>(header: &Header) -> Result<(), Layout> {
+    layout_is::<NV>(Side::Node, header.nv_layout_hash, &header.nv_type)
+}
+
+fn check_edge_layout<E: Edge>(header: &Header) -> Result<(), Layout>
+where
+    E::Val: layout::Val,
+{
+    layout_is::<E::Val>(Side::Edge, header.ev_layout_hash, &header.ev_type)
+}
+
+fn layout_is<V: layout::Val>(side: Side, file_hash: u64, file_type: &str) -> Result<(), Layout> {
+    if file_hash != V::layout_hash() {
+        return Err(Layout { side, file_type: file_type.to_string(), expected_type: std::any::type_name::<V>() });
     }
     Ok(())
+}
+
+pub(crate) mod promotion {
+    use super::{codec, layout, Header, Promotion};
+    use crate::composite::Composite;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum Held {
+        Composite,
+        Part,
+    }
+
+    pub(crate) fn held<C>(header: &Header) -> Result<Held, Promotion>
+    where
+        C: Composite + layout::Val,
+        C::Part: layout::Val,
+    {
+        let file = header.ev_layout_hash;
+        match (file == C::layout_hash(), file == <C::Part as layout::Val>::layout_hash()) {
+            (true, false) => Ok(Held::Composite),
+            (false, true) => Ok(Held::Part),
+            (true, true) => Err(Promotion::Ambiguous {
+                file_type: header.ev_type.clone(),
+                composite: std::any::type_name::<C>(),
+                part: std::any::type_name::<C::Part>(),
+            }),
+            (false, false) => Err(Promotion::Unrelated {
+                file_type: header.ev_type.clone(),
+                composite: std::any::type_name::<C>(),
+                part: std::any::type_name::<C::Part>(),
+            }),
+        }
+    }
+
+    pub(crate) fn value<C>(held: Held, bytes: &[u8]) -> Result<C, bincode::Error>
+    where
+        C: Composite + ::serde::de::DeserializeOwned,
+        C::Part: ::serde::de::DeserializeOwned,
+    {
+        match held {
+            Held::Composite => codec::decode::<C>(bytes),
+            Held::Part => codec::decode::<C::Part>(bytes).map(C::from_part),
+        }
+    }
 }
 
 const HEADER_SIZE_V2: usize = 44;
@@ -1163,33 +1199,23 @@ struct HeaderV2 {
     ev_layout_hash: u64,
 }
 
-fn parse_header_v2(data: &[u8]) -> io::Result<HeaderV2> {
-    if data.len() < HEADER_SIZE_V2 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "file too short"));
+fn parse_header_v2(data: &[u8]) -> Result<HeaderV2, Format> {
+    let mut r = Reader::new(data);
+    if r.array::<4>()? != MAGIC {
+        return Err(Format::Magic);
     }
-    if data[..4] != MAGIC {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid magic"));
-    }
-    let version = u16::from_le_bytes([data[4], data[5]]);
+    let version = r.u16()?;
     if version != VERSION_V2 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("unsupported version: {version} (expected {VERSION_V2})"),
-        ));
+        return Err(Format::Version { found: version, expected: VERSION_V2 });
     }
-    let edge_kind = data[6];
-    let nv_layout_hash = u64::from_le_bytes(data[24..32].try_into().unwrap());
-    let ev_layout_hash = u64::from_le_bytes(data[32..40].try_into().unwrap());
-    let nv_type_len = u16::from_le_bytes([data[40], data[41]]) as usize;
-    let ev_type_len = u16::from_le_bytes([data[42], data[43]]) as usize;
-
-    let required = HEADER_SIZE_V2 + nv_type_len + ev_type_len;
-    if data.len() < required {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "file truncated in type strings"));
-    }
-    let nv_type = utf8(&data[HEADER_SIZE_V2..HEADER_SIZE_V2 + nv_type_len])?;
-    let ev_type = utf8(&data[HEADER_SIZE_V2 + nv_type_len..HEADER_SIZE_V2 + nv_type_len + ev_type_len])?;
-
+    let edge_kind = r.u8()?;
+    r.seek(24);
+    let nv_layout_hash = r.u64()?;
+    let ev_layout_hash = r.u64()?;
+    let nv_type_len = r.u16()? as usize;
+    let ev_type_len = r.u16()? as usize;
+    let nv_type = utf8(r.bytes(nv_type_len)?)?;
+    let ev_type = utf8(r.bytes(ev_type_len)?)?;
     Ok(HeaderV2 { edge_kind, nv_type, ev_type, nv_layout_hash, ev_layout_hash })
 }
 
@@ -1208,16 +1234,7 @@ struct MGraphV2<NV, E: Edge> {
     degrees: Vec<(Id, index::IdSet<id::N>)>,
 }
 
-fn load_v2<NV, E: Edge>(path: &Path) -> io::Result<super::MGraph<NV, E>>
-where
-    NV: ::serde::de::DeserializeOwned + layout::Val,
-    E::Slot: ::serde::de::DeserializeOwned,
-    E::Val: ::serde::de::DeserializeOwned + layout::Val,
-{
-    load_v2_inner(path).map_err(|e| named(path, e))
-}
-
-fn load_v2_inner<NV, E: Edge>(path: &Path) -> io::Result<super::MGraph<NV, E>>
+fn load_v2<NV, E: Edge>(path: &Path) -> Result<super::MGraph<NV, E>, Reason>
 where
     NV: ::serde::de::DeserializeOwned + layout::Val,
     E::Slot: ::serde::de::DeserializeOwned,
@@ -1226,38 +1243,11 @@ where
     let file = File::open(path)?;
     let mmap = unsafe { memmap2::Mmap::map(&file)? };
     let header = parse_header_v2(&mmap)?;
-    if header.edge_kind != E::EDGE_KIND {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("edge kind mismatch: file has {}, expected {}", header.edge_kind, E::EDGE_KIND),
-        ));
-    }
-    let expected_nv = NV::layout_hash();
-    let expected_ev = <E::Val as layout::Val>::layout_hash();
-    if header.nv_layout_hash != expected_nv {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "node value layout mismatch: file has type `{}`, expected `{}`",
-                header.nv_type,
-                std::any::type_name::<NV>(),
-            ),
-        ));
-    }
-    if header.ev_layout_hash != expected_ev {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "edge value layout mismatch: file has type `{}`, expected `{}`",
-                header.ev_type,
-                std::any::type_name::<E::Val>(),
-            ),
-        ));
-    }
+    edge_kind_is::<E>(header.edge_kind)?;
+    layout_is::<NV>(Side::Node, header.nv_layout_hash, &header.nv_type)?;
+    layout_is::<E::Val>(Side::Edge, header.ev_layout_hash, &header.ev_type)?;
     let data_offset = HEADER_SIZE_V2 + header.nv_type.len() + header.ev_type.len();
-    let data = &mmap[data_offset..];
-    let v2: MGraphV2<NV, E> =
-        bincode::deserialize(data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let v2: MGraphV2<NV, E> = codec::decode(&mmap[data_offset..]).map_err(|e| V2::Body(*e))?;
     Ok(super::MGraph {
         nodes: v2.nodes,
         edges: v2.edges,
@@ -1268,13 +1258,13 @@ where
 
 /// Reads a v2 file (today's whole-struct bincode dump, `MGraph` only) and
 /// writes it out in the v3 format at `to`.
-pub fn convert<NV, E: Edge>(from: &Path, to: &Path) -> io::Result<ConvertReport>
+pub fn convert<NV, E: Edge>(from: &Path, to: &Path) -> Result<ConvertReport, Error>
 where
     NV: ::serde::Serialize + ::serde::de::DeserializeOwned + layout::Val,
     E::Slot: ::serde::Serialize + ::serde::de::DeserializeOwned,
     E::Val: ::serde::Serialize + ::serde::de::DeserializeOwned + layout::Val,
 {
-    let g: super::MGraph<NV, E> = load_v2(from)?;
+    let g: super::MGraph<NV, E> = at(from, || load_v2(from))?;
     let report = ConvertReport { node_count: g.node_count() as u64, edge_count: g.edge_count() as u64 };
     g.save(to)?;
     Ok(report)
@@ -1353,8 +1343,7 @@ mod tests {
         let Err(err) = MGraph::<(), edge::Undir<()>>::load(&path) else {
             panic!("expected error");
         };
-        let msg = err.to_string();
-        assert!(msg.contains("magic"), "expected magic error, got: {msg}");
+        assert!(matches!(err.reason, Reason::Format(Format::Magic)), "{err}");
     }
 
     #[test]
@@ -1367,8 +1356,7 @@ mod tests {
         let Err(err) = MGraph::<(), edge::Undir<()>>::load(&path) else {
             panic!("expected error");
         };
-        let msg = err.to_string();
-        assert!(msg.contains("version"), "expected version error, got: {msg}");
+        assert!(matches!(err.reason, Reason::Format(Format::Version { found: 99, expected: 3 })), "{err}");
     }
 
     #[test]
@@ -1380,8 +1368,7 @@ mod tests {
         let Err(err) = MGraph::<(), edge::Dir<()>>::load(&path) else {
             panic!("expected error");
         };
-        let msg = err.to_string();
-        assert!(msg.contains("edge kind"), "expected edge kind error, got: {msg}");
+        assert!(matches!(err.reason, Reason::EdgeKind { file: 0, expected: 1 }), "{err}");
     }
 
     #[test]
@@ -1398,8 +1385,127 @@ mod tests {
         let Err(err) = MGraph::<i64, edge::Undir<i64>>::load(&path) else {
             panic!("expected error");
         };
-        let msg = err.to_string();
-        assert!(msg.contains("layout mismatch"), "expected layout error, got: {msg}");
+        assert!(matches!(err.reason, Reason::Layout(Layout { side: Side::Node, .. })), "{err}");
+    }
+
+    mod ambiguous {
+        use super::super::{promotion, Header};
+        use crate::composite::{Composite, Included, Kinded, Removed, TypeSet};
+        use crate::layout::{FieldInfo, FieldType, Val};
+
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        struct Twin(TypeSet<Byte>);
+
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        struct Byte(u8);
+
+        impl Kinded for Byte {
+            type Kind = u8;
+
+            fn kind(&self) -> u8 {
+                self.0
+            }
+        }
+
+        impl Val for Byte {
+            fn fields() -> &'static [FieldInfo] {
+                &[]
+            }
+            fn field_type() -> FieldType {
+                FieldType::U8
+            }
+            fn layout_hash() -> u64 {
+                <u8 as Val>::layout_hash()
+            }
+            fn size() -> usize {
+                1
+            }
+            fn align() -> usize {
+                1
+            }
+        }
+
+        impl Val for Twin {
+            fn fields() -> &'static [FieldInfo] {
+                &[]
+            }
+            fn field_type() -> FieldType {
+                FieldType::U8
+            }
+            fn layout_hash() -> u64 {
+                <u8 as Val>::layout_hash()
+            }
+            fn size() -> usize {
+                std::mem::size_of::<Twin>()
+            }
+            fn align() -> usize {
+                std::mem::align_of::<Twin>()
+            }
+        }
+
+        impl Composite for Twin {
+            type Part = Byte;
+            type IncludeRefused = <TypeSet<Byte> as Composite>::IncludeRefused;
+            type ExcludeRefused = <TypeSet<Byte> as Composite>::ExcludeRefused;
+
+            fn from_part(part: Byte) -> Self {
+                Twin(TypeSet::from_part(part))
+            }
+
+            fn parts(&self) -> impl Iterator<Item = &Byte> {
+                self.0.parts()
+            }
+
+            fn part(&self, kind: &u8) -> Option<&Byte> {
+                self.0.part(kind)
+            }
+
+            fn with_part(&self, part: Byte) -> Result<Included<Self>, Self::IncludeRefused> {
+                self.0.with_part(part).map(|included| match included {
+                    Included::Added(set) => Included::Added(Twin(set)),
+                    Included::Held => Included::Held,
+                })
+            }
+
+            fn without_part(&self, kind: &u8) -> Result<Removed<Self>, Self::ExcludeRefused> {
+                self.0.without_part(kind).map(|removed| match removed {
+                    Removed::Remains(set) => Removed::Remains(Twin(set)),
+                    Removed::Vacant => Removed::Vacant,
+                })
+            }
+        }
+
+        fn header(ev_layout_hash: u64) -> Header {
+            Header {
+                version: 3,
+                graph_kind: 0,
+                edge_kind: 0,
+                node_count: 0,
+                edge_count: 0,
+                nv_layout_hash: 0,
+                ev_layout_hash,
+                nv_type: "()".to_string(),
+                ev_type: "u8".to_string(),
+                sections: Vec::new(),
+                catalogue: Vec::new(),
+            }
+        }
+
+        #[test]
+        fn a_composite_sharing_its_parts_layout_hash_is_refused() {
+            let Err(err) = promotion::held::<Twin>(&header(<u8 as Val>::layout_hash())) else {
+                panic!("expected an ambiguous layout error");
+            };
+            assert!(matches!(err, super::super::Promotion::Ambiguous { .. }), "{err}");
+        }
+
+        #[test]
+        fn type_set_is_told_from_its_part() {
+            let part = <Byte as Val>::layout_hash();
+            let set = <TypeSet<Byte> as Val>::layout_hash();
+            assert_eq!(promotion::held::<TypeSet<Byte>>(&header(part)).unwrap(), promotion::Held::Part);
+            assert_eq!(promotion::held::<TypeSet<Byte>>(&header(set)).unwrap(), promotion::Held::Composite);
+        }
     }
 
     #[test]

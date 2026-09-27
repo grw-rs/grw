@@ -1,4 +1,4 @@
-use crate::{search, Id};
+use crate::Id;
 use crate::edge::undir::E::U;
 use crate::graph;
 

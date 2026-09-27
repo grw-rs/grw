@@ -1,0 +1,15 @@
+error[E0631]: type mismatch in closure arguments
+  --> tests/compile_fail/search_has_test_wrong_part.rs:22:35
+   |
+22 |         N(0) & E().has::<Signs>().test(|u: &Uses| u.service > 1) >> N(1)
+   |                                   ^^^^ ---------- found signature defined here
+   |                                   |
+   |                                   expected due to this
+   |
+   = note: expected closure signature `for<'a> fn(&'a Signs) -> _`
+              found closure signature `fn(&Uses) -> _`
+note: required by a bound in `grw::search::dsl::edge::Edge::<Focus<P, F>, NV, ER>::test`
+  --> src/search/dsl/edge.rs
+   |
+   |     pub fn test(self, f: impl Fn(&F) -> bool + Send + Sync + 'static) -> Edge<Focus<P, F>, NV, ER> {
+   |                               ^^^^^^^^^^^^^^ required by this bound in `Edge::<Focus<P, F>, NV, ER>::test`

@@ -13,11 +13,10 @@ fn collect_from_op<NV, ER: graph::Edge>(
 ) -> Result<(), error::Node> {
     match op {
         Op::Free { id, edges, .. } => {
-            if let Some(lid) = id {
-                if !cluster_defs.insert(*lid) {
+            if let Some(lid) = id
+                && !cluster_defs.insert(*lid) {
                     return Err(error::Node::DuplicateLocalId(lid.0));
                 }
-            }
             for edge in edges {
                 collect_from_op(&edge.target, cluster_defs, cluster_context_defs, cluster_refs)?;
             }
@@ -139,7 +138,7 @@ mod tests {
             negated: false,
             edges: vec![dsl::EdgeOp {
                 slot: edge::undir::Slot,
-                val: (),
+                parts: dsl::Parts::none(),
                 edge_pred: None,
                 target,
                 negated: false,

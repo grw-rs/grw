@@ -1,0 +1,8 @@
+[package]
+name = "renamed_grw"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+grw2 = { package = "grw", path = "../.." }

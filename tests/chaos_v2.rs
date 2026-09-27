@@ -10,8 +10,11 @@ use grw::modify::{self, LocalId, Node};
 use grw::modify::node::{Bind, Exist, New};
 use grw::{Id, NR, id};
 
+type NodeList = Vec<(Id, ())>;
+type EdgeList<ER, EV> = Vec<(<ER as graph::Edge>::Def, EV)>;
+
 fn degree_histogram<ER: graph::Edge, EV>(
-    (ns, es): (Vec<(Id, ())>, Vec<(ER::Def, EV)>),
+    (ns, es): (NodeList, EdgeList<ER, EV>),
 ) -> Vec<(Id, usize)> {
     use std::collections::BTreeMap;
     let mut deg: BTreeMap<Id, Id> = BTreeMap::new();
@@ -27,11 +30,11 @@ fn degree_histogram<ER: graph::Edge, EV>(
         }
     }
     let mut hist: BTreeMap<Id, usize> = BTreeMap::new();
-    for (_, &d) in &deg {
+    for &d in deg.values() {
         *hist.entry(d).or_insert(0) += 1;
     }
     let mut result: Vec<_> = hist.into_iter().collect();
-    result.sort_by(|a, b| b.0.cmp(&a.0));
+    result.sort_by_key(|b| std::cmp::Reverse(b.0));
     result
 }
 
@@ -66,7 +69,7 @@ impl<ER: graph::Edge> Shadow<ER> {
         self.edges.remove(&(nr, slot));
     }
 
-    fn to_vecs(&self) -> (Vec<(Id, ())>, Vec<(ER::Def, ())>) {
+    fn to_vecs(&self) -> (NodeList, EdgeList<ER, ()>) {
         let ns: Vec<(Id, ())> = self.nodes.iter().map(|&id| (id, ())).collect();
         let es: Vec<(ER::Def, ())> = self
             .edges
@@ -408,13 +411,7 @@ fn chaos_step<ER: ChaosEdge>(
 
 fn chaos_v2<ER: ChaosEdge>(
     seed: u64,
-    shrink_factor: f64,
-    growth_factor: f64,
-    density_factor: f64,
-    graft_factor: f64,
-    exist_edge_factor: f64,
-    remove_edge_factor: f64,
-    max_batch: usize,
+    params: Params,
     steps: usize,
 ) where
     ER::Val: Default,
@@ -424,16 +421,6 @@ fn chaos_v2<ER: ChaosEdge>(
     let mut rng = SmallRng::seed_from_u64(seed);
     let mut graph = MGraph::<(), ER>::default();
     let mut shadow = Shadow::<ER>::new();
-
-    let params = Params {
-        shrink_factor,
-        growth_factor,
-        density_factor,
-        graft_factor,
-        exist_edge_factor,
-        remove_edge_factor,
-        max_batch,
-    };
 
     for step in 0..steps {
         chaos_step::<ER>(&mut graph, &mut shadow, &mut rng, step, seed, &params);
@@ -487,89 +474,89 @@ fn chaos_v2_phased<ER: ChaosEdge>(
 
 #[test]
 fn v2_undir_balanced() {
-    chaos_v2::<edge::Undir<()>>(42, 0.1, 0.5, 0.3, 0.5, 0.05, 0.05, 15, 80);
+    chaos_v2::<edge::Undir<()>>(42, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.3, graft_factor: 0.5, exist_edge_factor: 0.05, remove_edge_factor: 0.05, max_batch: 15 }, 80);
 }
 
 #[test]
 fn v2_dir_balanced() {
-    chaos_v2::<edge::Dir<()>>(42, 0.1, 0.5, 0.3, 0.5, 0.05, 0.05, 15, 80);
+    chaos_v2::<edge::Dir<()>>(42, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.3, graft_factor: 0.5, exist_edge_factor: 0.05, remove_edge_factor: 0.05, max_batch: 15 }, 80);
 }
 
 #[test]
 fn v2_anydir_balanced() {
-    chaos_v2::<edge::Anydir<()>>(42, 0.1, 0.5, 0.3, 0.5, 0.05, 0.05, 15, 80);
+    chaos_v2::<edge::Anydir<()>>(42, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.3, graft_factor: 0.5, exist_edge_factor: 0.05, remove_edge_factor: 0.05, max_batch: 15 }, 80);
 }
 
 // ── growth heavy: fast growth, low shrink ───────────────────────────────────
 
 #[test]
 fn v2_undir_growth_heavy() {
-    chaos_v2::<edge::Undir<()>>(123, 0.05, 1.5, 0.3, 0.7, 0.03, 0.02, 15, 40);
+    chaos_v2::<edge::Undir<()>>(123, Params { shrink_factor: 0.05, growth_factor: 1.5, density_factor: 0.3, graft_factor: 0.7, exist_edge_factor: 0.03, remove_edge_factor: 0.02, max_batch: 15 }, 40);
 }
 
 #[test]
 fn v2_dir_growth_heavy() {
-    chaos_v2::<edge::Dir<()>>(123, 0.05, 1.5, 0.3, 0.7, 0.03, 0.02, 15, 40);
+    chaos_v2::<edge::Dir<()>>(123, Params { shrink_factor: 0.05, growth_factor: 1.5, density_factor: 0.3, graft_factor: 0.7, exist_edge_factor: 0.03, remove_edge_factor: 0.02, max_batch: 15 }, 40);
 }
 
 // ── shrink heavy: aggressive node removal ───────────────────────────────────
 
 #[test]
 fn v2_undir_shrink_heavy() {
-    chaos_v2::<edge::Undir<()>>(999, 0.4, 0.3, 0.2, 0.3, 0.02, 0.1, 15, 60);
+    chaos_v2::<edge::Undir<()>>(999, Params { shrink_factor: 0.4, growth_factor: 0.3, density_factor: 0.2, graft_factor: 0.3, exist_edge_factor: 0.02, remove_edge_factor: 0.1, max_batch: 15 }, 60);
 }
 
 // ── dense: high new-to-new and exist-to-exist edge density ──────────────────
 
 #[test]
 fn v2_undir_dense() {
-    chaos_v2::<edge::Undir<()>>(777, 0.1, 0.5, 0.6, 0.8, 0.1, 0.02, 10, 60);
+    chaos_v2::<edge::Undir<()>>(777, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.6, graft_factor: 0.8, exist_edge_factor: 0.1, remove_edge_factor: 0.02, max_batch: 10 }, 60);
 }
 
 #[test]
 fn v2_anydir_dense() {
-    chaos_v2::<edge::Anydir<()>>(777, 0.1, 0.5, 0.5, 0.8, 0.1, 0.02, 10, 60);
+    chaos_v2::<edge::Anydir<()>>(777, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.5, graft_factor: 0.8, exist_edge_factor: 0.1, remove_edge_factor: 0.02, max_batch: 10 }, 60);
 }
 
 // ── edge churn: heavy edge addition and removal between existing nodes ──────
 
 #[test]
 fn v2_undir_edge_churn() {
-    chaos_v2::<edge::Undir<()>>(555, 0.05, 0.3, 0.2, 0.5, 0.15, 0.15, 12, 80);
+    chaos_v2::<edge::Undir<()>>(555, Params { shrink_factor: 0.05, growth_factor: 0.3, density_factor: 0.2, graft_factor: 0.5, exist_edge_factor: 0.15, remove_edge_factor: 0.15, max_batch: 12 }, 80);
 }
 
 #[test]
 fn v2_dir_edge_churn() {
-    chaos_v2::<edge::Dir<()>>(555, 0.05, 0.3, 0.2, 0.5, 0.15, 0.15, 12, 80);
+    chaos_v2::<edge::Dir<()>>(555, Params { shrink_factor: 0.05, growth_factor: 0.3, density_factor: 0.2, graft_factor: 0.5, exist_edge_factor: 0.15, remove_edge_factor: 0.15, max_batch: 12 }, 80);
 }
 
 #[test]
 fn v2_anydir_edge_churn() {
-    chaos_v2::<edge::Anydir<()>>(555, 0.05, 0.3, 0.2, 0.5, 0.15, 0.15, 12, 80);
+    chaos_v2::<edge::Anydir<()>>(555, Params { shrink_factor: 0.05, growth_factor: 0.3, density_factor: 0.2, graft_factor: 0.5, exist_edge_factor: 0.15, remove_edge_factor: 0.15, max_batch: 12 }, 80);
 }
 
 // ── graft heavy: many new nodes connecting to existing structure ─────────────
 
 #[test]
 fn v2_undir_graft_heavy() {
-    chaos_v2::<edge::Undir<()>>(314, 0.08, 0.8, 0.2, 0.95, 0.02, 0.01, 20, 60);
+    chaos_v2::<edge::Undir<()>>(314, Params { shrink_factor: 0.08, growth_factor: 0.8, density_factor: 0.2, graft_factor: 0.95, exist_edge_factor: 0.02, remove_edge_factor: 0.01, max_batch: 20 }, 60);
 }
 
 // ── mixed stress: all operations at moderate rates, many steps ──────────────
 
 #[test]
 fn v2_undir_mixed_stress() {
-    chaos_v2::<edge::Undir<()>>(2024, 0.15, 0.6, 0.3, 0.6, 0.08, 0.08, 15, 100);
+    chaos_v2::<edge::Undir<()>>(2024, Params { shrink_factor: 0.15, growth_factor: 0.6, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.08, max_batch: 15 }, 100);
 }
 
 #[test]
 fn v2_dir_mixed_stress() {
-    chaos_v2::<edge::Dir<()>>(2024, 0.15, 0.6, 0.3, 0.6, 0.08, 0.08, 15, 100);
+    chaos_v2::<edge::Dir<()>>(2024, Params { shrink_factor: 0.15, growth_factor: 0.6, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.08, max_batch: 15 }, 100);
 }
 
 #[test]
 fn v2_anydir_mixed_stress() {
-    chaos_v2::<edge::Anydir<()>>(2024, 0.15, 0.6, 0.3, 0.6, 0.08, 0.08, 15, 100);
+    chaos_v2::<edge::Anydir<()>>(2024, Params { shrink_factor: 0.15, growth_factor: 0.6, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.08, max_batch: 15 }, 100);
 }
 
 // ── multi-seed sweep: same params, different seeds ──────────────────────────
@@ -577,14 +564,14 @@ fn v2_anydir_mixed_stress() {
 #[test]
 fn v2_undir_seed_sweep() {
     for seed in [1, 7, 13, 42, 99, 256, 1000, 9999] {
-        chaos_v2::<edge::Undir<()>>(seed, 0.12, 0.5, 0.3, 0.6, 0.08, 0.06, 15, 60);
+        chaos_v2::<edge::Undir<()>>(seed, Params { shrink_factor: 0.12, growth_factor: 0.5, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.06, max_batch: 15 }, 60);
     }
 }
 
 #[test]
 fn v2_anydir_seed_sweep() {
     for seed in [1, 7, 13, 42, 99, 256, 1000, 9999] {
-        chaos_v2::<edge::Anydir<()>>(seed, 0.12, 0.5, 0.3, 0.6, 0.08, 0.06, 15, 60);
+        chaos_v2::<edge::Anydir<()>>(seed, Params { shrink_factor: 0.12, growth_factor: 0.5, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.06, max_batch: 15 }, 60);
     }
 }
 
@@ -592,51 +579,51 @@ fn v2_anydir_seed_sweep() {
 
 #[test]
 fn v2_undir_large_batch_50() {
-    chaos_v2::<edge::Undir<()>>(42, 0.08, 1.0, 0.25, 0.6, 0.05, 0.03, 50, 60);
+    chaos_v2::<edge::Undir<()>>(42, Params { shrink_factor: 0.08, growth_factor: 1.0, density_factor: 0.25, graft_factor: 0.6, exist_edge_factor: 0.05, remove_edge_factor: 0.03, max_batch: 50 }, 60);
 }
 
 #[test]
 fn v2_undir_large_batch_100() {
-    chaos_v2::<edge::Undir<()>>(42, 0.05, 0.8, 0.2, 0.5, 0.03, 0.02, 100, 40);
+    chaos_v2::<edge::Undir<()>>(42, Params { shrink_factor: 0.05, growth_factor: 0.8, density_factor: 0.2, graft_factor: 0.5, exist_edge_factor: 0.03, remove_edge_factor: 0.02, max_batch: 100 }, 40);
 }
 
 #[test]
 fn v2_anydir_large_batch_50() {
-    chaos_v2::<edge::Anydir<()>>(42, 0.08, 1.0, 0.25, 0.6, 0.05, 0.03, 50, 60);
+    chaos_v2::<edge::Anydir<()>>(42, Params { shrink_factor: 0.08, growth_factor: 1.0, density_factor: 0.25, graft_factor: 0.6, exist_edge_factor: 0.05, remove_edge_factor: 0.03, max_batch: 50 }, 60);
 }
 
 // ── ultra dense: extreme new-to-new edge density ─────────────────────────────
 
 #[test]
 fn v2_undir_ultra_dense_07() {
-    chaos_v2::<edge::Undir<()>>(777, 0.1, 0.5, 0.7, 0.8, 0.1, 0.02, 10, 60);
+    chaos_v2::<edge::Undir<()>>(777, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.7, graft_factor: 0.8, exist_edge_factor: 0.1, remove_edge_factor: 0.02, max_batch: 10 }, 60);
 }
 
 #[test]
 fn v2_undir_ultra_dense_09() {
-    chaos_v2::<edge::Undir<()>>(777, 0.1, 0.4, 0.9, 0.8, 0.1, 0.02, 8, 50);
+    chaos_v2::<edge::Undir<()>>(777, Params { shrink_factor: 0.1, growth_factor: 0.4, density_factor: 0.9, graft_factor: 0.8, exist_edge_factor: 0.1, remove_edge_factor: 0.02, max_batch: 8 }, 50);
 }
 
 #[test]
 fn v2_anydir_ultra_dense_08() {
-    chaos_v2::<edge::Anydir<()>>(777, 0.1, 0.5, 0.8, 0.8, 0.1, 0.02, 10, 60);
+    chaos_v2::<edge::Anydir<()>>(777, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.8, graft_factor: 0.8, exist_edge_factor: 0.1, remove_edge_factor: 0.02, max_batch: 10 }, 60);
 }
 
 // ── marathon: long-running incremental stability ─────────────────────────────
 
 #[test]
 fn v2_undir_marathon_200() {
-    chaos_v2::<edge::Undir<()>>(2024, 0.12, 0.5, 0.3, 0.6, 0.08, 0.06, 15, 200);
+    chaos_v2::<edge::Undir<()>>(2024, Params { shrink_factor: 0.12, growth_factor: 0.5, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.06, max_batch: 15 }, 200);
 }
 
 #[test]
 fn v2_undir_marathon_300() {
-    chaos_v2::<edge::Undir<()>>(2024, 0.15, 0.4, 0.25, 0.5, 0.06, 0.06, 12, 300);
+    chaos_v2::<edge::Undir<()>>(2024, Params { shrink_factor: 0.15, growth_factor: 0.4, density_factor: 0.25, graft_factor: 0.5, exist_edge_factor: 0.06, remove_edge_factor: 0.06, max_batch: 12 }, 300);
 }
 
 #[test]
 fn v2_anydir_marathon_200() {
-    chaos_v2::<edge::Anydir<()>>(2024, 0.12, 0.5, 0.3, 0.6, 0.08, 0.06, 15, 200);
+    chaos_v2::<edge::Anydir<()>>(2024, Params { shrink_factor: 0.12, growth_factor: 0.5, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.08, remove_edge_factor: 0.06, max_batch: 15 }, 200);
 }
 
 // ── warmup + hammer: build large graph then stress test ──────────────────────
@@ -726,17 +713,17 @@ fn v2_undir_warmup_dense_hammer() {
 
 #[test]
 fn v2_undir_extreme_churn() {
-    chaos_v2::<edge::Undir<()>>(555, 0.05, 0.3, 0.2, 0.5, 0.25, 0.25, 12, 80);
+    chaos_v2::<edge::Undir<()>>(555, Params { shrink_factor: 0.05, growth_factor: 0.3, density_factor: 0.2, graft_factor: 0.5, exist_edge_factor: 0.25, remove_edge_factor: 0.25, max_batch: 12 }, 80);
 }
 
 #[test]
 fn v2_anydir_extreme_churn() {
-    chaos_v2::<edge::Anydir<()>>(555, 0.05, 0.3, 0.2, 0.5, 0.25, 0.25, 12, 80);
+    chaos_v2::<edge::Anydir<()>>(555, Params { shrink_factor: 0.05, growth_factor: 0.3, density_factor: 0.2, graft_factor: 0.5, exist_edge_factor: 0.25, remove_edge_factor: 0.25, max_batch: 12 }, 80);
 }
 
 #[test]
 fn v2_undir_churn_dense() {
-    chaos_v2::<edge::Undir<()>>(555, 0.08, 0.4, 0.5, 0.6, 0.2, 0.2, 15, 80);
+    chaos_v2::<edge::Undir<()>>(555, Params { shrink_factor: 0.08, growth_factor: 0.4, density_factor: 0.5, graft_factor: 0.6, exist_edge_factor: 0.2, remove_edge_factor: 0.2, max_batch: 15 }, 80);
 }
 
 // ── multi-seed sweep at extreme params ───────────────────────────────────────
@@ -744,20 +731,20 @@ fn v2_undir_churn_dense() {
 #[test]
 fn v2_undir_seed_sweep_large() {
     for seed in [1, 7, 13, 42, 99, 256, 1000, 9999] {
-        chaos_v2::<edge::Undir<()>>(seed, 0.08, 1.0, 0.3, 0.6, 0.05, 0.03, 50, 40);
+        chaos_v2::<edge::Undir<()>>(seed, Params { shrink_factor: 0.08, growth_factor: 1.0, density_factor: 0.3, graft_factor: 0.6, exist_edge_factor: 0.05, remove_edge_factor: 0.03, max_batch: 50 }, 40);
     }
 }
 
 #[test]
 fn v2_undir_seed_sweep_dense() {
     for seed in [1, 7, 13, 42, 99, 256, 1000, 9999] {
-        chaos_v2::<edge::Undir<()>>(seed, 0.1, 0.5, 0.7, 0.8, 0.1, 0.02, 10, 50);
+        chaos_v2::<edge::Undir<()>>(seed, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.7, graft_factor: 0.8, exist_edge_factor: 0.1, remove_edge_factor: 0.02, max_batch: 10 }, 50);
     }
 }
 
 #[test]
 fn v2_anydir_seed_sweep_extreme() {
     for seed in [1, 7, 13, 42, 99, 256, 1000, 9999] {
-        chaos_v2::<edge::Anydir<()>>(seed, 0.1, 0.5, 0.6, 0.7, 0.15, 0.1, 15, 60);
+        chaos_v2::<edge::Anydir<()>>(seed, Params { shrink_factor: 0.1, growth_factor: 0.5, density_factor: 0.6, graft_factor: 0.7, exist_edge_factor: 0.15, remove_edge_factor: 0.1, max_batch: 15 }, 60);
     }
 }

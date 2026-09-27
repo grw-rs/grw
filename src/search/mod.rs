@@ -14,6 +14,7 @@ pub use query::Resolved;
 pub use query::Unresolved;
 pub use query::Bound;
 pub use query::BindError;
+pub use query::PinnedNode;
 pub use engine::{Seq, Par, Graph, Session, Indexed, Tier, Raw, Rev, RevCsr, RevCsrVal, Match, MatchedEdge, TranslatedMatch};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -69,17 +70,17 @@ pub enum Decision {
 #[macro_export]
 macro_rules! __search_clusters {
     (@acc [$($clusters:expr),*]) => {
-        vec![$($clusters),*]
+        ::std::vec![$($clusters),*]
     };
     (@acc [$($clusters:expr),*] get($m:expr) { $($expr:expr),* $(,)? } $(, $($rest:tt)*)?) => {
         $crate::__search_clusters!(
-            @acc [$($clusters,)* $crate::search::dsl::get($m, vec![$($expr.into()),*])]
+            @acc [$($clusters,)* $crate::search::dsl::get($m, ::std::vec![$($expr.into()),*])]
             $($($rest)*)?
         )
     };
     (@acc [$($clusters:expr),*] ban($m:expr) { $($expr:expr),* $(,)? } $(, $($rest:tt)*)?) => {
         $crate::__search_clusters!(
-            @acc [$($clusters,)* $crate::search::dsl::ban($m, vec![$($expr.into()),*])]
+            @acc [$($clusters,)* $crate::search::dsl::ban($m, ::std::vec![$($expr.into()),*])]
             $($($rest)*)?
         )
     };
@@ -179,7 +180,8 @@ mod tests {
     #[test]
     fn search_session_bound_pattern_errors() {
         let g = crate::mgraph![<(), ER>; N(0) ^ N(1)].unwrap();
-        let result = search![&g, get(Morphism::Mono) { X(0) ^ N(1) }];
+        let unresolved = search![<(), ER>; get(Morphism::Mono) { X(0) ^ N(1) }].unwrap();
+        let result = Session::from_search(unresolved, &g);
         assert!(matches!(result, Err(error::Search::BoundPatternInSession)));
     }
 
@@ -449,11 +451,11 @@ mod tests {
         assert_eq!(count, 4);
     }
 
-    type VER = edge::Undir<()>;
+    type Ver = edge::Undir<()>;
 
     fn run_valued_search(
-        search: Search<i32, VER>,
-        target: crate::graph::MGraph<i32, VER>,
+        search: Search<i32, Ver>,
+        target: crate::graph::MGraph<i32, Ver>,
     ) -> usize {
         let Search::Resolved(r) = search
         else { panic!("unexpected context nodes") };
@@ -464,10 +466,10 @@ mod tests {
 
     #[test]
     fn neg_freestanding_val_bail() {
-        let target = crate::mgraph![<i32, VER>;
+        let target = crate::mgraph![<i32, Ver>;
             N(0).val(10) ^ N(1).val(20)
         ].unwrap();
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 !N_().val(10)
             }
@@ -478,7 +480,7 @@ mod tests {
 
     #[test]
     fn neg_freestanding_val_no_bail() {
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 !N_().val(99)
             }
@@ -552,11 +554,11 @@ mod tests {
 
     #[test]
     fn neg_connected_val_pred_reject() {
-        let target = crate::mgraph![<i32, VER>;
+        let target = crate::mgraph![<i32, Ver>;
             N(0).val(1) ^ N(1).val(42),
             n(0) ^ N(2).val(99)
         ].unwrap();
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 N(0) ^ !N(1).val(42)
             }
@@ -574,10 +576,10 @@ mod tests {
 
     #[test]
     fn neg_connected_val_pred_allow() {
-        let target = crate::mgraph![<i32, VER>;
+        let target = crate::mgraph![<i32, Ver>;
             N(0).val(1) ^ N(1).val(20)
         ].unwrap();
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 N(0) ^ !N(1).val(42)
             }
@@ -588,11 +590,11 @@ mod tests {
 
     #[test]
     fn neg_context_val_freestanding() {
-        let graph = crate::mgraph![<i32, VER>;
+        let graph = crate::mgraph![<i32, Ver>;
             N(0).val(42) ^ N(1).val(10)
         ].unwrap();
         let target = graph.index(RevCsr);
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 !X(0).val(42)
             }
@@ -608,7 +610,7 @@ mod tests {
 
     #[test]
     fn neg_context_val_freestanding_no_match() {
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 !X(0).val(42)
             }
@@ -621,11 +623,11 @@ mod tests {
 
     #[test]
     fn positive_context_val_assertion() {
-        let graph = crate::mgraph![<i32, VER>;
+        let graph = crate::mgraph![<i32, Ver>;
             N(0).val(42) ^ N(1).val(10)
         ].unwrap();
         let target = graph.index(RevCsr);
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 X(0).val(42) ^ N(1)
             }
@@ -660,10 +662,10 @@ mod tests {
 
     #[test]
     fn neg_connected_explicit_neg_edge_reject() {
-        let target = crate::mgraph![<i32, VER>;
+        let target = crate::mgraph![<i32, Ver>;
             N(0).val(1) ^ N(1).val(42)
         ].unwrap();
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 N(0) & !E() ^ !N_().val(42)
             }
@@ -679,10 +681,10 @@ mod tests {
 
     #[test]
     fn neg_connected_explicit_neg_edge_reject_all() {
-        let target = crate::mgraph![<i32, VER>;
+        let target = crate::mgraph![<i32, Ver>;
             N(0).val(42) ^ N(1).val(42)
         ].unwrap();
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 N(0) & !E() ^ !N_().val(42)
             }
@@ -742,11 +744,11 @@ mod tests {
 
     #[test]
     fn neg_context_with_edge_connected() {
-        let graph = crate::mgraph![<i32, VER>;
+        let graph = crate::mgraph![<i32, Ver>;
             N(0).val(1) ^ N(1).val(2)
         ].unwrap();
         let target = graph.index(RevCsr);
-        let pattern = search![<i32, VER>;
+        let pattern = search![<i32, Ver>;
             get(Morphism::Mono) {
                 N(0) ^ !X(1).val(2)
             }
@@ -783,13 +785,13 @@ mod tests {
 
     #[test]
     fn sub_iso_rejects_extra_edges_anydir() {
-        type AER = crate::graph::edge::Anydir<()>;
-        let graph = crate::mgraph![<(), AER>;
+        type Aer = crate::graph::edge::Anydir<()>;
+        let graph = crate::mgraph![<(), Aer>;
             N(0) >> (N(1) ^ N(2)),
             n(0) << n(1)
         ].unwrap();
         let target = graph.index(RevCsr);
-        let pattern = search![<(), AER>; get(Morphism::SubIso) { X(0) % N(1) }];
+        let pattern = search![<(), Aer>; get(Morphism::SubIso) { X(0) % N(1) }];
         let Search::Unresolved(u) = pattern.unwrap()
         else { panic!("expected context nodes") };
         let ctx: &[(Id, Id)] = &[(0, 0)];
@@ -960,11 +962,11 @@ mod tests {
         assert_eq!(count, 0);
     }
 
-    type DER = edge::Dir<()>;
+    type Der = edge::Dir<()>;
 
     fn run_dir_search(
-        search: Search<(), DER>,
-        target: crate::graph::MGraph<(), DER>,
+        search: Search<(), Der>,
+        target: crate::graph::MGraph<(), Der>,
     ) -> usize {
         let Search::Resolved(r) = search
         else { panic!("unexpected context nodes") };
@@ -983,7 +985,7 @@ mod tests {
     #[test]
     fn dir_basic_match() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) }
         ];
         let count = run_dir_search(pattern.unwrap(), target);
@@ -993,7 +995,7 @@ mod tests {
     #[test]
     fn dir_reverse_uses_shl() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) << N(1) }
         ];
         let Search::Resolved(r) = pattern.unwrap()
@@ -1009,7 +1011,7 @@ mod tests {
     #[test]
     fn dir_iso_one_automorphism() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Iso) { N(0) >> N(1) }
         ];
         let count = run_dir_search(pattern.unwrap(), target);
@@ -1019,7 +1021,7 @@ mod tests {
     #[test]
     fn dir_iso_bidirectional_two_autos() {
         let target = dir_graph(&[0, 1], &[(0, 1), (1, 0)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Iso) { N(0) >> N(1), n(1) >> n(0) }
         ];
         let count = run_dir_search(pattern.unwrap(), target);
@@ -1029,7 +1031,7 @@ mod tests {
     #[test]
     fn dir_triangle_mono() {
         let target = dir_graph(&[0, 1, 2], &[(0, 1), (1, 2), (2, 0)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) {
                 N(0) >> N(1),
                 n(1) >> N(2)
@@ -1041,7 +1043,7 @@ mod tests {
 
     #[test]
     fn dir_contradictory_pos_neg_edge_errors() {
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) {
                 N(0) >> N(1),
                 n(0) & !E() >> n(1)
@@ -1053,11 +1055,11 @@ mod tests {
         ));
     }
 
-    type AER = edge::Anydir<()>;
+    type Aer = edge::Anydir<()>;
 
     fn run_anydir_search(
-        search: Search<(), AER>,
-        target: crate::graph::MGraph<(), AER>,
+        search: Search<(), Aer>,
+        target: crate::graph::MGraph<(), Aer>,
     ) -> usize {
         let Search::Resolved(r) = search
         else { panic!("unexpected context nodes") };
@@ -1086,7 +1088,7 @@ mod tests {
     #[test]
     fn anydir_mixed_match() {
         let target = anydir_graph(&[0, 1, 2], &[(0, 1)], &[(1, 2)]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) {
                 N(0) >> N(1),
                 n(1) ^ N(2)
@@ -1099,7 +1101,7 @@ mod tests {
     #[test]
     fn anydir_dir_only() {
         let target = anydir_graph(&[0, 1], &[(0, 1)], &[]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0) >> N(1) }
         ];
         let count = run_anydir_search(pattern.unwrap(), target);
@@ -1109,7 +1111,7 @@ mod tests {
     #[test]
     fn anydir_undir_only() {
         let target = anydir_graph(&[0, 1], &[], &[(0, 1)]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0) ^ N(1) }
         ];
         let count = run_anydir_search(pattern.unwrap(), target);
@@ -1130,7 +1132,7 @@ mod tests {
 
     #[test]
     fn ban_duplicates_get_edge_dir_same_slot_errors() {
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) },
             ban(Morphism::Mono) { n(0) >> n(1) }
         ];
@@ -1143,7 +1145,7 @@ mod tests {
     #[test]
     fn ban_different_slot_dir_not_contradictory() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) },
             ban(Morphism::Mono) { n(0) << n(1) }
         ];
@@ -1153,7 +1155,7 @@ mod tests {
 
     #[test]
     fn ban_mono_with_ban_only_not_subsumed() {
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) >> N(2) },
             ban(Morphism::Mono) { n(0) >> N_() }
         ];
@@ -1162,7 +1164,7 @@ mod tests {
 
     #[test]
     fn ban_homo_with_ban_only_subsumed() {
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) >> N(2) },
             ban(Morphism::Homo) { n(0) >> N_() }
         ];
@@ -1174,7 +1176,7 @@ mod tests {
 
     #[test]
     fn ban_shared_node_only_subsumed() {
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) },
             ban(Morphism::Mono) { n(0) }
         ];
@@ -1187,7 +1189,7 @@ mod tests {
     #[test]
     fn ban_not_subsumed_different_slot_with_ban_only_node() {
         let target = dir_graph(&[0, 1, 2], &[(0, 1), (1, 2)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1), n(1) >> N(2) },
             ban(Morphism::Mono) { n(1) << N_() }
         ];
@@ -1210,7 +1212,7 @@ mod tests {
     #[test]
     fn ban_anyslot_dir_one_slot_valid() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) },
             ban(Morphism::Mono) { n(0) % n(1) }
         ];
@@ -1220,7 +1222,7 @@ mod tests {
 
     #[test]
     fn ban_anyslot_dir_all_slots_covered() {
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) },
             get(Morphism::Mono) { n(0) << n(1) },
             ban(Morphism::Mono) { n(0) % n(1) }
@@ -1234,7 +1236,7 @@ mod tests {
     #[test]
     fn ban_anyslot_anydir_one_slot_valid() {
         let target = anydir_graph(&[0, 1], &[(0, 1)], &[]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0) >> N(1) },
             ban(Morphism::Mono) { n(0) % n(1) }
         ];
@@ -1244,7 +1246,7 @@ mod tests {
 
     #[test]
     fn ban_specific_slot_sub_iso_covered() {
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::SubIso) { N(0) >> N(1) },
             ban(Morphism::Mono) { n(0) << n(1) }
         ];
@@ -1257,7 +1259,7 @@ mod tests {
     #[test]
     fn ban_specific_slot_mono_different_slot_valid() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) >> N(1) },
             ban(Morphism::Mono) { n(0) << n(1) }
         ];
@@ -1268,7 +1270,7 @@ mod tests {
     #[test]
     fn ban_sub_iso_anyslot_survives_multi_edge() {
         let target = anydir_graph(&[0, 1, 2, 3], &[(0, 1), (1, 0)], &[]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0), N(1) },
             ban(Morphism::SubIso) { n(0) % n(1) }
         ];
@@ -1279,7 +1281,7 @@ mod tests {
     #[test]
     fn ban_sub_iso_anyslot_rejects_single_edge() {
         let target = anydir_graph(&[0, 1, 2], &[(0, 1)], &[]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0), N(1) },
             ban(Morphism::SubIso) { n(0) % n(1) }
         ];
@@ -1290,7 +1292,7 @@ mod tests {
     #[test]
     fn ban_sub_iso_extra_edge_unspecified_pair() {
         let target = anydir_graph(&[0, 1, 2], &[(0, 1), (1, 0), (0, 2)], &[]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0) >> N(1), N(2) },
             ban(Morphism::SubIso) { n(0) % n(1), n(2) }
         ];
@@ -1301,7 +1303,7 @@ mod tests {
     #[test]
     fn ban_sub_iso_no_extra_edge_unspecified_pair() {
         let target = anydir_graph(&[0, 1, 2], &[(0, 1), (1, 0)], &[]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0) >> N(1), N(2) },
             ban(Morphism::SubIso) { n(0) % n(1), n(2) }
         ];
@@ -1326,7 +1328,7 @@ mod tests {
     #[test]
     fn any_edge_dir() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) { N(0) % N(1) }
         ];
         let count = run_dir_search(pattern.unwrap(), target);
@@ -1336,7 +1338,7 @@ mod tests {
     #[test]
     fn any_edge_anydir() {
         let target = anydir_graph(&[0, 1, 2], &[(0, 1)], &[(1, 2)]);
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Mono) { N(0) % N(1) }
         ];
         let count = run_anydir_search(pattern.unwrap(), target);
@@ -1353,7 +1355,7 @@ mod tests {
         let pattern = search![<(), ER>;
             get(Morphism::Mono) {
                 N(0) % N(1),
-                n(0) & !E() % N(2)
+                n(0) & (!E() % N(2))
             }
         ];
         let Search::Resolved(r) = pattern.unwrap()
@@ -1390,8 +1392,8 @@ mod tests {
     #[test]
     fn bound_path_edge_multihop() {
         // Chain: 0→1→2→3 (directed, weight 1)
-        type AER = crate::graph::edge::Anydir<u8>;
-        let graph = crate::mgraph![<(), AER>;
+        type Aer = crate::graph::edge::Anydir<u8>;
+        let graph = crate::mgraph![<(), Aer>;
             N(0) & E().val(1u8) >> N(1),
             n(1) & E().val(1u8) >> N(2),
             n(2) & E().val(1u8) >> N(3)
@@ -1399,7 +1401,7 @@ mod tests {
         let target = graph.index(RevCsr);
 
         // Pattern: X(0) >> ..X(1).dfs()  (path from bound node 0 to bound node 3)
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Homo) {
                 X(0) >> ..X(1).dfs()
             }
@@ -1426,8 +1428,8 @@ mod tests {
     #[test]
     fn bound_path_edge_with_typed_pred() {
         // Chain: 0→1→2 (label 1), 0→2 shortcut (label 2)
-        type AER = crate::graph::edge::Anydir<u8>;
-        let graph = crate::mgraph![<(), AER>;
+        type Aer = crate::graph::edge::Anydir<u8>;
+        let graph = crate::mgraph![<(), Aer>;
             N(0) & E().val(1u8) >> N(1),
             n(1) & E().val(1u8) >> N(2),
             n(0) & E().val(2u8) >> n(2)
@@ -1435,7 +1437,7 @@ mod tests {
         let target = graph.index(RevCsr);
 
         // Pattern: X(0) & E().test(|label| label==1) >> ..X(1).dfs()
-        let pattern = search![<(), AER>;
+        let pattern = search![<(), Aer>;
             get(Morphism::Homo) {
                 X(0) & E().test(|label: &u8| *label == 1) >> ..X(1).dfs()
             }
@@ -1528,7 +1530,7 @@ mod tests {
     #[test]
     fn any_edge_filter_dir() {
         let target = dir_graph(&[0, 1], &[(0, 1)]);
-        let pattern = search![<(), DER>;
+        let pattern = search![<(), Der>;
             get(Morphism::Mono) {
                 N(0) % N(1),
                 n(0) & !E() << n(1)

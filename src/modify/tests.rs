@@ -1086,7 +1086,7 @@ fn degrees_after_modify_add_edge() {
     assert_eq!(g.node_count(), 3);
     assert_eq!(g.edge_count(), 2);
     let mut deg_map: Vec<(crate::Id, u64)> = g.degrees.iter().map(|(d, s)| (*d, s.len())).collect();
-    deg_map.sort_by(|a, b| b.0.cmp(&a.0));
+    deg_map.sort_by_key(|b| std::cmp::Reverse(b.0));
     assert_eq!(deg_map[0].0, 2);
     assert_eq!(deg_map[0].1, 1);
 }
@@ -1137,4 +1137,446 @@ fn degrees_after_modify_add_pairs() {
     assert_eq!(g.degrees.len(), 1);
     assert_eq!(g.degrees[0].0, 1);
     assert_eq!(g.degrees[0].1.len(), 6);
+}
+
+mod parts {
+    use crate::composite::{Composite, KindPresent, NotHeld, Part as Parted, TypeSet};
+    use crate::graph::edge::{self, dir};
+    use crate::graph::{self, Graph};
+    use crate::modify::error::{self, Apply, apply};
+    use crate::modify::{self, ExcludePart, IncludePart, Modification, Node, Part, node};
+    use crate::search::engine::Index;
+    use crate::{Id, RevCsr, id};
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct Signs {
+        since: u32,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct Uses {
+        service: &'static str,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Parted)]
+    enum Rel {
+        Signs(Signs),
+        Uses(Uses),
+    }
+
+    type Link = TypeSet<Rel>;
+    type ER = edge::Dir<Link>;
+    type Ops = Vec<Node<(), ER>>;
+    type Applied<G> = Result<(G, Modification<(), ER>), error::Modify>;
+
+    trait Subject: Graph<(), ER> + Sized {
+        fn built(links: Vec<(dir::E<Id>, Link)>) -> Self;
+        fn applied(self, ops: Ops) -> Applied<Self>;
+        fn attempted(&mut self, ops: Ops) -> Result<Modification<(), ER>, error::Modify>;
+    }
+
+    impl Subject for graph::MGraph<(), ER> {
+        fn built(links: Vec<(dir::E<Id>, Link)>) -> Self {
+            (3, links).try_into().unwrap()
+        }
+
+        fn applied(mut self, ops: Ops) -> Applied<Self> {
+            let modification = self.modify(ops)?;
+            Ok((self, modification))
+        }
+
+        fn attempted(&mut self, ops: Ops) -> Result<Modification<(), ER>, error::Modify> {
+            self.modify(ops)
+        }
+    }
+
+    impl Subject for graph::VGraph<(), ER> {
+        fn built(links: Vec<(dir::E<Id>, Link)>) -> Self {
+            graph::VGraph::from_mgraph(&<graph::MGraph<(), ER> as Subject>::built(links))
+        }
+
+        fn applied(self, ops: Ops) -> Applied<Self> {
+            self.modify(ops)
+        }
+
+        fn attempted(&mut self, ops: Ops) -> Result<Modification<(), ER>, error::Modify> {
+            let (next, modification) = self.modify(ops)?;
+            *self = next;
+            Ok(modification)
+        }
+    }
+
+    fn signs(since: u32) -> Rel {
+        Rel::Signs(Signs { since })
+    }
+
+    fn uses(service: &'static str) -> Rel {
+        Rel::Uses(Uses { service })
+    }
+
+    fn link(parts: Vec<Rel>) -> Link {
+        let mut parts = parts.into_iter();
+        let first = Link::from_part(parts.next().expect("a link holds at least one part"));
+        parts.fold(first, |held, part| match held.with_part(part).unwrap() {
+            crate::composite::Included::Added(next) => next,
+            crate::composite::Included::Held => held,
+        })
+    }
+
+    fn exist(n: Id) -> Node<(), ER> {
+        Node::Exist(node::Exist::Bind { id: id::N(n), op: node::Bind::Ref, edges: vec![] })
+    }
+
+    fn on(a: Id, b: Id, op: Part<Link>) -> Node<(), ER> {
+        Node::Exist(node::Exist::Bind {
+            id: id::N(a),
+            op: node::Bind::Ref,
+            edges: vec![modify::edge::Edge::Part { slot: dir::SRC, op, target: exist(b) }],
+        })
+    }
+
+    fn include(a: Id, b: Id, part: Rel) -> Node<(), ER> {
+        on(a, b, IncludePart::new(part).into())
+    }
+
+    fn exclude(a: Id, b: Id, kind: RelKind) -> Node<(), ER> {
+        on(a, b, ExcludePart::new(kind).into())
+    }
+
+    fn held<G: Subject>(g: &G, a: Id, b: Id) -> Option<&Link> {
+        g.get_edge_val(dir::E::D(a, b))
+    }
+
+    fn untouched(m: &Modification<(), ER>) -> bool {
+        m.added_edges.is_empty()
+            && m.removed_edges.is_empty()
+            && m.swapped_edge_vals.is_empty()
+            && m.removed_nodes.is_empty()
+            && m.swapped_node_vals.is_empty()
+    }
+
+    fn include_on_an_empty_pair_creates_the_link<G: Subject>() {
+        let (g, m) = G::built(vec![]).applied(vec![include(0, 1, signs(2020))]).unwrap();
+
+        assert_eq!(m.added_edges.len(), 1);
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2020)])));
+    }
+
+    fn include_a_second_kind_joins_the_link<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+
+        let (g, m) = g.applied(vec![include(0, 1, uses("custody"))]).unwrap();
+
+        assert_eq!(m.swapped_edge_vals.len(), 1);
+        assert_eq!(m.swapped_edge_vals[0].3, link(vec![signs(2020)]));
+        assert!(m.added_edges.is_empty());
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2020), uses("custody")])));
+    }
+
+    fn include_an_equal_part_changes_nothing<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+
+        let (g, m) = g.applied(vec![include(0, 1, signs(2020))]).unwrap();
+
+        assert!(untouched(&m));
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2020)])));
+    }
+
+    fn include_a_different_part_of_a_held_kind_is_rejected<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+
+        let Err(error::Modify::Apply(Apply::Edge(apply::Edge::PartRejected { a, b, refused }))) =
+            g.applied(vec![include(0, 1, signs(2024))])
+        else {
+            panic!("a second Signs on one link must be refused by the combinator")
+        };
+
+        assert_eq!((a, b), (id::N(0), id::N(1)));
+        assert_eq!(refused.of::<Link>(), Some(&KindPresent { kind: RelKind::Signs }));
+    }
+
+    fn exclude_to_remains_replaces_the_value<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020), uses("custody")]))]);
+
+        let (g, m) = g.applied(vec![exclude(0, 1, RelKind::Signs)]).unwrap();
+
+        assert_eq!(m.swapped_edge_vals.len(), 1);
+        assert!(m.removed_edges.is_empty());
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![uses("custody")])));
+    }
+
+    fn exclude_to_vacant_deletes_the_link<G: Subject>() {
+        let g = G::built(vec![
+            (dir::E::D(0, 1), link(vec![signs(2020)])),
+            (dir::E::D(1, 2), link(vec![uses("custody")])),
+        ]);
+
+        let (g, m) = g.applied(vec![exclude(0, 1, RelKind::Signs)]).unwrap();
+
+        assert_eq!(m.removed_edges.len(), 1);
+        assert_eq!(m.removed_edges[0].3, link(vec![signs(2020)]));
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(held(&g, 0, 1), None);
+        assert_eq!(g.edges_between(id::N(0), id::N(1)).count(), 0);
+        assert_eq!(g.neighbors(id::N(0)).unwrap().count(), 0);
+        assert_eq!(g.degree(id::N(0)), Some(0));
+        assert_eq!(g.degree(id::N(1)), Some(1));
+        assert!(!g.is_adjacent(0, 1));
+
+        let csr = g.index(RevCsr);
+        assert!(!csr.is_adjacent(0, 1));
+        assert!(!csr.has_edge_in_slot(0, 1, dir::SRC, false));
+        assert_eq!(csr.degree(0), 0);
+        assert!(csr.has_edge_in_slot(1, 2, dir::SRC, false));
+    }
+
+    fn exclude_a_kind_the_link_does_not_hold_is_refused<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+
+        let Err(error::Modify::Apply(Apply::Edge(apply::Edge::PartNotHeld { a, b, refused }))) =
+            g.applied(vec![exclude(0, 1, RelKind::Uses)])
+        else {
+            panic!("excluding an absent kind must be refused by the combinator")
+        };
+
+        assert_eq!((a, b), (id::N(0), id::N(1)));
+        assert_eq!(refused.of::<Link>(), Some(&NotHeld { kind: RelKind::Uses }));
+    }
+
+    fn exclude_on_a_pair_with_no_link_is_the_missing_edge<G: Subject>() {
+        let result = G::built(vec![]).applied(vec![exclude(0, 1, RelKind::Signs)]);
+
+        assert!(matches!(
+            result,
+            Err(error::Modify::Apply(Apply::Edge(apply::Edge::NotFound(a, b)))) if (a, b) == (id::N(0), id::N(1))
+        ));
+    }
+
+    fn whole_link_add_keeps_its_duplicate_refusal<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+        let add = Node::Exist(node::Exist::Bind {
+            id: id::N(0),
+            op: node::Bind::Ref,
+            edges: vec![modify::edge::Edge::New { slot: dir::SRC, val: link(vec![uses("custody")]), target: exist(1) }],
+        });
+
+        let result = g.applied(vec![add]);
+
+        assert!(matches!(result, Err(error::Modify::Apply(Apply::Edge(apply::Edge::Duplicate(_, _))))));
+    }
+
+    fn whole_and_part_ops_on_one_pair_conflict<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+        let remove = Node::Exist(node::Exist::Bind {
+            id: id::N(0),
+            op: node::Bind::Ref,
+            edges: vec![modify::edge::Edge::Exist { slot: dir::SRC, op: modify::edge::Exist::Rem, target: exist(1) }],
+        });
+
+        let result = g.applied(vec![remove, include(0, 1, uses("custody"))]);
+
+        assert!(matches!(result, Err(error::Modify::Apply(Apply::Edge(apply::Edge::PartConflict(_, _))))));
+    }
+
+    fn parts_on_one_pair_fold_in_batch_order<G: Subject>() {
+        let (g, m) = G::built(vec![])
+            .applied(vec![include(0, 1, signs(2020)), include(0, 1, signs(2020)), include(0, 1, uses("custody"))])
+            .unwrap();
+
+        assert_eq!(m.added_edges.len(), 1);
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2020), uses("custody")])));
+    }
+
+    fn include_then_exclude_all_in_one_batch_leaves_the_pair_empty<G: Subject>() {
+        let (g, m) = G::built(vec![])
+            .applied(vec![include(0, 1, signs(2020)), exclude(0, 1, RelKind::Signs)])
+            .unwrap();
+
+        assert!(untouched(&m));
+        assert_eq!(g.edge_count(), 0);
+    }
+
+    fn include_towards_a_new_node_creates_the_link<G: Subject>() {
+        let ops: Ops = vec![
+            Node::New(node::New::Add { id: Some(modify::LocalId(7)), val: () }, vec![]),
+            Node::Exist(node::Exist::Bind {
+                id: id::N(0),
+                op: node::Bind::Ref,
+                edges: vec![modify::edge::Edge::Part {
+                    slot: dir::SRC,
+                    op: IncludePart::new(signs(2020)).into(),
+                    target: Node::New(node::New::Ref { id: modify::LocalId(7) }, vec![]),
+                }],
+            }),
+        ];
+
+        let (g, m) = G::built(vec![]).applied(ops).unwrap();
+
+        let fresh = m.new_node_ids[&modify::LocalId(7)];
+        assert_eq!(held(&g, 0, *fresh), Some(&link(vec![signs(2020)])));
+    }
+
+    #[test]
+    fn a_refused_part_leaves_the_whole_batch_unapplied() {
+        let mut g = <graph::MGraph<(), ER> as Subject>::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+
+        let result = g.modify(vec![include(1, 2, uses("custody")), include(0, 1, signs(2024))]);
+
+        assert!(matches!(result, Err(error::Modify::Apply(Apply::Edge(apply::Edge::PartRejected { .. })))));
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(held(&g, 1, 2), None);
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2020)])));
+    }
+
+    fn whole(a: Id, b: Id, op: modify::edge::Exist<Link>) -> Node<(), ER> {
+        Node::Exist(node::Exist::Bind {
+            id: id::N(a),
+            op: node::Bind::Ref,
+            edges: vec![modify::edge::Edge::Exist { slot: dir::SRC, op, target: exist(b) }],
+        })
+    }
+
+    fn added(a: Id, b: Id, val: Link) -> Node<(), ER> {
+        Node::Exist(node::Exist::Bind {
+            id: id::N(a),
+            op: node::Bind::Ref,
+            edges: vec![modify::edge::Edge::New { slot: dir::SRC, val, target: exist(b) }],
+        })
+    }
+
+    fn shape<G: Subject>(g: &G) -> (usize, usize, Vec<(id::N, Option<Link>)>) {
+        let links = [(0, 1), (1, 2)].into_iter().map(|(a, b)| (id::N(a), held(g, a, b).cloned())).collect();
+        (g.node_count(), g.edge_count(), links)
+    }
+
+    fn refused_toward_a_missing_node<G: Subject>(toward_99: Node<(), ER>) {
+        let mut g = G::built(vec![
+            (dir::E::D(0, 1), link(vec![signs(2020)])),
+            (dir::E::D(1, 2), link(vec![uses("custody")])),
+        ]);
+        let before = shape(&g);
+
+        let result = g.attempted(vec![whole(1, 2, modify::edge::Exist::Rem), toward_99]);
+
+        assert!(matches!(
+            result,
+            Err(error::Modify::Apply(Apply::Node(apply::Node::NotFound(n)))) if n == id::N(99)
+        ));
+        assert_eq!(shape(&g), before);
+        assert_eq!(g.neighbors(id::N(2)).unwrap().count(), 1);
+    }
+
+    fn include_toward_a_missing_node_is_refused<G: Subject>() {
+        refused_toward_a_missing_node::<G>(include(0, 99, signs(2020)));
+    }
+
+    fn whole_link_add_toward_a_missing_node_is_refused<G: Subject>() {
+        refused_toward_a_missing_node::<G>(added(0, 99, link(vec![signs(2020)])));
+    }
+
+    fn part_and_whole_add_on_one_pair_conflict<G: Subject>() {
+        let result = G::built(vec![]).applied(vec![added(0, 1, link(vec![signs(2020)])), include(0, 1, uses("custody"))]);
+
+        assert!(matches!(result, Err(error::Modify::Apply(Apply::Edge(apply::Edge::PartConflict(_, _))))));
+    }
+
+    fn part_and_whole_swap_on_one_pair_conflict<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+        let swap = modify::edge::Exist::Bind(modify::edge::Bind::Swap(link(vec![signs(1999)])));
+
+        let result = g.applied(vec![whole(0, 1, swap), exclude(0, 1, RelKind::Signs)]);
+
+        assert!(matches!(result, Err(error::Modify::Apply(Apply::Edge(apply::Edge::PartConflict(_, _))))));
+    }
+
+    fn include_exclude_include_on_a_vacant_pair_adds_only_the_last<G: Subject>() {
+        let (g, m) = G::built(vec![])
+            .applied(vec![include(0, 1, signs(2020)), exclude(0, 1, RelKind::Signs), include(0, 1, signs(2024))])
+            .unwrap();
+
+        assert_eq!(m.added_edges.len(), 1);
+        assert!(m.swapped_edge_vals.is_empty() && m.removed_edges.is_empty());
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2024)])));
+    }
+
+    fn include_exclude_include_on_a_held_pair_swaps<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![uses("custody")]))]);
+
+        let (g, m) = g
+            .applied(vec![include(0, 1, signs(2020)), exclude(0, 1, RelKind::Signs), include(0, 1, signs(2024))])
+            .unwrap();
+
+        assert_eq!(m.swapped_edge_vals.len(), 1);
+        assert!(m.added_edges.is_empty() && m.removed_edges.is_empty());
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2024), uses("custody")])));
+    }
+
+    fn a_batch_that_returns_to_the_held_value_writes_nothing<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(0, 1), link(vec![signs(2020)]))]);
+
+        let (g, m) = g.applied(vec![include(0, 1, uses("custody")), exclude(0, 1, RelKind::Uses)]).unwrap();
+
+        assert!(untouched(&m));
+        assert_eq!(held(&g, 0, 1), Some(&link(vec![signs(2020)])));
+    }
+
+    fn include_on_a_descending_held_pair_joins_the_link<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(2, 1), link(vec![signs(2020)]))]);
+
+        let (g, m) = g.applied(vec![include(2, 1, uses("custody"))]).unwrap();
+
+        assert_eq!(m.swapped_edge_vals.len(), 1);
+        assert!(m.added_edges.is_empty());
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(held(&g, 2, 1), Some(&link(vec![signs(2020), uses("custody")])));
+    }
+
+    fn exclude_on_a_descending_held_pair_leaves_the_rest<G: Subject>() {
+        let g = G::built(vec![(dir::E::D(2, 1), link(vec![signs(2020), uses("custody")]))]);
+
+        let (g, m) = g.applied(vec![exclude(2, 1, RelKind::Signs)]).unwrap();
+
+        assert_eq!(m.swapped_edge_vals.len(), 1);
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(held(&g, 2, 1), Some(&link(vec![uses("custody")])));
+    }
+
+    macro_rules! on_both_graphs {
+        ($($case:ident),* $(,)?) => {
+            mod mgraph {
+                $(#[test] fn $case() { super::$case::<crate::graph::MGraph<(), super::ER>>() })*
+            }
+            mod vgraph {
+                $(#[test] fn $case() { super::$case::<crate::graph::VGraph<(), super::ER>>() })*
+            }
+        };
+    }
+
+    on_both_graphs!(
+        include_on_an_empty_pair_creates_the_link,
+        include_a_second_kind_joins_the_link,
+        include_an_equal_part_changes_nothing,
+        include_a_different_part_of_a_held_kind_is_rejected,
+        exclude_to_remains_replaces_the_value,
+        exclude_to_vacant_deletes_the_link,
+        exclude_a_kind_the_link_does_not_hold_is_refused,
+        exclude_on_a_pair_with_no_link_is_the_missing_edge,
+        whole_link_add_keeps_its_duplicate_refusal,
+        whole_and_part_ops_on_one_pair_conflict,
+        parts_on_one_pair_fold_in_batch_order,
+        include_then_exclude_all_in_one_batch_leaves_the_pair_empty,
+        include_towards_a_new_node_creates_the_link,
+        include_toward_a_missing_node_is_refused,
+        whole_link_add_toward_a_missing_node_is_refused,
+        part_and_whole_add_on_one_pair_conflict,
+        part_and_whole_swap_on_one_pair_conflict,
+        include_exclude_include_on_a_vacant_pair_adds_only_the_last,
+        include_exclude_include_on_a_held_pair_swaps,
+        a_batch_that_returns_to_the_held_value_writes_nothing,
+        include_on_a_descending_held_pair_joins_the_link,
+        exclude_on_a_descending_held_pair_leaves_the_rest,
+    );
 }

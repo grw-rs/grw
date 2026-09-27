@@ -1,0 +1,9 @@
+[package]
+name = "no_grw"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dev-dependencies]
+grw_derive = { path = "../../../grw_derive" }
+trybuild = "1"

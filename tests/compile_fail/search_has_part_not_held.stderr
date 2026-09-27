@@ -1,0 +1,22 @@
+error[E0277]: the trait bound `Rel: PartOf<Stranger>` is not satisfied
+  --> tests/compile_fail/search_has_part_not_held.rs:16:80
+   |
+16 |     let _ = grw::search![<(), Dir<TypeSet<Rel>>>; get(Mono) { N(0) & E().has::<Stranger>() >> N(1) }];
+   |                                                                                ^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `PartOf<Stranger>` is not implemented for `Rel`
+      but trait `PartOf<Signs>` is implemented for it
+  --> tests/compile_fail/search_has_part_not_held.rs:10:39
+   |
+10 | #[derive(Debug, Clone, PartialEq, Eq, Part)]
+   |                                       ^^^^
+   = help: for that trait implementation, expected `Signs`, found `Stranger`
+note: required by a bound in `has`
+  --> src/search/dsl/edge.rs
+   |
+   |     fn has<T: 'static>(self) -> Self::Focused<T>
+   |        --- required by a bound in this associated function
+   |     where
+   |         P: PartOf<T>;
+   |            ^^^^^^^^^ required by this bound in `Seek::has`
+   = note: this error originates in the derive macro `Part` (in Nightly builds, run with -Z macro-backtrace for more info)

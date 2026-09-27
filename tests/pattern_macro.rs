@@ -100,3 +100,15 @@ fn key_predicate_macro_form_matches_method_form() {
     assert!(!macro_bindings.is_empty());
     assert!(macro_bindings.iter().all(|(a, _)| *a == grw::id::N(0)));
 }
+
+#[test]
+fn typed_mgraph_names_the_caller_edge_module() {
+    let g = mgraph![<(), edge::Undir<()>>; N(0) ^ N(1), n(1) ^ N(2)].unwrap();
+    assert_eq!(g.node_count(), 3);
+}
+
+#[test]
+fn typed_vgraph_names_the_caller_edge_module() {
+    let g = grw::vgraph![<(), edge::Undir<()>>; N(0) ^ N(1), n(1) ^ N(2)].unwrap();
+    assert_eq!(g.node_count(), 3);
+}

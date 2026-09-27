@@ -2,9 +2,9 @@ use grw::modify::error::{Apply, Modify, apply};
 
 fn view<ER: grw::graph::Edge, G: grw::graph::Graph<(), ER>>(g: &G) -> Vec<(u32, Vec<u32>)> {
     let mut v: Vec<(u32, Vec<u32>)> = g.iter_node_ids().map(|n| {
-        let mut adj: Vec<u32> = g.neighbor_ids(n).unwrap().map(|m| *m as u32).collect();
+        let mut adj: Vec<u32> = g.neighbor_ids(n).unwrap().map(|m| *m).collect();
         adj.sort_unstable();
-        (*n as u32, adj)
+        ((*n), adj)
     }).collect();
     v.sort_unstable(); v
 }
@@ -94,7 +94,7 @@ fn overlay_swap_cannot_see_edge_added_in_same_batch() {
         x(0) & E().val(5u32) ^ x(2),
         x(0) & e().val(9u32) ^ x(2)
     ]));
-    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s as u32 == 0 && *t as u32 == 2),
+    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s == 0 && *t == 2),
         "swaps run before adds, so an edge added in the same batch is not visible: {e:?}");
     assert_eq!(view(&g), before);
     assert_eq!(edge_vals(&g), vals_before);
@@ -106,7 +106,7 @@ fn overlay_double_remove_of_one_edge_is_notfound() {
     let before = view(&g);
 
     let e = edge_err(grw::modify!(g, [x(0) & !e() ^ x(1), x(0) & !e() ^ x(1)]));
-    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s as u32 == 0 && *t as u32 == 1),
+    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s == 0 && *t == 1),
         "second removal of a singly-present edge must be NotFound: {e:?}");
     assert_eq!(view(&g), before);
     assert_eq!(g.edge_count(), 2);
@@ -117,7 +117,7 @@ fn overlay_add_on_batch_removed_node_sees_pre_batch_edges() {
     let mut g: grw::graph::MUndir0 = grw::mgraph![N(0) ^ N(1), n(1) ^ N(2)].unwrap();
     let before = view(&g);
     let e = edge_err(grw::modify!(g, [!X(1), x(0) ^ x(1)]));
-    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s as u32 == 0 && *t as u32 == 1),
+    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s == 0 && *t == 1),
         "node removal is the last mutation step, so the edge is still present for the add: {e:?}");
     assert_eq!(view(&g), before);
 
@@ -136,7 +136,7 @@ fn overlay_swap_branch_accepts_and_rejects() {
 
     let before = view(&g);
     let e = edge_err(grw::modify!(g, [x(0) & e().val(7u32) ^ x(2)]));
-    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s as u32 == 0 && *t as u32 == 2),
+    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s == 0 && *t == 2),
         "swap of an absent edge must be rejected by validation: {e:?}");
     assert_eq!(view(&g), before);
     assert_eq!(edge_vals(&g), vec![9], "rejected batch must not have swapped anything");
@@ -146,7 +146,7 @@ fn overlay_swap_branch_accepts_and_rejects() {
 fn edge_notfound_payload_keeps_dsl_endpoint_order() {
     let mut g: grw::graph::MUndir0 = grw::mgraph![N(0) ^ N(1), n(1) ^ N(2)].unwrap();
     let e = edge_err(grw::modify!(g, [x(2) & !e() ^ x(0)]));
-    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s as u32 == 2 && *t as u32 == 0),
+    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s == 2 && *t == 0),
         "payload carries the DSL (source, target), not the canonical (n1, n2) = (0, 2): {e:?}");
 }
 
@@ -154,7 +154,7 @@ fn edge_notfound_payload_keeps_dsl_endpoint_order() {
 fn edge_duplicate_payload_keeps_dsl_endpoint_order() {
     let mut g: grw::graph::MUndir0 = grw::mgraph![N(0) ^ N(1)].unwrap();
     let e = edge_err(grw::modify!(g, [x(1) ^ x(0)]));
-    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s as u32 == 1 && *t as u32 == 0),
+    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s == 1 && *t == 0),
         "payload carries the DSL (source, target), not the canonical (n1, n2) = (0, 1): {e:?}");
 }
 
@@ -162,7 +162,7 @@ fn edge_duplicate_payload_keeps_dsl_endpoint_order() {
 fn dir_edge_notfound_payload_keeps_dsl_endpoint_order() {
     let mut g: grw::graph::MDir0 = grw::mgraph![N(0) >> N(1), n(1) >> N(2)].unwrap();
     let e = edge_err(grw::modify!(g, [x(2) & !e() >> x(0)]));
-    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s as u32 == 2 && *t as u32 == 0),
+    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s == 2 && *t == 0),
         "payload carries the DSL (source, target): {e:?}");
 }
 
@@ -171,7 +171,7 @@ fn dir_edge_duplicate_payload_keeps_dsl_endpoint_order() {
     let mut g: grw::graph::MDir0 = grw::mgraph![N(0), N(1)].unwrap();
     grw::modify!(g, [x(1) >> x(0)]).unwrap();
     let e = edge_err(grw::modify!(g, [x(1) >> x(0)]));
-    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s as u32 == 1 && *t as u32 == 0),
+    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s == 1 && *t == 0),
         "payload carries the DSL (source, target), not the canonical (n1, n2) = (0, 1): {e:?}");
 }
 
@@ -179,7 +179,7 @@ fn dir_edge_duplicate_payload_keeps_dsl_endpoint_order() {
 fn anydir_edge_notfound_payload_keeps_dsl_endpoint_order() {
     let mut g: grw::graph::MAnydir0 = grw::mgraph![N(0) ^ N(1), n(1) ^ N(2)].unwrap();
     let e = edge_err(grw::modify!(g, [x(2) & !e() ^ x(0)]));
-    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s as u32 == 2 && *t as u32 == 0),
+    assert!(matches!(e, apply::Edge::NotFound(s, t) if *s == 2 && *t == 0),
         "payload carries the DSL (source, target) for the Und slot: {e:?}");
 }
 
@@ -188,7 +188,7 @@ fn anydir_edge_duplicate_payload_keeps_dsl_endpoint_order() {
     let mut g: grw::graph::MAnydir0 = grw::mgraph![N(0), N(1)].unwrap();
     grw::modify!(g, [x(1) >> x(0)]).unwrap();
     let e = edge_err(grw::modify!(g, [x(1) >> x(0)]));
-    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s as u32 == 1 && *t as u32 == 0),
+    assert!(matches!(e, apply::Edge::Duplicate(s, t) if *s == 1 && *t == 0),
         "payload carries the DSL (source, target) for the Src slot: {e:?}");
 }
 

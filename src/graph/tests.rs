@@ -1,6 +1,5 @@
 use crate::graph::*;
 use crate::graph::dsl::LocalId;
-use crate::graph;
 use crate::mgraph;
 use crate::id;
 
@@ -88,10 +87,7 @@ fn t_graph_nv_ev_not_found() {
         ],
     ));
 
-    assert_eq!(
-        g.err(),
-        Some(error::Build::Edge(error::Edge::NodeNotFound(id::N(2 as Id))))
-    );
+    assert!(matches!(g.err(), Some(error::Build::Edge(error::Edge::NodeNotFound(n))) if n == id::N(2 as Id)));
 }
 
 #[test]
@@ -114,7 +110,7 @@ fn t_graph_nv_ev_duplicate() {
         ],
     ));
 
-    assert_eq!(g.err(), Some(error::Build::Node(error::Node::Duplicate(id::N(0 as Id)))));
+    assert!(matches!(g.err(), Some(error::Build::Node(error::Node::Duplicate(n))) if n == id::N(0 as Id)));
 }
 
 #[test]
@@ -245,6 +241,33 @@ fn t_rel_api() {
     let rel = g.rel([id::N(0), id::N(1)]);
     assert_eq!(rel.out, Some(&10));
     assert_eq!(rel.inc, Some(&20));
+}
+
+#[test]
+fn t_rel_mut_agrees_with_rel_in_either_query_order() {
+    use crate::edge::dir::E::D;
+    use crate::id;
+
+    let mut g = MDir::<(), u32>::try_from((
+        3,
+        vec![(D(0, 1), 10u32), (D(1, 0), 20u32)],
+    ))
+    .unwrap();
+
+    let rev = g.rel([id::N(1), id::N(0)]);
+    assert_eq!(rev.out, Some(&10));
+    assert_eq!(rev.inc, Some(&20));
+
+    let m = g.rel_mut([id::N(1), id::N(0)]);
+    assert_eq!(m.out.as_deref(), Some(&10));
+    assert_eq!(m.inc.as_deref(), Some(&20));
+    *m.inc.unwrap() = 21;
+
+    let again = g.rel([id::N(0), id::N(1)]);
+    assert_eq!(again.out, Some(&10));
+    assert_eq!(again.inc, Some(&21));
+    let items: Vec<_> = again.into_iter().map(|(d, v)| (format!("{d:?}"), *v)).collect();
+    assert_eq!(items, vec![("D(0, 1)".to_string(), 10), ("D(1, 0)".to_string(), 21)]);
 }
 
 // ---- TryFrom edges-only ----
@@ -528,13 +551,7 @@ fn test_undir_reversed_duplicate() {
     use super::error;
     use edge::undir::E::U;
     let g = MUndir0::try_from(vec![U(0, 1), U(1, 0)]);
-    assert_eq!(
-        g.err(),
-        Some(error::Edge::Duplicate(
-            NR([id::N(0), id::N(1)]),
-            edge::undir::UND,
-        ))
-    );
+    assert!(matches!(g.err(), Some(error::Edge::Duplicate(rel, slot)) if rel == NR([id::N(0), id::N(1)]) && slot == edge::undir::UND));
 }
 
 // ---- Error cases ----
@@ -544,10 +561,7 @@ fn test_err_node_not_found_undir() {
     use super::error;
     use edge::undir::E::U;
     let g = MUndir0::try_from((vec![0, 1], vec![U(0, 1), U(2, 3)]));
-    assert_eq!(
-        g.err(),
-        Some(error::Build::Edge(error::Edge::NodeNotFound(id::N(2 as Id))))
-    );
+    assert!(matches!(g.err(), Some(error::Build::Edge(error::Edge::NodeNotFound(n))) if n == id::N(2 as Id)));
 }
 
 #[test]
@@ -555,10 +569,7 @@ fn test_err_node_not_found_dir() {
     use super::error;
     use edge::dir::E::D;
     let g = MDir0::try_from((vec![0, 1], vec![D(0, 1), D(2, 3)]));
-    assert_eq!(
-        g.err(),
-        Some(error::Build::Edge(error::Edge::NodeNotFound(id::N(2 as Id))))
-    );
+    assert!(matches!(g.err(), Some(error::Build::Edge(error::Edge::NodeNotFound(n))) if n == id::N(2 as Id)));
 }
 
 #[test]
@@ -566,10 +577,7 @@ fn test_err_node_not_found_anydir() {
     use super::error;
     use edge::anydir::E::{D, U};
     let g = MAnydir0::try_from((vec![0, 1], vec![U(0, 1), D(2, 3)]));
-    assert_eq!(
-        g.err(),
-        Some(error::Build::Edge(error::Edge::NodeNotFound(id::N(2 as Id))))
-    );
+    assert!(matches!(g.err(), Some(error::Build::Edge(error::Edge::NodeNotFound(n))) if n == id::N(2 as Id)));
 }
 
 #[test]
@@ -584,7 +592,7 @@ fn test_err_node_duplicate_undir() {
         ],
         vec![U(0, 1)],
     ));
-    assert_eq!(g.err(), Some(error::Build::Node(error::Node::Duplicate(id::N(0 as Id)))));
+    assert!(matches!(g.err(), Some(error::Build::Node(error::Node::Duplicate(n))) if n == id::N(0 as Id)));
 }
 
 #[test]
@@ -599,7 +607,7 @@ fn test_err_node_duplicate_dir() {
         ],
         vec![D(0, 1)],
     ));
-    assert_eq!(g.err(), Some(error::Build::Node(error::Node::Duplicate(id::N(0 as Id)))));
+    assert!(matches!(g.err(), Some(error::Build::Node(error::Node::Duplicate(n))) if n == id::N(0 as Id)));
 }
 
 #[test]
@@ -614,7 +622,7 @@ fn test_err_node_duplicate_anydir() {
         ],
         vec![U(0, 1)],
     ));
-    assert_eq!(g.err(), Some(error::Build::Node(error::Node::Duplicate(id::N(0 as Id)))));
+    assert!(matches!(g.err(), Some(error::Build::Node(error::Node::Duplicate(n))) if n == id::N(0 as Id)));
 }
 
 // ---- graph! macro ----
@@ -766,11 +774,10 @@ impl Watcher<(), edge::Undir<()>> for Recorder {
     fn on_ban_verdict(&mut self, _c: usize, _v: BanVerdict) -> Control { Control::Continue }
     fn on_match(&mut self, mapping: &[(LocalId, id::N)]) -> Control {
         self.matches.push(mapping.to_vec());
-        if let Some(limit) = self.stop_after {
-            if self.matches.len() >= limit {
+        if let Some(limit) = self.stop_after
+            && self.matches.len() >= limit {
                 return Control::Stop;
             }
-        }
         Control::Continue
     }
 
