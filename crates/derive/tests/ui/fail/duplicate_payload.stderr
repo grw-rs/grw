@@ -1,0 +1,5 @@
+error: Part: variant `A` and `B` both hold `Signs` — each payload type may appear in only one variant
+  --> tests/ui/fail/duplicate_payload.rs:11:7
+   |
+11 |     B(Signs),
+   |       ^^^^^

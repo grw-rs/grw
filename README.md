@@ -2,12 +2,21 @@
 
 Graph construction, mutation, and morphism matching in Rust.
 
-GRW is an embedded graph rewriting system that runs inside a Rust process. The user API is modelled as small domain-specific languages. The graph and modify DSLs — `mgraph!`, `vgraph!` and `modify!` — are `macro_rules!` macros that overload Rust operators (`^`, `>>`, `<<`, `&`, `!`) to express graph edge semantics. `search!` and `pattern!` are `macro_rules!` trampolines in grw that forward to procedural macros in [`grw_derive`](https://github.com/grw-rs/grw_derive), whose pattern grammar lives in the [`grw_pattern`](https://github.com/grw-rs/grw_pattern) crate; `grw_derive`, a required dependency of grw, also provides the `#[grw::repl]` attribute, `#[derive(Val)]` and `#[derive(Part)]`. All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying `from_fragment()` / `modify()` / `compile()` functions directly.
+GRW is an embedded graph rewriting system that runs inside a Rust process. The user API is modelled as small domain-specific languages. The graph and modify DSLs — `mgraph!`, `vgraph!` and `modify!` — are `macro_rules!` macros that overload Rust operators (`^`, `>>`, `<<`, `&`, `!`) to express graph edge semantics. `search!` and `pattern!` are `macro_rules!` trampolines in grw that forward to procedural macros in [`grw_derive`](crates/derive/), whose pattern grammar lives in the [`grw_pattern`](crates/pattern/) crate; `grw_derive`, a required dependency of grw, also provides the `#[grw::repl]` attribute, `#[derive(Val)]` and `#[derive(Part)]`. All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying `from_fragment()` / `modify()` / `compile()` functions directly.
 
 - [**`mgraph!`**](#mgraph--construction) — graph literal (like `vec!`)
 - [**`modify!`**](#modify--mutation) — transactional graph mutation (add/remove/change nodes and edges atomically)
 - [**`search!`**](#search--pattern-matching) — graph pattern matching iterator with morphism control
 - [**Composite link values**](#composite-link-values) — one link between two nodes holding several typed parts
+
+## Using grw
+
+```toml
+[dependencies]
+grw = { git = "https://github.com/grw-rs/grw.git" }
+```
+
+This repository is a Cargo workspace of three crates: `grw` (the library, at the root), [`grw_derive`](crates/derive/) (its procedural macros) and [`grw_pattern`](crates/pattern/) (the pattern grammar those macros parse). A clone builds and tests on its own with `cargo test --workspace`.
 
 ## Graph model
 

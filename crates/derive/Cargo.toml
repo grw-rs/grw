@@ -1,0 +1,24 @@
+[package]
+name = "grw_derive"
+version = "0.3.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Derive macros for the grw graph rewriting library"
+repository = "https://github.com/grw-rs/grw"
+keywords = ["graph", "derive", "macro"]
+categories = ["development-tools::procedural-macro-helpers"]
+include = ["src/**/*", "LICENSE-*", "README.md"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
+proc-macro-crate = "3"
+grw_pattern = { version = "0.1.0", path = "../pattern" }
+
+[dev-dependencies]
+grw = { path = "../.." }
+trybuild = "1"

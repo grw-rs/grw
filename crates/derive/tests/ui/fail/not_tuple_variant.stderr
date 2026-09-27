@@ -1,0 +1,5 @@
+error: Part requires every variant to be a single-field tuple variant, e.g. `Signs(Signs)`
+  --> tests/ui/fail/not_tuple_variant.rs:11:5
+   |
+11 |     Empty,
+   |     ^^^^^

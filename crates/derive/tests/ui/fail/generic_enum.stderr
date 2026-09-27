@@ -1,0 +1,5 @@
+error: Part cannot be derived for a generic enum: each part kind needs one concrete payload type
+ --> tests/ui/fail/generic_enum.rs:4:9
+  |
+4 | enum Rel<T> {
+  |         ^^^

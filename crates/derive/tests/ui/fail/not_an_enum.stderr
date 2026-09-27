@@ -1,0 +1,7 @@
+error: Part can only be derived for an enum
+ --> tests/ui/fail/not_an_enum.rs:4:1
+  |
+4 | / struct NotAnEnum {
+5 | |     x: u32,
+6 | | }
+  | |_^

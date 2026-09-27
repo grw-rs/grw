@@ -1,0 +1,15 @@
+[package]
+name = "grw_pattern"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Token grammar for grw pattern macros: symbolic node ids, value patterns, pins"
+repository = "https://github.com/grw-rs/grw"
+keywords = ["graph", "macro", "pattern"]
+categories = ["development-tools::procedural-macro-helpers"]
+include = ["src/**/*", "LICENSE-*", "README.md"]
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits"] }
+proc-macro2 = "1"
+quote = "1"

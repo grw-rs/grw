@@ -215,11 +215,13 @@ dependencies = [
 name = "grw_derive"
 version = "0.3.0"
 dependencies = [
+ "grw",
  "grw_pattern",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn",
+ "trybuild",
 ]
 
 [[package]]

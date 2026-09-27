@@ -12,7 +12,7 @@ A link between two nodes can hold a [composite value](./composite-values.md): se
 
 All DSL fragments are plain Rust structs — they can be constructed, composed, and manipulated programmatically before being passed to the macros or the underlying `from_fragment()` / `modify()` / `compile()` functions directly.
 
-The graph and modify DSLs — `mgraph!`, `vgraph!` and `modify!` — are `macro_rules!` macros that overload Rust operators (`^`, `>>`, `<<`, `&`, `!`) to express graph edge semantics. `search!` and `pattern!` are procedural macros whose pattern grammar lives in the [`grw_pattern`](https://github.com/grw-rs/grw_pattern) crate; they, the `#[grw::repl]` attribute, `#[derive(Val)]` and `#[derive(Part)]` come from [`grw_derive`](https://github.com/grw-rs/grw_derive), a required dependency of grw.
+The graph and modify DSLs — `mgraph!`, `vgraph!` and `modify!` — are `macro_rules!` macros that overload Rust operators (`^`, `>>`, `<<`, `&`, `!`) to express graph edge semantics. `search!` and `pattern!` are procedural macros whose pattern grammar lives in the [`grw_pattern`](https://github.com/grw-rs/grw/tree/master/crates/pattern) crate; they, the `#[grw::repl]` attribute, `#[derive(Val)]` and `#[derive(Part)]` come from [`grw_derive`](https://github.com/grw-rs/grw/tree/master/crates/derive), a required dependency of grw.
 
 ## Quick Example
 

@@ -1,0 +1,29 @@
+error[E0277]: the trait bound `Rel: PartOf<Other>` is not satisfied
+  --> tests/ui/fail/get_missing_kind.rs:25:17
+   |
+25 |     let _ = set.get::<Other>();
+   |                 ^^^ unsatisfied trait bound
+   |
+help: the trait `PartOf<Other>` is not implemented for `Rel`
+  --> tests/ui/fail/get_missing_kind.rs:18:1
+   |
+18 | enum Rel {
+   | ^^^^^^^^
+help: `Rel` implements trait `PartOf<T>`
+  --> tests/ui/fail/get_missing_kind.rs:17:39
+   |
+17 | #[derive(Debug, Clone, PartialEq, Eq, Part)]
+   |                                       ^^^^
+   |                                       |
+   |                                       `PartOf<Signs>`
+   |                                       `PartOf<Uses>`
+   = note: required for `TypeSet<Rel>` to implement `Has<Other>`
+note: required by a bound in `grw::composite::Typed::get`
+  --> $WORKSPACE/src/composite/typed.rs
+   |
+   |     fn get<T>(&self) -> Option<&T>
+   |        --- required by a bound in this associated function
+   |     where
+   |         Self: Has<T>;
+   |               ^^^^^^ required by this bound in `Typed::get`
+   = note: this error originates in the derive macro `Part` (in Nightly builds, run with -Z macro-backtrace for more info)
