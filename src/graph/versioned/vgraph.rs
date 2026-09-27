@@ -189,26 +189,6 @@ impl<NV, E: Edge> VGraph<NV, E> {
         self.indices.catalogue()
     }
 
-    fn find_unique_collision(&self, decl: &graph::index::IndexDecl<NV>) -> Option<Vec<id::N>> {
-        let mut groups: FxHashMap<graph::index::KeyBytes, Vec<id::N>> = FxHashMap::default();
-        for (slot, node) in self.nodes.iter() {
-            if let Some(key) = decl.key_of(&node.val) {
-                groups.entry(key).or_default().push(nid(slot));
-            }
-        }
-        let mut colliding: Option<Vec<id::N>> = None;
-        for (_, mut ids) in groups {
-            if ids.len() < 2 {
-                continue;
-            }
-            ids.sort();
-            if colliding.as_ref().is_none_or(|c| ids[0] < c[0]) {
-                colliding = Some(ids);
-            }
-        }
-        colliding
-    }
-
     pub fn with_indices(mut self, decls: Vec<graph::index::IndexDecl<NV>>) -> Result<Self, graph::error::Index> {
         let mut seen = FxHashSet::default();
         for decl in &decls {
@@ -216,33 +196,26 @@ impl<NV, E: Edge> VGraph<NV, E> {
                 return Err(graph::error::Index::DuplicateName(decl.name()));
             }
         }
-        for decl in &decls {
-            if decl.cardinality() == graph::index::Cardinality::Unique
-                && let Some(nodes) = self.find_unique_collision(decl)
-            {
-                return Err(graph::error::Index::NotUnique { index: decl.name(), nodes });
-            }
-        }
-
+        let keyed = graph::index::keyed_nodes(&decls, self.nodes.iter().map(|(slot, node)| (nid(slot), &node.val)))?;
         let mut indices = VIndices::from_parts(decls);
-        for (slot, node) in self.nodes.iter() {
-            indices.insert_node(nid(slot), &node.val);
+        for (n, keys) in &keyed {
+            indices.insert_node(*n, keys);
         }
         self.indices = indices;
         Ok(self)
     }
 
     pub fn add_index(&mut self, decl: graph::index::IndexDecl<NV>) -> Result<(), graph::error::Index> {
+        let column = graph::index::column(&decl, self.nodes.iter().map(|(slot, node)| (nid(slot), &node.val)))?;
         if decl.cardinality() == graph::index::Cardinality::Unique
-            && let Some(nodes) = self.find_unique_collision(&decl)
+            && let Some(nodes) = graph::index::unique_collision(column.iter().map(|(n, k)| (*n, k)))
         {
             return Err(graph::error::Index::NotUnique { index: decl.name(), nodes });
         }
         self.indices.push_decl(decl)?;
         let last = self.indices.decls().len() - 1;
-        let VGraph { nodes, indices, .. } = self;
-        for (slot, node) in nodes.iter() {
-            indices.insert_key_for(last, nid(slot), &node.val);
+        for (n, key) in column {
+            self.indices.insert_key_for(last, n, key);
         }
         Ok(())
     }
@@ -523,6 +496,23 @@ where
         })
     }
 
+    pub fn load_promoting_catalogued(path: &Path, catalogue: &[graph::index::Catalogued]) -> Result<Self, persist::Error>
+    where
+        NV: ::serde::de::DeserializeOwned + layout::Val,
+        E::Slot: ::serde::de::DeserializeOwned,
+        E::Val: Composite + ::serde::de::DeserializeOwned + layout::Val,
+        <E::Val as Composite>::Part: ::serde::de::DeserializeOwned + layout::Val,
+    {
+        persist::at(path, || {
+            let snap = persist::read_snapshot(path)?;
+            persist::check_edge_kind::<E>(&snap.header)?;
+            persist::check_node_layout::<NV>(&snap.header)?;
+            let held = persist::promotion::held::<E::Val>(&snap.header)?;
+            persist::verify_catalogue(&snap.indices, catalogue)?;
+            Self::restore_parts(snap, (Vec::new(), Vec::new(), Vec::new()), |bytes| persist::promotion::value::<E::Val>(held, bytes))
+        })
+    }
+
     fn restore(
         snap: persist::SnapshotRead,
         decls: Vec<graph::index::IndexDecl<NV>>,
@@ -531,7 +521,18 @@ where
     where
         NV: ::serde::de::DeserializeOwned,
     {
-        let (decls, unique, multi) = persist::verify_and_split_indices(&snap.indices, decls)?;
+        let parts = persist::verify_and_split_indices(&snap.indices, decls)?;
+        Self::restore_parts(snap, parts, edge_value)
+    }
+
+    fn restore_parts(
+        snap: persist::SnapshotRead,
+        (decls, unique, multi): persist::IndexRestoreParts<NV>,
+        edge_value: impl Fn(&[u8]) -> Result<E::Val, bincode::Error>,
+    ) -> Result<Self, persist::Reason>
+    where
+        NV: ::serde::de::DeserializeOwned,
+    {
 
         let nodes = snap
             .nodes
@@ -721,6 +722,9 @@ where
             edges_between_in(&nodes, &edges, n1, n2).filter(|(s, _)| *s == slot).count()
         })?;
 
+        let flat = crate::modify::apply::keyed(flat, indices.decls())?;
+        let vacated = crate::modify::apply::vacated(indices.decls(), |nid| &nodes.get(nslot(nid)).expect("exist and remove nodes verified present").val, &flat)?;
+
         check_duplicate_keys(
             indices.decls(),
             |pos, key| indices.unique_get(pos, key),
@@ -732,15 +736,8 @@ where
         // values) before anything claims a key — mirrors `MGraph::apply_validated`'s
         // ordering, so a new or swapped-in node can take over a key a
         // removed/swapped-away node held in the same batch.
-        for &(exist_nid, ref val) in &flat.exist_nodes {
-            if val.is_some() {
-                let old = &nodes.get(nslot(exist_nid)).expect("exist node verified present").val;
-                indices.remove_node(exist_nid, old);
-            }
-        }
-        for &remove_nid in &flat.remove_nodes {
-            let old = &nodes.get(nslot(remove_nid)).expect("remove node verified present").val;
-            indices.remove_node(remove_nid, old);
+        for (nid, keys) in &vacated {
+            indices.remove_node(*nid, keys);
         }
 
         let mut result =
@@ -752,18 +749,18 @@ where
             .filter(|(local, _)| inserted_locals.insert(*local))
             .for_each(|(local, val)| {
                 let real_id = local_map[&local];
-                indices.insert_node(real_id, &val);
+                indices.insert_node(real_id, &val.keys);
                 nodes = nodes.set(
                     nslot(real_id),
-                    Arc::new(VNode { val, r#gen: version, adj: Adjacents::new() }),
+                    Arc::new(VNode { val: val.val, r#gen: version, adj: Adjacents::new() }),
                 );
             });
 
         flat.new_anon.into_iter().for_each(|(anon_id, val)| {
-            indices.insert_node(anon_id, &val);
+            indices.insert_node(anon_id, &val.keys);
             nodes = nodes.set(
                 nslot(anon_id),
-                Arc::new(VNode { val, r#gen: version, adj: Adjacents::new() }),
+                Arc::new(VNode { val: val.val, r#gen: version, adj: Adjacents::new() }),
             );
         });
 
@@ -773,8 +770,8 @@ where
                 && swapped_exist.insert(nid)
             {
                 let mut node = clone_node(&nodes, nid);
-                let old_val = std::mem::replace(&mut node.val, new_val);
-                indices.insert_node(nid, &node.val);
+                let old_val = std::mem::replace(&mut node.val, new_val.val);
+                indices.insert_node(nid, &new_val.keys);
                 nodes = nodes.set(nslot(nid), Arc::new(node));
                 result.swapped_node_vals.push((nid, old_val));
             }

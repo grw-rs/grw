@@ -68,7 +68,149 @@ where
     }
 }
 
-type Extract<NV> = Arc<dyn Fn(&NV) -> Option<KeyBytes> + Send + Sync>;
+pub trait TryKeyOf<NV>: Send + Sync + 'static {
+    type Key: serde::Serialize + 'static;
+    type Fault: std::error::Error + Send + Sync + 'static;
+    fn key(&self, v: &NV) -> Result<Option<Self::Key>, Self::Fault>;
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyFault(Arc<dyn std::error::Error + Send + Sync>);
+
+impl KeyFault {
+    pub fn fault(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
+        self.0.as_ref()
+    }
+}
+
+impl std::fmt::Display for KeyFault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for KeyFault {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.0.as_ref())
+    }
+}
+
+impl PartialEq for KeyFault {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for KeyFault {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Faulted {
+    pub(crate) index: IndexName,
+    pub(crate) fault: KeyFault,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Catalogued {
+    name: IndexName,
+    cardinality: Cardinality,
+    tag: KeyTag,
+}
+
+impl Catalogued {
+    pub fn of(name: IndexName, cardinality: Cardinality, tag: KeyTag) -> Self {
+        Catalogued { name, cardinality, tag }
+    }
+
+    pub fn name(&self) -> IndexName {
+        self.name
+    }
+
+    pub fn cardinality(&self) -> Cardinality {
+        self.cardinality
+    }
+
+    pub fn tag(&self) -> KeyTag {
+        self.tag
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NodeKeys(Vec<Option<KeyBytes>>);
+
+impl NodeKeys {
+    pub(crate) fn of<NV>(decls: &[IndexDecl<NV>], val: &NV) -> Result<NodeKeys, Faulted> {
+        decls.iter().map(|d| d.key_of(val).map_err(|fault| Faulted { index: d.name(), fault })).collect::<Result<Vec<_>, Faulted>>().map(NodeKeys)
+    }
+
+    pub(crate) fn at(&self, i: usize) -> Option<&KeyBytes> {
+        self.0[i].as_ref()
+    }
+
+    pub(crate) fn held(&self) -> impl Iterator<Item = (usize, &KeyBytes)> {
+        self.0.iter().enumerate().filter_map(|(i, k)| k.as_ref().map(|k| (i, k)))
+    }
+}
+
+impl From<Faulted> for super::error::Index {
+    fn from(f: Faulted) -> Self {
+        super::error::Index::KeyFault { index: f.index, fault: f.fault }
+    }
+}
+
+pub(crate) fn column<'a, NV: 'a>(
+    decl: &IndexDecl<NV>,
+    nodes: impl Iterator<Item = (id::N, &'a NV)>,
+) -> Result<Vec<(id::N, KeyBytes)>, super::error::Index> {
+    let mut out = Vec::new();
+    for (n, val) in nodes {
+        match decl.key_of(val) {
+            Ok(Some(key)) => out.push((n, key)),
+            Ok(None) => {}
+            Err(fault) => return Err(super::error::Index::KeyFault { index: decl.name(), fault }),
+        }
+    }
+    Ok(out)
+}
+
+pub(crate) fn unique_collision<'a>(keys: impl Iterator<Item = (id::N, &'a KeyBytes)>) -> Option<Vec<id::N>> {
+    let mut groups: FxHashMap<&KeyBytes, Vec<id::N>> = FxHashMap::default();
+    for (n, key) in keys {
+        groups.entry(key).or_default().push(n);
+    }
+    let mut colliding: Option<Vec<id::N>> = None;
+    for (_, mut ids) in groups {
+        if ids.len() < 2 {
+            continue;
+        }
+        ids.sort();
+        if colliding.as_ref().is_none_or(|c| ids[0] < c[0]) {
+            colliding = Some(ids);
+        }
+    }
+    colliding
+}
+
+pub(crate) fn keyed_nodes<'a, NV: 'a>(
+    decls: &[IndexDecl<NV>],
+    nodes: impl Iterator<Item = (id::N, &'a NV)>,
+) -> Result<Vec<(id::N, NodeKeys)>, super::error::Index> {
+    let keyed = nodes.map(|(n, val)| NodeKeys::of(decls, val).map(|keys| (n, keys))).collect::<Result<Vec<_>, Faulted>>()?;
+    for (i, decl) in decls.iter().enumerate() {
+        if decl.cardinality() == Cardinality::Unique
+            && let Some(nodes) = unique_collision(keyed.iter().filter_map(|(n, keys)| keys.at(i).map(|k| (*n, k))))
+        {
+            return Err(super::error::Index::NotUnique { index: decl.name(), nodes });
+        }
+    }
+    Ok(keyed)
+}
+
+pub(crate) struct Keyed<NV> {
+    pub(crate) val: NV,
+    pub(crate) keys: NodeKeys,
+}
+
+type Extract<NV> = Arc<dyn Fn(&NV) -> Result<Option<KeyBytes>, KeyFault> + Send + Sync>;
 
 pub struct IndexDecl<NV> {
     name: IndexName,
@@ -80,8 +222,19 @@ pub struct IndexDecl<NV> {
 impl<NV> IndexDecl<NV> {
     pub fn new<X: KeyOf<NV>>(name: IndexName, cardinality: Cardinality, x: X) -> Self {
         let tag = KeyTag::of::<X::Key>();
-        let extract: Extract<NV> = Arc::new(move |v: &NV| x.key(v).map(|k| KeyBytes::of(&k)));
+        let extract: Extract<NV> = Arc::new(move |v: &NV| Ok(x.key(v).map(|k| KeyBytes::of(&k))));
         IndexDecl { name, cardinality, tag, extract }
+    }
+
+    pub fn fallible<X: TryKeyOf<NV>>(name: IndexName, cardinality: Cardinality, x: X) -> Self {
+        let tag = KeyTag::of::<X::Key>();
+        let extract: Extract<NV> =
+            Arc::new(move |v: &NV| x.key(v).map(|k| k.map(|k| KeyBytes::of(&k))).map_err(|f| KeyFault(Arc::new(f))));
+        IndexDecl { name, cardinality, tag, extract }
+    }
+
+    pub fn catalogued(&self) -> Catalogued {
+        Catalogued { name: self.name, cardinality: self.cardinality, tag: self.tag }
     }
 
     pub fn name(&self) -> IndexName {
@@ -94,7 +247,7 @@ impl<NV> IndexDecl<NV> {
         self.tag
     }
 
-    pub(crate) fn key_of(&self, v: &NV) -> Option<KeyBytes> {
+    pub(crate) fn key_of(&self, v: &NV) -> Result<Option<KeyBytes>, KeyFault> {
         (self.extract)(v)
     }
 }
@@ -234,8 +387,7 @@ impl<NV> Indices<NV> {
         })
     }
 
-    pub(crate) fn insert_key_for(&mut self, i: usize, id: id::N, val: &NV) {
-        let Some(key) = self.decls[i].key_of(val) else { return };
+    pub(crate) fn insert_key_for(&mut self, i: usize, id: id::N, key: KeyBytes) {
         let pos = self.table_pos(i);
         match self.decls[i].cardinality() {
             Cardinality::Unique => {
@@ -247,33 +399,32 @@ impl<NV> Indices<NV> {
         }
     }
 
-    pub(crate) fn remove_key_for(&mut self, i: usize, id: id::N, val: &NV) {
-        let Some(key) = self.decls[i].key_of(val) else { return };
+    pub(crate) fn remove_key_for(&mut self, i: usize, id: id::N, key: &KeyBytes) {
         let pos = self.table_pos(i);
         match self.decls[i].cardinality() {
             Cardinality::Unique => {
-                self.unique[pos].remove(&key);
+                self.unique[pos].remove(key);
             }
             Cardinality::Multi => {
-                if let Some(set) = self.multi[pos].get_mut(&key) {
+                if let Some(set) = self.multi[pos].get_mut(key) {
                     set.remove(&id);
                     if set.is_empty() {
-                        self.multi[pos].remove(&key);
+                        self.multi[pos].remove(key);
                     }
                 }
             }
         }
     }
 
-    pub(crate) fn insert_node(&mut self, id: id::N, val: &NV) {
-        for i in 0..self.decls.len() {
-            self.insert_key_for(i, id, val);
+    pub(crate) fn insert_node(&mut self, id: id::N, keys: &NodeKeys) {
+        for (i, key) in keys.held() {
+            self.insert_key_for(i, id, key.clone());
         }
     }
 
-    pub(crate) fn remove_node(&mut self, id: id::N, val: &NV) {
-        for i in 0..self.decls.len() {
-            self.remove_key_for(i, id, val);
+    pub(crate) fn remove_node(&mut self, id: id::N, keys: &NodeKeys) {
+        for (i, key) in keys.held() {
+            self.remove_key_for(i, id, key);
         }
     }
 
@@ -342,13 +493,14 @@ mod tests {
     fn insert_hit_remove_roundtrip() {
         let decls = vec![IndexDecl::new(IndexName("by_val"), Cardinality::Unique, |v: &u32| Some(*v))];
         let mut indices = Indices::from_parts(decls, vec![FxHashMap::default()], vec![]);
-        indices.insert_node(id::N(0), &42u32);
+        let keys = NodeKeys::of(indices.decls(), &42u32).unwrap();
+        indices.insert_node(id::N(0), &keys);
         let tag = KeyTag::of::<u32>();
         match indices.hit(IndexName("by_val"), &KeyBytes::of(&42u32), tag).unwrap() {
             IndexHit::One(n) => assert_eq!(n, id::N(0)),
             _ => panic!("expected One"),
         }
-        indices.remove_node(id::N(0), &42u32);
+        indices.remove_node(id::N(0), &keys);
         assert!(matches!(indices.hit(IndexName("by_val"), &KeyBytes::of(&42u32), tag).unwrap(), IndexHit::None));
     }
 

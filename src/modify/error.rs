@@ -131,6 +131,8 @@ pub mod apply {
     pub enum Index {
         #[error("duplicate key on index {index}: existing node {existing:?}")]
         DuplicateKey { index: crate::graph::index::IndexName, existing: id::N },
+        #[error("index {index} could not key a node value: {fault}")]
+        KeyFault { index: crate::graph::index::IndexName, fault: crate::graph::index::KeyFault },
     }
 }
 

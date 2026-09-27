@@ -331,26 +331,6 @@ impl<NV, E: Edge> MGraph<NV, E> {
         self.indices.catalogue()
     }
 
-    fn find_unique_collision(&self, decl: &super::index::IndexDecl<NV>) -> Option<Vec<id::N>> {
-        let mut groups: FxHashMap<super::index::KeyBytes, Vec<id::N>> = FxHashMap::default();
-        for (n, node) in self.nodes.nodes_iter() {
-            if let Some(key) = decl.key_of(&node.val) {
-                groups.entry(key).or_default().push(n);
-            }
-        }
-        let mut colliding: Option<Vec<id::N>> = None;
-        for (_, mut ids) in groups {
-            if ids.len() < 2 {
-                continue;
-            }
-            ids.sort();
-            if colliding.as_ref().is_none_or(|c| ids[0] < c[0]) {
-                colliding = Some(ids);
-            }
-        }
-        colliding
-    }
-
     pub fn with_indices(mut self, decls: Vec<super::index::IndexDecl<NV>>) -> Result<Self, super::error::Index> {
         let mut seen = FxHashSet::default();
         for decl in &decls {
@@ -358,14 +338,7 @@ impl<NV, E: Edge> MGraph<NV, E> {
                 return Err(super::error::Index::DuplicateName(decl.name()));
             }
         }
-        for decl in &decls {
-            if decl.cardinality() == super::index::Cardinality::Unique
-                && let Some(nodes) = self.find_unique_collision(decl)
-            {
-                return Err(super::error::Index::NotUnique { index: decl.name(), nodes });
-            }
-        }
-
+        let keyed = super::index::keyed_nodes(&decls, self.nodes.nodes_iter().map(|(n, node)| (n, &node.val)))?;
         let unique_count = decls.iter().filter(|d| d.cardinality() == super::index::Cardinality::Unique).count();
         let multi_count = decls.len() - unique_count;
         let mut indices = super::index::Indices::from_parts(
@@ -373,24 +346,24 @@ impl<NV, E: Edge> MGraph<NV, E> {
             vec![FxHashMap::default(); unique_count],
             vec![FxHashMap::default(); multi_count],
         );
-        for (n, node) in self.nodes.nodes_iter() {
-            indices.insert_node(n, &node.val);
+        for (n, keys) in &keyed {
+            indices.insert_node(*n, keys);
         }
         self.indices = indices;
         Ok(self)
     }
 
     pub fn add_index(&mut self, decl: super::index::IndexDecl<NV>) -> Result<(), super::error::Index> {
+        let column = super::index::column(&decl, self.nodes.nodes_iter().map(|(n, node)| (n, &node.val)))?;
         if decl.cardinality() == super::index::Cardinality::Unique
-            && let Some(nodes) = self.find_unique_collision(&decl)
+            && let Some(nodes) = super::index::unique_collision(column.iter().map(|(n, k)| (*n, k)))
         {
             return Err(super::error::Index::NotUnique { index: decl.name(), nodes });
         }
         self.indices.push_decl(decl)?;
         let last = self.indices.decls().len() - 1;
-        let MGraph { nodes, indices, .. } = self;
-        for (n, node) in nodes.nodes_iter() {
-            indices.insert_key_for(last, n, &node.val);
+        for (n, key) in column {
+            self.indices.insert_key_for(last, n, key);
         }
         Ok(())
     }

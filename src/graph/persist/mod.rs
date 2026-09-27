@@ -94,7 +94,7 @@ type NodeRow = (u32, u64, u64, u32, u64, u32);
 type EdgeRow = (u32, u64, u32, u32, u8, u64, u32);
 pub(crate) type UniqueEntries = Vec<Vec<(index::KeyBytes, id::N)>>;
 pub(crate) type MultiEntries = Vec<Vec<(index::KeyBytes, index::IdSet<id::N>)>>;
-type IndexRestoreParts<NV> = (Vec<index::IndexDecl<NV>>, UniqueEntries, MultiEntries);
+pub(crate) type IndexRestoreParts<NV> = (Vec<index::IndexDecl<NV>>, UniqueEntries, MultiEntries);
 
 // `Id` is `u32` under the default `id32` feature (making this conversion a
 // no-op clippy would rather see as a plain cast) and `u64` under `id64`,
@@ -747,20 +747,17 @@ pub(crate) fn write_snapshot(path: &Path, mut snap: SnapshotWrite) -> Result<(),
 /// `decls`' own order, so `Indices::from_parts`/the VGraph equivalent can
 /// restore the tables without rescanning node values through the
 /// extractors.
-pub(crate) fn verify_and_split_indices<NV>(
-    file_catalogue: &[RawIndexTable],
-    decls: Vec<index::IndexDecl<NV>>,
-) -> Result<IndexRestoreParts<NV>, Reason> {
+pub(crate) fn verify_catalogue(file_catalogue: &[RawIndexTable], declared: &[index::Catalogued]) -> Result<(), Reason> {
     let undeclared: Vec<String> = file_catalogue
         .iter()
         .map(|t| t.name.as_str())
-        .filter(|n| !decls.iter().any(|d| d.name().0 == *n))
+        .filter(|n| !declared.iter().any(|d| d.name().0 == *n))
         .map(str::to_owned)
         .collect();
     if !undeclared.is_empty() {
         return Err(Catalogue::Undeclared(undeclared).into());
     }
-    let unheld: Vec<String> = decls
+    let unheld: Vec<String> = declared
         .iter()
         .map(|d| d.name().0)
         .filter(|n| !file_catalogue.iter().any(|t| t.name == *n))
@@ -769,10 +766,7 @@ pub(crate) fn verify_and_split_indices<NV>(
     if !unheld.is_empty() {
         return Err(Catalogue::Unheld(unheld).into());
     }
-
-    let mut unique = Vec::new();
-    let mut multi = Vec::new();
-    for decl in &decls {
+    for decl in declared {
         let table = file_catalogue
             .iter()
             .find(|t| t.name == decl.name().0)
@@ -788,7 +782,24 @@ pub(crate) fn verify_and_split_indices<NV>(
             }
             .into());
         }
-        match file_cardinality {
+    }
+    Ok(())
+}
+
+pub(crate) fn verify_and_split_indices<NV>(
+    file_catalogue: &[RawIndexTable],
+    decls: Vec<index::IndexDecl<NV>>,
+) -> Result<IndexRestoreParts<NV>, Reason> {
+    verify_catalogue(file_catalogue, &decls.iter().map(index::IndexDecl::catalogued).collect::<Vec<_>>())?;
+
+    let mut unique = Vec::new();
+    let mut multi = Vec::new();
+    for decl in &decls {
+        let table = file_catalogue
+            .iter()
+            .find(|t| t.name == decl.name().0)
+            .expect("name presence verified by the undeclared check above");
+        match decl.cardinality() {
             index::Cardinality::Unique => {
                 let entries = table
                     .entries

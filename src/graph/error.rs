@@ -53,6 +53,8 @@ pub enum Index {
     KeyTagMismatch { index: super::index::IndexName, expected: super::index::KeyTag, got: super::index::KeyTag },
     #[error("index {index} is not unique across nodes {nodes:?}")]
     NotUnique { index: super::index::IndexName, nodes: Vec<id::N> },
+    #[error("index {index} could not key a node value: {fault}")]
+    KeyFault { index: super::index::IndexName, fault: super::index::KeyFault },
 }
 
 #[derive(Debug, thiserror::Error)]

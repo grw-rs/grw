@@ -399,3 +399,19 @@ fn corrupted_fixture_is_refused() {
     is_trailer(refused(MGraph::<u32, Der>::load_promoting(&path), &path));
     is_trailer(refused(VGraph::<u32, Der>::load_promoting(&path), &path));
 }
+
+#[test]
+fn vgraph_0_2_1_fixture_loads_by_its_catalogue_alone() {
+    let g: VGraph<u32, Der> = VGraph::load_promoting_catalogued(&fixture_path(V_0_2_1), &[by_val().catalogued()]).unwrap();
+    assert_eq!(node_vals(&g), vec![(0, 10), (1, 11), (2, 12)]);
+    assert_eq!(links(&g), links(&v_0_2_1_as_built_today()));
+    assert_eq!(g.catalogue().iter().count(), 0);
+}
+
+#[test]
+fn a_catalogue_the_file_does_not_hold_refuses_the_catalogued_load() {
+    let other = IndexDecl::new(IndexName("by_other"), Cardinality::Unique, |v: &u32| Some(*v)).catalogued();
+    assert!(VGraph::<u32, Der>::load_promoting_catalogued(&fixture_path(V_0_2_1), &[other]).is_err());
+    let retagged = IndexDecl::new(BY_VAL, Cardinality::Unique, |v: &u32| Some(u64::from(*v))).catalogued();
+    assert!(VGraph::<u32, Der>::load_promoting_catalogued(&fixture_path(V_0_2_1), &[retagged]).is_err());
+}

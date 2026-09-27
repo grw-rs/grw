@@ -170,8 +170,7 @@ impl<NV> VIndices<NV> {
         })
     }
 
-    pub(crate) fn insert_key_for(&mut self, i: usize, id: id::N, val: &NV) {
-        let Some(key) = self.decls[i].key_of(val) else { return };
+    pub(crate) fn insert_key_for(&mut self, i: usize, id: id::N, key: KeyBytes) {
         let pos = self.table_pos(i);
         match self.decls[i].cardinality() {
             Cardinality::Unique => {
@@ -187,35 +186,34 @@ impl<NV> VIndices<NV> {
         }
     }
 
-    pub(crate) fn remove_key_for(&mut self, i: usize, id: id::N, val: &NV) {
-        let Some(key) = self.decls[i].key_of(val) else { return };
+    pub(crate) fn remove_key_for(&mut self, i: usize, id: id::N, key: &KeyBytes) {
         let pos = self.table_pos(i);
         match self.decls[i].cardinality() {
             Cardinality::Unique => {
-                let (next, _) = self.unique[pos].remove(&key);
+                let (next, _) = self.unique[pos].remove(key);
                 self.unique[pos] = next;
             }
             Cardinality::Multi => {
-                if let Some(set) = self.multi[pos].get(&key) {
+                if let Some(set) = self.multi[pos].get(key) {
                     let mut set = set.clone();
                     set.remove(&id);
                     let (next, _) =
-                        if set.is_empty() { self.multi[pos].remove(&key) } else { self.multi[pos].set(key, set) };
+                        if set.is_empty() { self.multi[pos].remove(key) } else { self.multi[pos].set(key.clone(), set) };
                     self.multi[pos] = next;
                 }
             }
         }
     }
 
-    pub(crate) fn insert_node(&mut self, id: id::N, val: &NV) {
-        for i in 0..self.decls.len() {
-            self.insert_key_for(i, id, val);
+    pub(crate) fn insert_node(&mut self, id: id::N, keys: &index::NodeKeys) {
+        for (i, key) in keys.held() {
+            self.insert_key_for(i, id, key.clone());
         }
     }
 
-    pub(crate) fn remove_node(&mut self, id: id::N, val: &NV) {
-        for i in 0..self.decls.len() {
-            self.remove_key_for(i, id, val);
+    pub(crate) fn remove_node(&mut self, id: id::N, keys: &index::NodeKeys) {
+        for (i, key) in keys.held() {
+            self.remove_key_for(i, id, key);
         }
     }
 
